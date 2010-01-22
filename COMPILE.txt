@@ -1,0 +1,55 @@
+IgProf, the ignominious performance and memory profiler.
+Copyright (C) 2003-2010
+ Lassi Tuura <lat@iki.fi> and
+ Giulio Eulisse <giulio.eulisse@gmail.com>.
+Please refer to COPYING.txt for licensing information.
+
+IgProf is non-intrusive profiling application for GNU/Linux systems,
+complementary to other tools such as valgrind's callgrind, oprofile,
+and compiler built-in profiling support.
+
+The code is regularly tested and used on RedHat Enterprise Linux
+systems, mainly RHEL4 and RHEL5 at the moment, but we do try to
+make sure the code works on other systems as well. The profiler
+has been used extensively on ia32. Support for x64 is still very
+much experimental. Some support for Mac OS X PPC remains in the
+code but it is unknown if it still works.
+
+In order to build the package, please do something like this:
+
+ - On ia32 systems:
+
+     tar zxf classlib-3.0.9.tar.gz
+     tar zxf igprof-5.7.0.tar.gz
+
+     cd classlib-3.0.9
+     ./configure && make -j 4 install
+     cd ..
+
+     cd igprof-5.7.0
+     cmake . && make -j 4 install
+
+ - On x64 systems:
+
+     tar zxf libatomic_ops-7.2alpha4.tar.gz
+     tar zxf libunwind-0.99.tar.gz
+     tar zxf classlib-3.0.9.tar.gz
+     tar zxf igprof-5.7.0.tar.gz
+
+     cd libatomic_ops-7.2alpha4
+     ./configure && make -j 4 install
+     cd ..
+
+     cd libunwind-0.99
+     ./configure && make -j 4 install
+     cd ..
+
+     cd classlib-3.0.9
+     ./configure && make -j 4 install
+     cd ..
+
+     cd igprof-5.7.0
+     cmake . && make -j 4 install
+
+Please report problems to the sourceforge tracker at
+  http://sourceforge.net/projects/igprof/

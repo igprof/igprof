@@ -1,0 +1,129 @@
+#!/bin/sh
+# Collect up args for igprof.
+
+usage() {
+  echo "igprof [options] program [options]"
+  echo
+  echo "Options to igprof:"
+  echo -e "-h, --help                 \tthis help message"
+  echo -e "-o, --output FILE          \toutput to FILE, or pipe if starts with '|'"
+  echo -e "-z, --compress             \tcompress output file"
+  echo -e "-d, --debug                \tenable more details from profiler"
+  echo -e "-f, --full                 \tstart all the profilers"
+  echo -e "-t, --target STR           \tonly profile programs with STR in their names"
+  echo -e "-D, --dump-flag FILE       \tuse FILE as a hint to dump the profile data"
+  echo -e "-T, --tmpdir DIR           \tuse DIR for temporary profile data files"
+  echo -e "-mp, --memory-profiler     \tstart the memory profiler"
+  echo -e "-mo, --memory-overhead X   \treport memory overhead ('none', 'include', 'delta')"
+  echo -e "-pp, --performance-profiler\tstart the performance profile (default)"
+  echo -e "-pr, --real-time           \tmeasure real time in performance profiler"
+  echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
+  echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
+  echo -e "-cl, --check-leaks         \tenable leak tracking in activated profilers"
+  echo -e "[--] cmd [args...]         \tcommand arguments to execute"
+}
+
+append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
+
+SORT= MEM= FD= PERF= ALL= OUT= OUTZ=false OPTS=
+while [ "$#" != 0 ]; do
+  case "$1" in
+    -h | --help )
+      usage; exit 1;;
+
+    -o | --output )
+      OUT="$2"; shift; shift ;;
+
+    -z | --compress )
+      OUTZ=true; shift ;;
+
+    -t | --target )
+      IGPROF_TARGET="$2"; shift; shift;
+      export IGPROF_TARGET ;;
+
+    -T | --tmpdir )
+      IGPROF_TMPDIR="$2"; shift; shift;
+      export IGPROF_TMPDIR ;;
+
+    -D | --dump-flag )
+      OPTS="$OPTS igprof:dump='$2'"; shift; shift;;
+
+    -d | --debug )
+      IGHOOK_DEBUGGING=1 IGPROF_DEBUGGING=1;
+      export IGHOOK_DEBUGGING IGPROF_DEBUGGING;
+      shift ;;
+
+    -f | --full )
+      MEM="mem" FD="fd" PERF="perf" ALL=":all"; shift ;;
+
+    -mp | --memory-profiler )
+      [ -z "$MEM" ] && MEM=mem
+      MEM="$MEM:total:largest:live"; shift;;
+
+    -mo | --memory-overhead )
+      [ -z "$MEM" ] && MEM=mem
+      case "$2" in
+        none | include | delta )
+          MEM="$MEM:overhead=$2"; shift; shift;;
+        * )
+	  echo "$0: unrecognised -mo value '$2', expected 'none', 'include' or 'delta'"
+	  exit 1 ;;
+      esac ;;
+
+    -fd | --file-descriptor )
+      [ -z "$FD" ] && FD=fd
+      FD="$FD:used:live"; shift ;;
+
+    -pp | --performance-profiler )
+      PERF="perf"; shift ;;
+    -pr | --real-time )
+      [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:real"; shift ;;
+    -pu | --user-time )
+      [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:user"; shift ;;
+
+    -cl | --check-leaks )
+      ALL="$ALL:leaks"; shift ;;
+
+    -- )
+      shift; break ;;
+
+    -* )
+      echo "$0: unrecognised option $1"
+      usage 
+      exit 1 ;;
+
+    * )
+      break ;;
+  esac
+done
+
+[ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X ] && PERF=perf
+
+if $OUTZ; then
+  [ X"$OUT" = X ] && OUT="igprof.$$.gz"
+  OUT="|gzip -c>$OUT"
+fi
+
+if [ -z "$ALL" ]; then :; else
+  [ -z "$MEM"  ] || MEM="$MEM$ALL"
+  [ -z "$FD"   ] || FD="$FD$ALL"
+  [ -z "$PERF" ] || PERF="$PERF$ALL"
+fi
+
+[ X"$OUT" = X ]   || append IGPROF "igprof:out='$OUT'"
+[ X"$OPTS" = X ]  || append IGPROF "$OPTS"
+[ X"$MEM" = X ]   || append IGPROF "$MEM"
+[ X"$FD" = X ]    || append IGPROF "$FD"
+[ X"$PERF" = X ]  || append IGPROF "$PERF"
+
+case $(uname) in
+  Darwin )
+    # DYLD_INSERT_LIBRARIES=$LOCALRT/lib/`scramv1 arch`/libIgProf.dylib
+    DYLD_INSERT_LIBRARIES=./libigprof.dylib
+    export DYLD_INSERT_LIBRARIES ;;
+  * )
+    LD_PRELOAD=${LD_PRELOAD:+${LD_PRELOAD}:}libigprof.so;
+    export LD_PRELOAD ;;
+esac
+export IGPROF
+exec "$@"
