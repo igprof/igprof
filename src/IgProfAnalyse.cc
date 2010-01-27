@@ -51,7 +51,7 @@ dieWithUsage(const char *message = 0)
     std::cerr << message << "\n";
 
   std::cerr << ("igprof-analyse\n"
-                "  {[-r/--report KEY[,KEY]...], --show-pages, --show-partial-pages, --show-locality-metrics}"
+                "  {[-r/--report KEY[,KEY]...], --show-pages, --show-page-ranges, --show-locality-metrics}"
                 "  [-o/--order ORDER]\n"
                 "  [-p/--paths] [-c/--calls] [--value peak|normal]\n"
                 "  [-mr/--merge-regexp REGEXP]\n"
@@ -94,16 +94,216 @@ private:
 };
 
 /** Structure which holds information about a given
-    live allocation. This is used to hold
-    information about the LK elements found in the
-    report.
+    range in memory (possibly in terms of pages).
+    For the moment we only care about the start and end address, not about
+    the amount of memory found in it.
  */
-struct Allocation
+struct RangeInfo
 {
-  uintptr_t address;  // The address of the allocation
-  uint64_t  size;     // The size of the allocation
+  uint64_t startAddr;       // The address of the first page in the range
+  uint64_t endAddr;         // The address of the last page in the range
+
+  RangeInfo(uint64_t iStartAddr, uint64_t iEndAddr)
+  : startAddr(iStartAddr), endAddr(iEndAddr)
+  {
+    ASSERT(iStartAddr < iEndAddr);
+  }
+
+  // One page range is less than the other if its final address is less than the
+  // start address of the other.
+  bool operator<(const RangeInfo &other) const
+  {
+    return this->endAddr < other.startAddr;
+  }
+
+  size_t size(void) const
+  {
+    if (endAddr - startAddr + 1 <= 0)
+      std::cerr << endAddr << " " << startAddr << std::endl;
+
+    ASSERT(endAddr - startAddr + 1 > 0);
+    return endAddr - startAddr + 1;
+  }
 };
 
+
+typedef std::vector<RangeInfo>  Ranges;
+
+
+void debugRanges(const char * name, const Ranges &ranges)
+{
+  std::cerr << name << " ";
+  for (size_t i = 0, e = ranges.size(); i != e; ++i)
+  {
+    std::cerr << "(" << ranges[i].startAddr << ", " << ranges[i].endAddr << ")";
+  }
+  std::cerr << std::endl;
+}
+
+
+void
+mergeSortedRanges(Ranges &source)
+{
+  if (source.empty())
+    return;
+
+  Ranges temp;
+  temp.reserve(source.size());
+  temp.push_back(source.front());
+  for (size_t ri = 1, re = source.size(); ri != re; ++ri)
+  {
+    RangeInfo &current = temp.back();
+    const RangeInfo &next = source[ri];
+    if (next.startAddr <= current.endAddr)
+    {
+      if (next.endAddr >= current.endAddr)
+        current.endAddr = next.endAddr;
+    }
+    else
+      temp.push_back(next);
+  }
+  temp.reserve(temp.size());
+  source.swap(temp);
+  return;
+}
+
+/** Helper function to count number of pages in a set of
+    @a ranges*/
+size_t
+countPages(Ranges &ranges)
+{
+  size_t numOfPages = 0;
+  for (size_t ri = 0, re = ranges.size(); ri != re; ++ri)
+  {
+    ASSERT(ranges[ri].size() > 0);
+    numOfPages += ranges[ri].size();
+  }
+
+  return numOfPages;
+}
+
+// Merges to set of ranges together by sorting their union
+// and the collapsing consecutive ranges.
+void mergeRanges(Ranges &dest, Ranges &source)
+{
+  //  std::cerr << "Merging: " << std::endl;
+  //  debugRanges(dest);
+  //  debugRanges(source);
+  // Trivial cases, when one of the lists or both is empty.
+  Ranges temp;
+
+  if (source.empty())
+  {
+//    mergeSortedRanges(dest);
+    return;
+  }
+
+  if (dest.empty())
+  {
+//    mergeSortedRanges(source);
+    dest = source;
+    return;
+  }
+
+  size_t di = 0, si = 0;
+
+  temp.reserve(dest.size() + source.size());
+
+  // Select the one of the two queues which has the lowest start address.
+  if (dest.front().startAddr < source.front().startAddr)
+  {
+    temp.push_back(dest.front());
+    ++di;
+  }
+  else
+  {
+    temp.push_back(source.front());
+    ++si;
+  }
+
+  while (di < dest.size() && si < source.size())
+  {
+    ASSERT(temp.size());
+    RangeInfo &current = temp.back();
+    const RangeInfo &nextDest = dest[di];
+    const RangeInfo &nextSource = source[si];
+    // Select which of the two queues has the lowest start address.
+    if (nextDest.startAddr < nextSource.startAddr)
+    {
+      // Extend previous, if overlapping.
+      if (nextDest.startAddr <= current.endAddr)
+      {
+        if (nextDest.endAddr >= current.endAddr)
+          current.endAddr = nextDest.endAddr;
+      }
+      else
+        temp.push_back(nextDest);
+      ++di;
+    }
+    else
+    {
+      // Extend previous, if overlapping.
+      if (nextSource.startAddr <= current.endAddr)
+      {
+        if (nextSource.endAddr >= current.endAddr)
+          current.endAddr = nextSource.endAddr;
+      }
+      else
+        temp.push_back(nextSource);
+      ++si;
+    }
+
+    if (temp.size() && temp.back().endAddr < temp.back().startAddr)
+    {
+      std::cerr << temp.back().endAddr << " " << temp.back().startAddr << std::endl;
+      ASSERT(false);
+    }
+  }
+
+  // One of the two will finish earlier. Merge the remaining of the other.
+  if (di < dest.size())
+  {
+    for (size_t ri = di, re = dest.size(); ri != re; ++ri)
+    {
+      RangeInfo &current = temp.back();
+      const RangeInfo &next = dest[ri];
+      if (next.startAddr <= current.endAddr)
+      {
+        if (next.endAddr >= current.endAddr)
+          current.endAddr = next.endAddr;
+      }
+      else
+        temp.push_back(next);
+    }
+  }
+  else
+  {
+    for (size_t ri = si, re = source.size(); ri != re; ++ri)
+    {
+      RangeInfo &current = temp.back();
+      const RangeInfo &next = source[ri];
+      if (next.startAddr <= current.endAddr)
+      {
+        if (next.endAddr >= current.endAddr)
+          current.endAddr = next.endAddr;
+      }
+      else
+        temp.push_back(next);
+    }
+  }
+
+//  if (countPages(temp) < countPages(source))
+//  {
+//    debugRanges("old parent", dest);
+//    debugRanges("child", source);
+//    debugRanges("new parent", temp);
+//  }
+
+//  ASSERT(countPages(temp) >= countPages(source));
+
+  temp.reserve(temp.size());
+  dest.swap(temp);
+}
 
 /** Structure to hold information about nodes in the
     call tree. */
@@ -111,12 +311,12 @@ class NodeInfo
 {
 public:
   typedef std::vector<NodeInfo *> Nodes;
-  typedef std::vector<Allocation> Allocations;
   typedef Nodes::iterator Iterator;
 
-  Nodes CHILDREN;
+  Nodes   CHILDREN;
   Counter COUNTER;
-  Allocations allocations;
+  Ranges  RANGES;
+  Ranges  CUM_RANGES;
 
   NodeInfo()
     : SYMBOL(0), m_reportSymbol(0) {};
@@ -538,7 +738,12 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
 
   if (node == parent->getChildrenBySymbol(node->symbol()))
   {
-    parent->allocations.insert(parent->allocations.end(), node->allocations.begin(), node->allocations.end());
+    // Merge the ranges between the two nodes.
+    // Not only we need to extend the range, but in case
+    // we close an hole we also need to join the ranges
+    // together into one single range.
+    // are consecutive.
+    mergeRanges(parent->RANGES, node->RANGES);
 
     NodeInfo::Nodes::iterator new_end = std::remove_if(parent->CHILDREN.begin(),
                                                        parent->CHILDREN.end(),
@@ -604,6 +809,7 @@ public:
         return;
 
       parent->COUNTER.add(node->COUNTER, m_isMax);
+      mergeRanges(parent->RANGES, node->RANGES);
       parent->removeChild(node);
     }
 
@@ -658,6 +864,7 @@ public:
   void tree(ProfileInfo &prof);
   void dumpAllocations(ProfileInfo &prof);
   void prepdata(ProfileInfo &prof);
+  void summarizePageInfo(FlatVector &sorted);
 
   /** Sets the mnemonic name of the counter is to be used as a key.
 
@@ -700,7 +907,7 @@ private:
   bool                          m_isPerfTicks;
   bool                          m_keyMax;
   bool                          m_disableFilters;
-  bool                          m_showPartialPages;
+  bool                          m_showPageRanges;
   bool                          m_showPages;
   bool                          m_showLocalityMetrics;
   size_t                        m_topN;
@@ -712,7 +919,7 @@ IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv
    m_argc(argc),
    m_argv(argv),
    m_disableFilters(false),
-   m_showPartialPages(false),
+   m_showPageRanges(false),
    m_showPages(false),
    m_showLocalityMetrics(false),
    m_topN(0)
@@ -854,6 +1061,11 @@ public:
     values to the counts for the node itself,
     while on the way up (post) the counts of a child are
     added properly to the parent.
+
+    In case any of --show-pages, --show-page-ranges,
+    --show-locality-metrics options is found,
+    we propagate to the parent also the list of RANGES
+    and we merge it to the it ranges.
   */
 class AddCumulativeInfoFilter : public IgProfFilter
 {
@@ -862,12 +1074,16 @@ public:
     : m_isMax(isMax)
     {}
 
+  /** Initialise the cumulative counters with
+      the self counters.
+    */
   virtual void pre(NodeInfo *, NodeInfo *node)
     {
       ASSERT(node);
       Counter &counter = node->COUNTER;
       counter.cfreq = counter.freq;
       counter.ccnt = counter.cnt;
+      node->CUM_RANGES = node->RANGES;
     }
 
   virtual void post(NodeInfo *parent, NodeInfo *node)
@@ -876,7 +1092,21 @@ public:
       if (!parent)
         return;
       parent->COUNTER.accumulate(node->COUNTER, m_isMax);
+
+      // Merge the allocation ranges of the children into
+      // the cumulative ranges of the parent.
+      Ranges oldparent = parent->CUM_RANGES;
+      mergeRanges(parent->CUM_RANGES, node->CUM_RANGES);
+
+      if (countPages(parent->CUM_RANGES) < countPages(node->CUM_RANGES))
+      {
+        debugRanges("old parent", oldparent);
+        debugRanges("child", node->CUM_RANGES);
+        debugRanges("new parent", parent->CUM_RANGES);
+      }
+      ASSERT(countPages(parent->CUM_RANGES) >= countPages(node->CUM_RANGES));
     }
+
   virtual std::string name(void) const { return "cumulative info"; }
   virtual enum FilterType type(void) const { return BOTH; }
 
@@ -953,11 +1183,11 @@ public:
     */
   virtual void pre(NodeInfo *, NodeInfo *node)
   {
-    for (size_t i = 0, e = node->allocations.size(); i != e; ++i)
+    for (size_t i = 0, e = node->RANGES.size(); i != e; ++i)
     {
-      Allocation &a = node->allocations[i];
+      RangeInfo &r = node->RANGES[i];
       m_out << node << "," << node->symbol() << ","
-            << std::hex << a.address << "," << a.size << "\n";
+            << std::hex << r.startAddr << "," << r.endAddr - r.startAddr << "\n";
     }
   }
 
@@ -1008,11 +1238,13 @@ public:
         {
           todos.insert(todos.end(), todo->CHILDREN.begin(), todo->CHILDREN.end());
           node->COUNTER.add(todo->COUNTER, m_isMax);
+          mergeRanges(node->RANGES, todo->RANGES);
         }
         else if (NodeInfo *same = node->getChildrenBySymbol(todo->symbol()))
         {
           same->CHILDREN.insert(same->CHILDREN.end(), todo->CHILDREN.begin(), todo->CHILDREN.end());
           same->COUNTER.add(todo->COUNTER, m_isMax);
+          mergeRanges(same->RANGES, todo->RANGES);
         }
         else
           node->CHILDREN.push_back(todo);
@@ -1162,12 +1394,13 @@ private:
   bool m_isMax;
 };
 
-
+/** Structure to keep track of the cost of a given edge. */
 class CallInfo
 {
 public:
-  int64_t VALUES[3];
+  int64_t    VALUES[3];
   SymbolInfo *SYMBOL;
+  Ranges     RANGES;
 
   CallInfo(SymbolInfo *symbol)
     :SYMBOL(symbol)
@@ -1252,6 +1485,8 @@ public:
 
   int64_t SELF_KEY[3];
   int64_t CUM_KEY[3];
+  Ranges  SELF_RANGES;
+  Ranges  CUM_RANGES;
 protected:
   FlatInfo(SymbolInfo *symbol)
     : SYMBOL(symbol), DEPTH(-1) {
@@ -1686,12 +1921,16 @@ public:
         CallInfo *callInfo = parentInfo->getCallee(sym, true);
 
         accumulateCounts(callInfo->VALUES, nodeCounter.ccnt, nodeCounter.cfreq);
+        mergeRanges(callInfo->RANGES, node->CUM_RANGES);
       }
 
       // Do SELF_KEY
       accumulateCounts(symnode->SELF_KEY, nodeCounter.cnt, nodeCounter.freq);
+      mergeRanges(symnode->SELF_RANGES, node->RANGES);
+
       // Do CUM_KEY
       accumulateCounts(symnode->CUM_KEY, nodeCounter.ccnt, nodeCounter.cfreq);
+      mergeRanges(symnode->CUM_RANGES, node->CUM_RANGES);
     }
 
   virtual void post(NodeInfo *,
@@ -2169,8 +2408,8 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
   // in order to improve lookup whether or not a page is
   // already there. This way the total number of pages
   // touched is given by "count".
-  std::vector<int64_t> pages;
-  pages.reserve(20000);
+  std::vector<RangeInfo> ranges;
+  ranges.reserve(20000);
 
   while (! reader.eof())
   {
@@ -2242,8 +2481,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
     nodestack.push_back(child);
 
     match.reset();
-    pages.clear();
-    int64_t fullPagesCount = 0;
+    ranges.clear();
 
     // Read the counter information.
     while (true)
@@ -2307,59 +2545,26 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       else if (line.size() >= pos()+3
                && parseLeak(line.c_str(), pos, leakAddress, leakSize))
       {
-        // In case we specify --show-pages option, we keep an
-        // ordered unique list of all the (non completely allocated) pages
-        // that got touched. We only track beginning and end page since
-        // the others are not fragmented and not really interesting.
-        // This means that an allocation of 2MB has the same cost of an
-        // allocation of 5KB or two allocation of 1B that are on different pages.
-        // Moreover 4096 allocations of 1B have the same cost of 1 allocation
-        // of 1B, if they are continuos (i.e. pooled allocation are considered
-        // good).
-        if (m_showPages)
-        {
-          int64_t startPageAddress = leakAddress >> 12;
-          std::vector<int64_t>::iterator spi = std::lower_bound(pages.begin(),
-                                                                pages.end(),
-                                                                startPageAddress);
-
-          // Add contribution to pages if page was never seen.
-          if ((spi == pages.end()) ||  (*spi != startPageAddress))
-            pages.insert(spi, startPageAddress);
-
-          int64_t endPageAddress = (leakAddress+leakSize) >> 12;
-          std::vector<int64_t>::iterator epi = std::lower_bound(pages.begin(),
-                                                                pages.end(),
-                                                                endPageAddress);
-          // Add contribution to pages if page was never seen.
-          if ((epi == pages.end()) ||  (*epi != endPageAddress))
-            pages.insert(epi, endPageAddress);
-
-          // Keep the contribution of full pages between start and end one,
-          // if any.
-          int64_t fullPages = (endPageAddress - startPageAddress - 1);
-          if (!m_showPartialPages && fullPages > 0)
-            fullPagesCount += fullPages;
+        // In case we are not looking at pages or allocation, simply continue the loop.
+        if (!(m_showPages  || m_config->dumpAllocations || m_showPageRanges))
           continue;
-        }
-        else
+        // In the case we specify one of the --show-pages --show-page-ranges
+        // or --show-locality-metrics options, we keep track
+        // of the page ranges that are referenced by all the allocations
+        // (LK counters in the report).
+        //
+        // We first fill a vector with all the ranges, then we sort it later on
+        // collapsing all the adjacent ranges.
+        ASSERT(leakSize > 0);
+        ranges.push_back(RangeInfo(leakAddress, (leakAddress + leakSize + 1)));
+        RangeInfo &range = ranges.back();
+        if (m_showPages || m_showPageRanges)
         {
-          // Allocations get handled only when --dump-allocations flag
-          // is passed in the command line.
-          // Here we simply attach the allocation information to the
-          // node. They will be printed out by a special filter later on.
-          // Notice that allocation information needs to be merged in
-          // just like counters do in the case of filtering
-          // and reorganization of the calltree.
-          if (!m_config->dumpAllocations)
-            continue;
-
-          child->allocations.resize(child->allocations.size() + 1);
-          Allocation &a = child->allocations.back();
-          a.address = leakAddress;
-          a.size = leakSize;
-          continue;
+          range.startAddr = range.startAddr >> 12;
+          range.endAddr = range.endAddr >> 12;
         }
+        ASSERT(range.size() > 0);
+        continue;
       }
       else
       {
@@ -2374,13 +2579,17 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       child->COUNTER.freq += ctrfreq;
     }
 
-    // In case the --show-pages option was specified,
-    // we keep track of pages touched, rather than the
-    // counter value.
-    if (m_showPages && m_showLocalityMetrics)
-      child->COUNTER.cnt = child->COUNTER.cnt ? 4096 * (pages.size() + fullPagesCount) / child->COUNTER.cnt : 0;
-    else if (m_showPages)
-      child->COUNTER.cnt = pages.size() + fullPagesCount;
+    // Sort the ranges and collapse them, if any.
+    if (!ranges.size())
+    {
+      lineCount++;
+      continue;
+    }
+
+    std::sort(ranges.begin(), ranges.end());
+    mergeSortedRanges(ranges);
+    mergeRanges(child->RANGES, ranges);
+
     lineCount++;
   }
 
@@ -2971,6 +3180,69 @@ public:
     }
 };
 
+/** Helper method which summarizes page information
+    contained in flat infos and substitutes them to
+    the actual counter values.
+  */
+void
+IgProfAnalyzerApplication::summarizePageInfo(FlatVector &sorted)
+{
+  for (size_t fii = 0, fie = sorted.size(); fii != fie; ++fii)
+  {
+    FlatInfo *flatinfo = sorted[fii];
+    int64_t selfranges = 0;
+    int64_t cumranges = 0;
+    for (size_t ri = 0, re = flatinfo->SELF_RANGES.size(); ri != re; ++ri)
+      selfranges += flatinfo->SELF_RANGES[ri].size();
+
+    for (size_t ri = 0, re = flatinfo->CUM_RANGES.size(); ri != re; ++ri)
+      cumranges += flatinfo->CUM_RANGES[ri].size();
+
+    if (m_showPageRanges)
+    {
+      flatinfo->SELF_KEY[0] = flatinfo->SELF_RANGES.size();
+      flatinfo->CUM_KEY[0] = flatinfo->CUM_RANGES.size();
+      for (FlatInfo::Calls::iterator ci = flatinfo->CALLS.begin(), ce = flatinfo->CALLS.end();
+           ci != ce; ++ci)
+        (*ci)->VALUES[0] = (*ci)->RANGES.size();
+    }
+    else if (m_showLocalityMetrics)
+    {
+      if (!flatinfo->SELF_KEY[0])
+        flatinfo->SELF_KEY[0] = 1;
+      else
+        flatinfo->SELF_KEY[0] = 4096 * selfranges / flatinfo->SELF_KEY[0];
+
+      if (!flatinfo->CUM_KEY[0])
+        flatinfo->CUM_KEY[0] = 1;
+      else
+        flatinfo->CUM_KEY[0] = 4096 * selfranges / flatinfo->CUM_KEY[0];
+
+      for (FlatInfo::Calls::iterator ci = flatinfo->CALLS.begin(), ce = flatinfo->CALLS.end();
+           ci != ce; ++ci)
+      {
+        if (!(*ci)->RANGES.size())
+          (*ci)->VALUES[0] = 1;
+        else
+          (*ci)->VALUES[0] = 4096 * (*ci)->RANGES.size() / (*ci)->VALUES[0];
+      }
+    }
+    else if (m_showPages)
+    {
+      flatinfo->SELF_KEY[0] = selfranges;
+      flatinfo->CUM_KEY[0] = cumranges;
+      for (FlatInfo::Calls::iterator ci = flatinfo->CALLS.begin(), ce = flatinfo->CALLS.end();
+           ci != ce; ++ci)
+      {
+        int64_t callranges = 0;
+        for (size_t ri = 0, re = (*ci)->RANGES.size(); ri != re; ++ri)
+          callranges += (*ci)->RANGES[ri].size();
+        (*ci)->VALUES[0] = callranges;
+      }
+    }
+  }
+}
+
 void
 IgProfAnalyzerApplication::tree(ProfileInfo &prof)
 {
@@ -2997,6 +3269,9 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
        i != flatMap->end();
        i++)
     sorted.push_back(i->second);
+
+  if (m_showPageRanges || m_showPages || m_showLocalityMetrics)
+    summarizePageInfo(sorted);
 
   sort(sorted.begin(), sorted.end(), FlatInfoComparator(m_config->ordering()));
 
@@ -3179,6 +3454,9 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
        i++)
     sorted.push_back(i->second);
 
+  if (m_showPages || m_showLocalityMetrics || m_showPageRanges)
+    summarizePageInfo(sorted);
+
   sort(sorted.begin(), sorted.end(), FlatInfoComparator(m_config->ordering()));
 
   for (FlatVector::const_iterator i = sorted.begin(); i != sorted.end(); i++)
@@ -3270,8 +3548,8 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 
     if (m_showLocalityMetrics)
       std::cout << m_key << "@SPREAD_FACTOR\n";
-    else if (m_showPartialPages)
-      std::cout << m_key << "@PARTIAL_PAGES\n";
+    else if (m_showPageRanges)
+      std::cout << m_key << "@RANGES\n";
     else if (m_showPages)
       std::cout << m_key << "@PAGES\n";
     else
@@ -3304,7 +3582,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
          i++)
     {
       MainGProfRow &row = **i;
-      printPercentage(row.PCT);
+      if (m_showLocalityMetrics || m_showPageRanges)
+        printPercentage(0., "   -.--  ");
+      else
+        printPercentage(row.PCT);
 
       if (m_isPerfTicks && ! m_config->callgrind())
         printf("%*s  ", maxval, thousands(static_cast<double>(row.CUM) * tickPeriod, 0, 2).c_str());
@@ -3335,7 +3616,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     {
       MainGProfRow &row = **i;
 
-      printPercentage(row.SELF_PCT, "%7.2f  ");
+      if (m_showLocalityMetrics || m_showPageRanges)
+        printPercentage(0., "   -.--  ");
+      else
+        printPercentage(row.SELF_PCT, "%7.2f  ");
 
       if (m_isPerfTicks && ! m_config->callgrind())
         printf("%*s  ", maxval, thousands(static_cast<double>(row.SELF) * tickPeriod, 0, 2).c_str());
@@ -3402,7 +3686,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         OtherGProfRow &row = **c;
         std::cout << std::string(8, ' ');
 
-        printPercentage(row.PCT);
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0., "   -.--  ");
+        else
+          printPercentage(row.PCT);
 
         ASSERT(maxval);
         std::cout << std::string(maxval, '.') << "  ";
@@ -3435,7 +3722,11 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       char rankBuffer[256];
       sprintf(rankBuffer, "[%d]", mainRow.rank());
       printf("%-8s", rankBuffer);
-      printPercentage(mainRow.PCT);
+
+      if (m_showLocalityMetrics || m_showPageRanges)
+        printPercentage(0., "   -.--  ");
+      else
+        printPercentage(mainRow.PCT);
 
       if (m_isPerfTicks && ! m_config->callgrind())
       {
@@ -3473,7 +3764,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       {
         OtherGProfRow &row = **c;
         std::cout << std::string(8, ' ');
-        printPercentage(row.PCT);
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0., "   -.--  ");
+        else
+          printPercentage(row.PCT);
 
         std::cout << std::string(maxval, '.') << "  ";
 
@@ -3561,8 +3855,8 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                   "INSERT INTO summary (counter, total_count, total_freq, tick_period) VALUES(\"");
     if (m_showLocalityMetrics)
       std::cout << m_key << "@SPREAD_FACTOR";
-    else if (m_showPartialPages)
-      std::cout << m_key << "@PARTIAL_PAGES";
+    else if (m_showPageRanges)
+      std::cout << m_key << "@RANGES";
     else if (m_showPages)
       std::cout << m_key << "@PAGES";
     else
@@ -3600,7 +3894,13 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                 << mainRow.SELF << ", " << mainRow.CUM << ", " << mainRow.KIDS << ", "
                 << mainRow.SELF_ALL[1] << ", " << mainRow.CUM_ALL[1] << ", "
                 << mainRow.SELF_ALL[2] << ", " << mainRow.CUM_ALL[2] << ", ";
-      printPercentage(mainRow.PCT, "%7.2f", "-101");
+
+      // In case we are showing page related information,
+      // percentages do not really make sense.
+      if (m_showLocalityMetrics || m_showPageRanges)
+        printPercentage(0.0);
+      else
+        printPercentage(mainRow.PCT, "%7.2f", "-101");
       std::cout << ");\n";
       if ((++insertCount % 100000) == 0)
         std::cout << "END TRANSACTION;\nBEGIN TRANSACTION;\n";
@@ -3613,7 +3913,13 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         std::cout << "INSERT INTO parents VALUES ("
                   << row.rank() << ", " << mainRow.rank() << ", "
                   << row.SELF_COUNTS << ", " << row.SELF_CALLS << ", " << row.SELF_PATHS << ", ";
-        printPercentage(row.PCT, "%7.2f", "-101");
+
+        // In case we are showing page related information,
+        // percentages do not really make sense.
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0.0);
+        else
+          printPercentage(row.PCT, "%7.2f", "-101");
         std::cout << ");\n";
         if ((++insertCount % 100000) == 0)
           std::cout << "END TRANSACTION;\nBEGIN TRANSACTION;\n";
@@ -3627,7 +3933,13 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         std::cout << "INSERT INTO children VALUES("
                   << row.rank() << ", " << mainRow.rank() << ", "
                   << row.SELF_COUNTS << ", "<< row.SELF_CALLS << ", " << row.SELF_PATHS << ", ";
-        printPercentage(row.PCT, "%7.2f", "-101");
+
+        // In case we are showing page related information,
+        // percentages do not really make sense.
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0.0);
+        else
+          printPercentage(row.PCT, "%7.2f", "-101");
         std::cout << ");\n";
         if ((++insertCount % 100000) == 0)
           std::cout << "END TRANSACTION;\nBEGIN TRANSACTION;\n";
@@ -3880,18 +4192,15 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     else if (is("--show-locality-metrics"))
     {
       m_showLocalityMetrics = true;
-      m_showPartialPages = true;
       m_showPages = true;
     }
-    else if (is("--show-partial-pages"))
+    else if (is("--show-page-ranges"))
     {
-      m_showPartialPages = true;
+      m_showPageRanges = true;
       m_showPages = true;
     }
     else if (is("--show-pages"))
       m_showPages = true;
-    else if (is("--show-locality-metric"))
-      m_showLocalityMetrics = true;
     else if (is("--"))
     {
       while (left(arg) - 1)
@@ -3910,7 +4219,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
   if (m_showPages)
   {
     if (!m_key.empty())
-     dieWithUsage("Option --show-pages / --show-partial-pages cannot be used with -r");
+     dieWithUsage("Option --show-pages / --show-page-ranges cannot be used with -r");
     setKey("MEM_LIVE");
     m_config->setShowCalls(false);
   }
