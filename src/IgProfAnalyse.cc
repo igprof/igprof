@@ -3508,7 +3508,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
        i++)
   {
     FlatInfo *info = *i;
-    if (!info->CUM_KEY[0])
+    if (!info->CUM_KEY[0] && !m_showLocalityMetrics)
       continue;
 
     // Sort calling and called functions.
