@@ -104,6 +104,9 @@ struct Allocation
   uint64_t  size;     // The size of the allocation 
 };
 
+
+/** Structure to hold information about nodes in the
+    call tree. */
 class NodeInfo
 {
 public:
@@ -115,26 +118,23 @@ public:
   Counter COUNTER;
   Allocations allocations;
   
-  NodeInfo(SymbolInfo *symbol)
-    : SYMBOL(symbol), m_reportSymbol(0) {};
+  NodeInfo()
+    : SYMBOL(0), m_reportSymbol(0) {};
+
   NodeInfo *getChildrenBySymbol(SymbolInfo *symbol)
     {
-      for (Nodes::const_iterator i = CHILDREN.begin();
-           i != CHILDREN.end();
-           i++)
+      for (size_t ni = 0, ne = CHILDREN.size(); ni != ne; ++ni)
       {
-        if ((*i)->SYMBOL == symbol)
-          return *i;
+        NodeInfo *node = CHILDREN[ni];
+        if (node->SYMBOL == symbol)
+          return node;
 
-        if (symbol && ((*i)->SYMBOL->NAME == symbol->NAME))
-          return *i;
+        if (symbol && (node->SYMBOL->NAME == symbol->NAME))
+          return node;
       }
       return 0;
     }
  
-  Nodes::iterator begin(void) { return CHILDREN.begin(); }
-  Nodes::iterator end(void) { return CHILDREN.end(); }
-  
   void printDebugInfo(int level=0)
     {
       std::string indent(level*4, ' ');
@@ -142,13 +142,12 @@ public:
                 << " Symbol name: " << this->symbol()->NAME
                 << " File name: " << this->symbol()->FILE->NAME
                 << std::endl;
-      for (Nodes::const_iterator i = CHILDREN.begin();
-           i != CHILDREN.end();
-           i++)
-        (*i)->printDebugInfo(level+1);
+      for (size_t ni = 0, ne = CHILDREN.size(); ni != ne; ++ni)
+        CHILDREN[ni]->printDebugInfo(level+1);
     }
   
   void removeChild(NodeInfo *node) {
+
     ASSERT(node);
     Nodes::iterator new_end = std::remove_if(CHILDREN.begin(), 
                                              CHILDREN.end(), 
@@ -213,10 +212,11 @@ public:
     {
       FileInfo *unknownFile = new FileInfo("<unknown>", false);
       SymbolInfo *spontaneousSym = new SymbolInfo("<spontaneous>", unknownFile, 0);
-      m_spontaneous = new NodeInfo(spontaneousSym);
+      m_spontaneous = new NodeInfo();
+      m_spontaneous->setSymbol(spontaneousSym);
       m_files.insert(unknownFile);
       m_syms.push_back(spontaneousSym);
-      m_nodes.push_back(m_spontaneous);  
+      m_nodes.push_back(m_spontaneous);
     };
 
   Files & files(void) { return m_files; }
@@ -695,6 +695,7 @@ private:
   std::vector<std::string>      m_inputFiles;
   std::vector<RegexpSpec>       m_regexps;
   std::vector<IgProfFilter *>   m_filters;
+  std::deque<NodeInfo>          m_nodesStorage;
   std::string                   m_key;
   bool                          m_isPerfTicks;
   bool                          m_keyMax;
@@ -986,7 +987,7 @@ public:
       ASSERT(node->symbol()->FILE);
 
       std::deque<NodeInfo *> todos;
-      todos.insert(todos.begin(), node->begin(), node->end());
+      todos.insert(todos.begin(), node->CHILDREN.begin(), node->CHILDREN.end());
       node->CHILDREN.clear();  
       convertSymbol(node);
 
@@ -1005,12 +1006,12 @@ public:
         // * Otherwise we simply re-add the node.
         if (todo->symbol() == node->symbol())
         {
-          todos.insert(todos.end(), todo->begin(), todo->end());
+          todos.insert(todos.end(), todo->CHILDREN.begin(), todo->CHILDREN.end());
           node->COUNTER.add(todo->COUNTER, m_isMax);
         }
         else if (NodeInfo *same = node->getChildrenBySymbol(todo->symbol()))
         {
-          same->CHILDREN.insert(same->end(), todo->begin(), todo->end());
+          same->CHILDREN.insert(same->CHILDREN.end(), todo->CHILDREN.begin(), todo->CHILDREN.end());
           same->COUNTER.add(todo->COUNTER, m_isMax);
         }
         else
@@ -2228,7 +2229,11 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
     
     if (! child)
     {
-      child = new NodeInfo(sym);
+      // Nodes are allocated in a deque, to maximize locality
+      // and reduce the actual number of allocations.
+      m_nodesStorage.resize(m_nodesStorage.size() + 1);
+      child = &(m_nodesStorage.back());
+      child->setSymbol(sym);
       nodes.push_back(child);
       if (parent)
         parent->CHILDREN.push_back(child);
