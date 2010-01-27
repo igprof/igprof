@@ -234,8 +234,11 @@ def summary(database, out, cumulative):
     rank, name, count, calls = l.split("@@@")
     name = cgi.escape(name)
     path = join(absPath, str(rank))
-    percent = 100*(float(count) / float(total_count))
-    pct = locale.format("%.2f", percent, 2)
+    if float(total_count):
+      percent = 100*(float(count) / float(total_count))
+      pct = locale.format("%.2f", percent, 2)
+    else:
+      pct = "-.--"
     count = locale.format(countFormat, int(count) * multiplier, True)
     calls = locale.format("%d", int(calls), True)
     out.write("""<tr>
