@@ -43,8 +43,8 @@ dieWithUsage(const char *message = 0)
   // * -F/--filter-module [FILE]
   // * --callgrind
   //
-  // which where present in the old perl version 
-  // are either obsolete or not supported at the moment 
+  // which where present in the old perl version
+  // are either obsolete or not supported at the moment
   // by igprof-analyse. We do not show them in the usage, but
   // we do show a different message if someone uses them.
   if (message)
@@ -95,13 +95,13 @@ private:
 
 /** Structure which holds information about a given
     live allocation. This is used to hold
-    information about the LK elements found in the 
+    information about the LK elements found in the
     report.
  */
 struct Allocation
 {
   uintptr_t address;  // The address of the allocation
-  uint64_t  size;     // The size of the allocation 
+  uint64_t  size;     // The size of the allocation
 };
 
 
@@ -113,11 +113,11 @@ public:
   typedef std::vector<NodeInfo *> Nodes;
   typedef std::vector<Allocation> Allocations;
   typedef Nodes::iterator Iterator;
-    
+
   Nodes CHILDREN;
   Counter COUNTER;
   Allocations allocations;
-  
+
   NodeInfo()
     : SYMBOL(0), m_reportSymbol(0) {};
 
@@ -134,7 +134,7 @@ public:
       }
       return 0;
     }
- 
+
   void printDebugInfo(int level=0)
     {
       std::string indent(level*4, ' ');
@@ -145,27 +145,27 @@ public:
       for (size_t ni = 0, ne = CHILDREN.size(); ni != ne; ++ni)
         CHILDREN[ni]->printDebugInfo(level+1);
     }
-  
+
   void removeChild(NodeInfo *node) {
 
     ASSERT(node);
-    Nodes::iterator new_end = std::remove_if(CHILDREN.begin(), 
-                                             CHILDREN.end(), 
+    Nodes::iterator new_end = std::remove_if(CHILDREN.begin(),
+                                             CHILDREN.end(),
                                              std::bind2nd(std::equal_to<NodeInfo *>(), node));
     if (new_end != CHILDREN.end())
-      CHILDREN.erase(new_end, CHILDREN.end()); 
+      CHILDREN.erase(new_end, CHILDREN.end());
   }
-  
+
   SymbolInfo *symbol(void) const
-    { 
-      return m_reportSymbol ? m_reportSymbol : SYMBOL; 
+    {
+      return m_reportSymbol ? m_reportSymbol : SYMBOL;
     }
-  
+
   void reportSymbol(SymbolInfo *reportSymbol)
-    { 
-      m_reportSymbol = reportSymbol; 
+    {
+      m_reportSymbol = reportSymbol;
     }
-  
+
   SymbolInfo *reportSymbol(void) const
     {
       return m_reportSymbol;
@@ -180,12 +180,12 @@ public:
       m_reportSymbol = 0;
     }
 private:
-  SymbolInfo *SYMBOL; 
+  SymbolInfo *SYMBOL;
   SymbolInfo *m_reportSymbol;
 };
 
 
-class ProfileInfo 
+class ProfileInfo
 {
 private:
   struct FilesComparator
@@ -195,7 +195,7 @@ private:
         return strcmp(f1->NAME.c_str(), f2->NAME.c_str()) < 0;
       }
   };
-  
+
 public:
   typedef std::set<FileInfo *, FilesComparator> Files;
   typedef std::vector<SymbolInfo *> Syms;
@@ -242,13 +242,13 @@ class IgProfFilter;
   */
 struct RegexpSpec
 {
-  // The actual regular expression to match. 
+  // The actual regular expression to match.
   std::string  re;
   // The replacement string.
   std::string  with;
 };
 
-class Configuration 
+class Configuration
 {
 public:
   enum OutputType {
@@ -261,7 +261,7 @@ public:
     DESCENDING=-1,
     ASCENDING=1
   };
-  
+
   Configuration(void);
 
   void setShowLib(bool value) { m_showLib = value;}
@@ -292,16 +292,16 @@ public:
 
   void setNormalValue(bool value) { m_normalValue = value; }
   bool normalValue(void) { return m_normalValue; }
- 
+
   void setTickPeriod(float value) { m_tickPeriod = value; }
   float tickPeriod(void) {return m_tickPeriod; }
-  
+
   void setMergeLibraries(bool value) { m_mergeLibraries = value; }
   bool mergeLibraries(void) { return m_mergeLibraries; }
 
   void setBaseline(const std::string &baseline)
     {
-      m_baseline = baseline; 
+      m_baseline = baseline;
     }
 
   const std::string &baseline(void)
@@ -313,7 +313,7 @@ public:
     {
       m_diffMode = value;
     }
-  
+
   bool diffMode(void)
     {
       return m_diffMode;
@@ -321,7 +321,7 @@ public:
 
   bool hasHitFilter(void)
     {
-      return minCountValue > 0 
+      return minCountValue > 0
         || maxCountValue > 0
         || minCallsValue > 0
         || maxCallsValue > 0
@@ -381,8 +381,8 @@ class StackTraceFilter
 {
 public:
   virtual ~StackTraceFilter();
-  virtual void filter(SymbolInfo *symbol, 
-                      int64_t &counter, 
+  virtual void filter(SymbolInfo *symbol,
+                      int64_t &counter,
                       int64_t &freq) = 0;
 };
 
@@ -391,23 +391,23 @@ StackTraceFilter::~StackTraceFilter() {}
 class ZeroFilter : public StackTraceFilter
 {
 public:
-  virtual void filter(SymbolInfo *, int64_t &counter, int64_t &freq) 
-    { 
-      counter=0; freq = 0; 
+  virtual void filter(SymbolInfo *, int64_t &counter, int64_t &freq)
+    {
+      counter=0; freq = 0;
     }
 };
 
 class BaseLineFilter : public StackTraceFilter
 {
 public:
-  virtual void filter(SymbolInfo *, int64_t &counter, int64_t &freq) 
-    { 
-      counter=-counter; freq = -freq; 
+  virtual void filter(SymbolInfo *, int64_t &counter, int64_t &freq)
+    {
+      counter=-counter; freq = -freq;
     }
 };
 
 // Filters the incoming stacktraces by the size
-// of their counters(either absolute total, average, or 
+// of their counters(either absolute total, average, or
 // by the number of calls to a given stacktrace).
 // If the counter value is not within limits,
 // the the stacktrace is not accumulated in the
@@ -425,22 +425,22 @@ public:
     {
       if (m_minValue > 0 && counter < m_minValue)
       {
-        counter = 0; freq = 0;    
+        counter = 0; freq = 0;
         return;
       }
 
       if (m_maxValue > 0 && counter > m_maxValue)
       {
-        counter = 0; freq = 0;    
+        counter = 0; freq = 0;
         return;
       }
 
       if (m_minFreq > 0 && freq < m_minFreq)
       {
-        counter = 0; freq = 0;    
+        counter = 0; freq = 0;
         return;
       }
-    
+
       if (m_maxFreq > 0 && freq > m_maxFreq)
       {
         counter = 0; freq = 0;
@@ -449,9 +449,9 @@ public:
 
       if (m_minAvg > 0 && freq && (counter/freq < m_minAvg))
       {
-        counter = 0; freq = 0;    
+        counter = 0; freq = 0;
         return;
-      }                           
+      }
 
       if (m_maxAvg > 0 && freq && (counter/freq > m_maxAvg))
       {
@@ -490,15 +490,15 @@ public:
 };
 
 /** Merges @a node and all its children to @a parent.
-    
-    We iterate on all the children of node. 
+
+    We iterate on all the children of node.
     If parent does not have any children with the same name, we simply add it
     to the list of children.
     If parent already has a children with the same symbol name
     we merge the counters and call mergeToNode for every one of the children.
     Finally if node is among the children of parent, remove it from them.
 
-    @a node is the node to be removed. 
+    @a node is the node to be removed.
 
     @a parent is the parent of that node, which will get all the
      children of node.
@@ -512,11 +512,11 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
   // * If parent does not have any children with the same name, we simply add it
   //   to the list of children. [2]
   // * If parent already has a children with the same symbol name
-  //   we merge the counters and call mergeToNode for every one of the 
+  //   we merge the counters and call mergeToNode for every one of the
   //   children. [3]
   // Finally if node is among the children of parent we copy all
   // its allocations to it and remove the node from the children list. [4]
- 
+
   // [1]
   for (size_t i = 0, e = node->CHILDREN.size(); i != e; i++)
   {
@@ -649,8 +649,8 @@ public:
   void parseArgs(const ArgsList &args);
   void readDump(ProfileInfo &prof, const std::string& filename, StackTraceFilter *filter = 0);
   void analyse(ProfileInfo &prof, TreeMapBuilderFilter *baselineBuilder);
-  void generateFlatReport(ProfileInfo &prof, 
-                          TreeMapBuilderFilter *callTreeBuilder, 
+  void generateFlatReport(ProfileInfo &prof,
+                          TreeMapBuilderFilter *callTreeBuilder,
                           TreeMapBuilderFilter *baselineBuilder,
                           FlatVector &sorted);
   void callgrind(ProfileInfo &prof);
@@ -661,7 +661,7 @@ public:
 
   /** Sets the mnemonic name of the counter is to be used as a key.
 
-      Update the m_keyMax and m_isPerfTick to match the kind of 
+      Update the m_keyMax and m_isPerfTick to match the kind of
       counter specified.
 
       It also sets up the default filters (unless --no-filter / -nf is
@@ -678,7 +678,7 @@ public:
 
     if (m_disableFilters)
       return;
-    
+
     m_filters.push_back(new RemoveIgProfFilter(m_keyMax));
 
     if (!m_filters.empty() && !memcmp(m_key.c_str(), "MEM_", 4))
@@ -723,7 +723,7 @@ parseHeaders(const std::string &headerLine)
 {
   lat::Regexp matchHeader("^P=\\(.*T=(.*)\\)");
   lat::RegexpMatch match;
-  
+
   if (!matchHeader.match(headerLine, 0, 0, &match))
   {
     std::cerr << "\nThis does not look like an igprof profile stats:\n  "
@@ -737,7 +737,7 @@ parseHeaders(const std::string &headerLine)
 
 static int s_counter = 0;
 
-void 
+void
 printProgress(void)
 {
   s_counter = (s_counter + 1) % 100000;
@@ -745,7 +745,7 @@ printProgress(void)
     std::cerr << "o";
 }
 
-int 
+int
 index(const std::string &s, char c)
 {
   int pos = 0;
@@ -760,7 +760,7 @@ index(const std::string &s, char c)
   return -1;
 }
 
-class Position 
+class Position
 {
 public:
   unsigned int operator()(void) { return m_pos; }
@@ -778,7 +778,7 @@ symlookup(FileInfo *file, int fileoff, const std::string& symname, bool useGdb)
   // * If the useGdb option is true, it uses the symbol offset to look up,
   //   via nm, the closest matching symbol.
   // * If the useGdb option is not given and the symbol starts with @?
-  // * If any of the above match, it simply 
+  // * If any of the above match, it simply
   ASSERT(file);
   std::string result = symname;
   if ((symname.size() > 1 && symname[0] == '@' && symname[1] == '?') && file->NAME.size() && (fileoff > 0))
@@ -797,18 +797,18 @@ symlookup(FileInfo *file, int fileoff, const std::string& symname, bool useGdb)
                + buffer;
     }
   }
-  
+
   if (useGdb && lat::Filename(file->NAME).isRegular())
   {
-    const char *name = file->symbolByOffset(fileoff); 
-    if (name) return name; 
+    const char *name = file->symbolByOffset(fileoff);
+    if (name) return name;
   }
   return result;
 }
 
 void
-printSyntaxError(const std::string &text, 
-                 const std::string &filename, 
+printSyntaxError(const std::string &text,
+                 const std::string &filename,
                  int line, int position)
 {
   std::cerr << filename << ":" << "line " << line
@@ -822,7 +822,7 @@ printSyntaxError(const std::string &text,
 // required to allocate the amount of memory that fits on
 // one page. This is a rough indication of the actual
 // fragmentation and has the advantage that the greater the number is
-// the more fragmented the memory is likely to be. 
+// the more fragmented the memory is likely to be.
 //
 // FIXME: a more accurate indication of fragmentation is
 //        to find out how many pages were actually touched
@@ -847,15 +847,15 @@ public:
 };
 
 /** This filter accumulates all the counters so that
-    parents cumulative counts / freq contain all 
+    parents cumulative counts / freq contain all
     include those of all their children.
-    
+
     On the way down (pre) the filter sets all the cumulative
     values to the counts for the node itself,
     while on the way up (post) the counts of a child are
-    added properly to the parent. 
+    added properly to the parent.
   */
-class AddCumulativeInfoFilter : public IgProfFilter 
+class AddCumulativeInfoFilter : public IgProfFilter
 {
 public:
   AddCumulativeInfoFilter(bool isMax)
@@ -885,7 +885,7 @@ private:
 };
 
 /** Simple tree consistency class that makes sure that there
-    is only one node (the root) without parent. 
+    is only one node (the root) without parent.
 */
 class CheckTreeConsistencyFilter : public IgProfFilter
 {
@@ -897,7 +897,7 @@ public:
   virtual void post(NodeInfo *parent,
                     NodeInfo *)
     {
-      if (!parent) 
+      if (!parent)
       {
         m_noParentCount++;
         ASSERT(m_noParentCount == 1);
@@ -920,9 +920,9 @@ public:
   virtual void pre(NodeInfo *parent, NodeInfo *node)
     {
       m_parentStack.erase(std::find(m_parentStack.begin(), m_parentStack.end(), parent), m_parentStack.end());
-      m_parentStack.push_back(parent);  
-    
-      std::cerr << std::string(2*(m_parentStack.size()-1), ' ') << node->symbol()->NAME; 
+      m_parentStack.push_back(parent);
+
+      std::cerr << std::string(2*(m_parentStack.size()-1), ' ') << node->symbol()->NAME;
       Counter &counter = node->COUNTER;
       std::cerr << " C" << "[" << counter.cnt << ", "
                 << counter.freq << ", "
@@ -933,7 +933,7 @@ public:
   virtual std::string name(void) const { return "Printing tree structure"; }
   virtual enum FilterType type(void) const {return PRE; }
 private:
-  std::vector<NodeInfo *> m_parentStack; 
+  std::vector<NodeInfo *> m_parentStack;
 };
 
 /** Filter which dumps per node allocation information
@@ -956,7 +956,7 @@ public:
     for (size_t i = 0, e = node->allocations.size(); i != e; ++i)
     {
       Allocation &a = node->allocations[i];
-      m_out << node << "," << node->symbol() << "," 
+      m_out << node << "," << node->symbol() << ","
             << std::hex << a.address << "," << a.size << "\n";
     }
   }
@@ -988,10 +988,10 @@ public:
 
       std::deque<NodeInfo *> todos;
       todos.insert(todos.begin(), node->CHILDREN.begin(), node->CHILDREN.end());
-      node->CHILDREN.clear();  
+      node->CHILDREN.clear();
       convertSymbol(node);
 
-      while (!todos.empty()) 
+      while (!todos.empty())
       {
         NodeInfo *todo = todos.front();
         todos.pop_front();
@@ -1015,7 +1015,7 @@ public:
           same->COUNTER.add(todo->COUNTER, m_isMax);
         }
         else
-          node->CHILDREN.push_back(todo);  
+          node->CHILDREN.push_back(todo);
       }
     }
   virtual enum FilterType type(void) const {return PRE; }
@@ -1025,7 +1025,7 @@ private:
   bool m_isMax;
 };
 
-class UseFileNamesFilter : public CollapsingFilter 
+class UseFileNamesFilter : public CollapsingFilter
 {
   typedef std::map<std::string, SymbolInfo *> FilenameSymbols;
 public:
@@ -1072,7 +1072,7 @@ public:
       m_regexps.resize(m_regexps.size() + 1);
       Regexp &regexp = m_regexps.back();
       regexp.re = new lat::Regexp(specs[i].re);
-      regexp.with = specs[i].with; 
+      regexp.with = specs[i].with;
     }
   }
 
@@ -1104,11 +1104,11 @@ protected:
           continue;
 
         translatedName = lat::StringOps::replace(mutantString, *(regexp.re), regexp.with);
-        
+
         CollapsedSymbols::iterator csi = m_symbols.find(translatedName);
         if (csi != m_symbols.end())
           node->setSymbol(csi->second);
-        
+
         SymbolInfo *newInfo = new SymbolInfo(translatedName.c_str(),
                                              node->symbol()->FILE, 0);
         m_symbols.insert(CollapsedSymbols::value_type(translatedName,
@@ -1123,7 +1123,7 @@ private:
   std::vector<Regexp> m_regexps;
 };
 
-/** Filter to merge use by C++ std namespace entities to parents. 
+/** Filter to merge use by C++ std namespace entities to parents.
  */
 class RemoveStdFilter : public IgProfFilter
 {
@@ -1131,7 +1131,7 @@ public:
   RemoveStdFilter(bool isMax)
   :m_isMax(isMax)
   {}
-  
+
   virtual void post(NodeInfo *parent,
                     NodeInfo *node)
     {
@@ -1141,18 +1141,18 @@ public:
       ASSERT(node->originalSymbol());
       // Check if the symbol refers to a definition in the c++ "std" namespace.
       const char *symbolName = node->originalSymbol()->NAME.c_str();
-  
+
       if (*symbolName++ != '_' || *symbolName++ != 'Z')
         return;
       if (strncmp(symbolName, "NSt", 3) || strncmp(symbolName, "St", 2))
         return;
-      
+
       // Yes it was.  Squash resource usage to the caller and hide this
       // function from the call tree.(Note that the std entry may end
       // up calling something in the user space again, so we don't want
       // to lose that information.)
       std::cerr << "Symbol " << node->originalSymbol()->NAME << " is "
-                << " in " << node->originalSymbol()->FILE->NAME 
+                << " in " << node->originalSymbol()->FILE->NAME
                 << ". Merging." << std::endl;
       mergeToNode(parent, node, m_isMax);
     }
@@ -1164,7 +1164,7 @@ private:
 
 
 class CallInfo
-{ 
+{
 public:
   int64_t VALUES[3];
   SymbolInfo *SYMBOL;
@@ -1174,7 +1174,7 @@ public:
     {
       memset(VALUES, 0, 3*sizeof(int64_t));
     }
-};  
+};
 
 template<class T>
 struct CompareBySymbol
@@ -1209,7 +1209,7 @@ public:
       this->CALLS.insert(callInfo);
       return callInfo;
     }
-  
+
   static FlatInfo *getInMap(FlatInfoMap *flatMap, SymbolInfo *sym, bool create=true)
     {
       FlatInfoMap::iterator i = flatMap->find(sym);
@@ -1223,31 +1223,31 @@ public:
       flatMap->insert(FlatInfoMap::value_type(sym, result));
       return result;
     }
-  
+
   std::string filename(void)
     {
       ASSERT(SYMBOL);
       ASSERT(SYMBOL->FILE);
       return SYMBOL->FILE->NAME;
     }
-  
+
   const char *name(void)
     {
       ASSERT(SYMBOL);
       return SYMBOL->NAME.c_str();
     }
-  
+
   Callers CALLERS;
   Calls CALLS;
   SymbolInfo *SYMBOL;
   int DEPTH;
   int rank(void) {
     ASSERT(SYMBOL);
-    return SYMBOL->rank(); 
+    return SYMBOL->rank();
   }
   void setRank(int rank) {
     ASSERT(SYMBOL);
-    SYMBOL->setRank(rank); 
+    SYMBOL->setRank(rank);
   }
 
   int64_t SELF_KEY[3];
@@ -1260,7 +1260,7 @@ protected:
   }
 };
 
-class SymbolInfoFactory 
+class SymbolInfoFactory
 {
 public:
   typedef std::map<std::string, SymbolInfo *> SymbolsByName;
@@ -1283,7 +1283,7 @@ public:
 
   FileInfo *createFileInfo(const std::string &origname, unsigned int fileid)
     {
-    
+
       static PathCollection paths("PATH");
       if ((m_files.size() >= fileid + 1)  && m_files[fileid] == 0){
         std::cerr << "Error in igprof input file." << std::endl;
@@ -1304,41 +1304,41 @@ public:
       else
       {
         FileInfo *file;
-      
+
         if (lat::Filename(absname).isDirectory() == true)
           file = new FileInfo("<dynamically generated>", false);
-        else 
-          file = new FileInfo(absname, m_useGdb); 
- 
+        else
+          file = new FileInfo(absname, m_useGdb);
+
         m_namedFiles.insert(FilesByName::value_type(absname, file));
         int oldsize = m_files.size();
-        int missingSize = fileid + 1 - oldsize; 
+        int missingSize = fileid + 1 - oldsize;
         if (missingSize > 0)
-        { 
+        {
           m_files.resize(fileid + 1);
           for (int i = oldsize; i < oldsize + missingSize; i++)
-            ASSERT(m_files[i] == 0); 
+            ASSERT(m_files[i] == 0);
         }
         m_files[fileid] = file;
         return file;
       }
     }
 
-  
-  SymbolInfo *createSymbolInfo(const std::string &line, unsigned int symid, 
+
+  SymbolInfo *createSymbolInfo(const std::string &line, unsigned int symid,
                                Position &pos, int lineCount)
     {
       // Regular expressions matching the file and symbolname information.
       static lat::Regexp fRE("F(\\d+)\\+(-?\\d+) N=\\((.*?)\\)\\)\\+\\d+\\s*");
       static lat::Regexp fWithFilenameRE("F(\\d+)=\\((.*?)\\)\\+(-?\\d+) N=\\((.*?)\\)\\)\\+\\d+\\s*");
       static lat::RegexpMatch match;
-    
+
       FileInfo *file = 0;
       std::string symname;
       unsigned int fileoff;
 
       match.reset();
-    
+
       if (fRE.match(line, pos(), 0, &match))
       {
         IntConverter getIntMatch(line, &match);
@@ -1365,11 +1365,11 @@ public:
       }
 
       pos(match.matchEnd());
-    
+
       symname = symlookup(file, fileoff, symname, m_useGdb);
-    
+
       SymbolInfoFactory::SymbolsByName::iterator symiter = namedSymbols().find(symname);
-    
+
       if (symiter != namedSymbols().end())
       {
         ASSERT(symiter->second);
@@ -1380,22 +1380,22 @@ public:
         ASSERT(getSymbol(symid) == symiter->second);
         return symiter->second;
       }
-   
+
       SymbolInfo *sym = new SymbolInfo(symname.c_str(), file, fileoff);
       namedSymbols().insert(SymbolInfoFactory::SymbolsByName::value_type(symname, sym));
-      ASSERT(symid >= m_symbols.size()); 
+      ASSERT(symid >= m_symbols.size());
       m_symbols.resize(symid + 1);
       m_symbols[symid] = sym;
       return sym;
     }
 
-  
+
   static SymbolsByName &namedSymbols(void)
     {
       static SymbolsByName s_namedSymbols;
       return s_namedSymbols;
     }
-  
+
 private:
   typedef std::vector<FileInfo *> Files;
   typedef std::map<std::string, FileInfo *> FilesByName;
@@ -1409,8 +1409,8 @@ private:
 
 struct SuffixOps
 {
-  static void splitSuffix(const std::string &fullSymbol, 
-                          std::string &oldSymbol, 
+  static void splitSuffix(const std::string &fullSymbol,
+                          std::string &oldSymbol,
                           std::string &suffix)
     {
       size_t tickPos = fullSymbol.rfind("'");
@@ -1438,7 +1438,7 @@ struct SuffixOps
 class MassifTreeBuilder : public IgProfFilter
 {
 public:
-  MassifTreeBuilder(Configuration *) 
+  MassifTreeBuilder(Configuration *)
   :m_indent(0),
    m_totals(0),
    m_sorter(false),
@@ -1449,21 +1449,21 @@ public:
   virtual void pre(NodeInfo *parent, NodeInfo *node)
   {
     std::sort(node->CHILDREN.begin(), node->CHILDREN.end(), m_reverseSorter);
-    
+
     Counter &nodeCounter = node->COUNTER;
-    
+
     float pct = 0;
     if (!parent)
       m_totals = nodeCounter.ccnt;
 
     pct = percent(nodeCounter.ccnt, m_totals);
-    
+
     // Determine which children are above threshold.
     // Sum up the contribution of those below threshold.
     // FIXME: Add a new node called "others" to the list
     //        with the aggregated sum.
     int lastPrinted = -1;
-    float others = 0.; 
+    float others = 0.;
     for (size_t i = 0, e = node->CHILDREN.size(); i != e; i++)
     {
       Counter &childCounter = node->CHILDREN[i]->COUNTER;
@@ -1476,7 +1476,7 @@ public:
 
     if ((size_t)(lastPrinted + 1) != node->CHILDREN.size())
       node->CHILDREN.resize(lastPrinted + 1);
-    
+
     std::sort(node->CHILDREN.begin(), node->CHILDREN.end(), m_sorter);
 
     if (m_kids.size() <= m_indent)
@@ -1501,7 +1501,7 @@ public:
     else
       std::cout << "<no symbol>";
 
-    // After the node gets printed, it's parent has one kid less. 
+    // After the node gets printed, it's parent has one kid less.
     if (m_indent)
       m_kids[m_indent-1]--;
 
@@ -1519,7 +1519,7 @@ public:
   virtual enum FilterType type() const { return BOTH; }
 private:
 
-  struct SortByCumulativeCount 
+  struct SortByCumulativeCount
   {
     SortByCumulativeCount(bool reverse)
     :m_reverse(reverse)
@@ -1552,7 +1552,7 @@ private:
     and reports them together with their stacktrace.
 
     While parsing the tree it maintains a stacktrace
-    and if a leaf has a self counter which enters 
+    and if a leaf has a self counter which enters
     in the "top N", it saves the stacktrace.
 */
 class TopNBuilderFilter : public IgProfFilter
@@ -1565,7 +1565,7 @@ public:
   {
     m_topNValues = new int64_t[rankingSize];
     memset(m_topNValues, 0, sizeof(int64_t) * rankingSize);
-    m_topNStackTrace = new StackTrace[rankingSize]; 
+    m_topNStackTrace = new StackTrace[rankingSize];
   }
 
   ~TopNBuilderFilter()
@@ -1579,10 +1579,10 @@ public:
     // If a node has children, simply record it on the stacktrace
     // and navigate further.
     m_currentStackTrace.push_back(node);
-    
+
     // If the node does not have children, compare its "self" values
     // against the topten, find the minimum of the top ten and
-    // if it is smaller than the counter, replace the 
+    // if it is smaller than the counter, replace the
     Counter &nodeCounter = node->COUNTER;
 
     int min = -1;
@@ -1600,19 +1600,19 @@ public:
               m_currentStackTrace.end(),
               m_topNStackTrace[min].begin());
   }
-  
+
   virtual void post(NodeInfo */*parent*/, NodeInfo */*node*/)
   {
     if (!m_currentStackTrace.empty())
       m_currentStackTrace.pop_back();
   }
-  
+
   StackTrace &stackTrace(size_t pos, int64_t &value)
   {
     std::vector<std::pair<int64_t, size_t> > sorted;
     for (size_t i = 0; i != m_rankingSize; ++i)
       sorted.push_back(std::make_pair(m_topNValues[i], i));
-    
+
     std::sort(sorted.begin(), sorted.end(), Cmp());
     value = m_topNValues[sorted[pos].second];
     return m_topNStackTrace[sorted[pos].second];
@@ -1643,9 +1643,9 @@ public:
     :m_prof(prof), m_flatMap(new FlatInfoMap), m_firstInfo(0), m_isMax(isMax)
     {
     }
- 
-  /** Creates the GPROF like output. 
-    
+
+  /** Creates the GPROF like output.
+
   * Gets invoked with a node and it's parent.
   * Finds a unique name for the node, keeping into account recursion.
   * Gets the unique FlatInfo associated to the symbols. Recursive calls result in same symbol.
@@ -1684,24 +1684,24 @@ public:
         symnode->CALLERS.insert(parsym);
 
         CallInfo *callInfo = parentInfo->getCallee(sym, true);
-         
+
         accumulateCounts(callInfo->VALUES, nodeCounter.ccnt, nodeCounter.cfreq);
       }
-    
+
       // Do SELF_KEY
       accumulateCounts(symnode->SELF_KEY, nodeCounter.cnt, nodeCounter.freq);
       // Do CUM_KEY
       accumulateCounts(symnode->CUM_KEY, nodeCounter.ccnt, nodeCounter.cfreq);
     }
 
-  virtual void post(NodeInfo *, 
+  virtual void post(NodeInfo *,
                     NodeInfo *node)
     {
       ASSERT(node);
       ASSERT(node->symbol());
       if (m_seen.count(node->symbol()->NAME) <= 0)
         std::cerr << "Error: " << node->symbol()->NAME << std::endl;
-      
+
       ASSERT(m_seen.count(node->symbol()->NAME) > 0);
       m_seen.erase(node->symbol()->NAME);
       ASSERT(m_seen.count(node->symbol()->NAME) == 0);
@@ -1710,7 +1710,7 @@ public:
   virtual std::string name() const { return "tree map builder"; }
   virtual enum FilterType type() const { return BOTH; }
 
-  void getTotals(int64_t &totals, int64_t &totfreqs) 
+  void getTotals(int64_t &totals, int64_t &totfreqs)
     {
       ASSERT(m_firstInfo);
       totals = m_firstInfo->CUM_KEY[0];
@@ -1739,22 +1739,22 @@ private:
     buffer[2]++;
   }
 
-  SymbolInfo *symfor(NodeInfo *node) 
+  SymbolInfo *symfor(NodeInfo *node)
     {
       ASSERT(node);
       SymbolInfo *reportSymbol = node->reportSymbol();
       if (reportSymbol)
       {
-        m_seen.insert(SeenSymbols::value_type(reportSymbol->NAME, 
+        m_seen.insert(SeenSymbols::value_type(reportSymbol->NAME,
                                               reportSymbol));
         return reportSymbol;
       }
-    
+
       std::string suffix = "";
-    
+
       ASSERT(node->originalSymbol());
       std::string symbolName = node->originalSymbol()->NAME;
-    
+
       SeenSymbols::iterator i = m_seen.find(symbolName);
       if (i != m_seen.end())
       {
@@ -1767,7 +1767,7 @@ private:
           reportSymbol = new SymbolInfo(newName.c_str(),
                                         originalSymbol->FILE,
                                         originalSymbol->FILEOFF);
-          namedSymbols.insert(SymbolInfoFactory::SymbolsByName::value_type(newName, 
+          namedSymbols.insert(SymbolInfoFactory::SymbolsByName::value_type(newName,
                                                                            reportSymbol));
         }
         else
@@ -1776,22 +1776,22 @@ private:
       ASSERT(node);
       node->reportSymbol(reportSymbol);
       ASSERT(node->symbol());
-      m_seen.insert(SeenSymbols::value_type(node->symbol()->NAME, 
+      m_seen.insert(SeenSymbols::value_type(node->symbol()->NAME,
                                             node->symbol()));
       return node->symbol();
     }
-  
+
   std::string getUniqueName(const std::string &symbolName)
     {
       int index = 2;
       std::string origname = SuffixOps::removeSuffix(symbolName);
       std::string candidate = origname;
-    
-      do 
+
+      do
       {
         candidate = origname + "'" + toString(index++);
       } while (m_seen.find(candidate) != m_seen.end());
-      return candidate;   
+      return candidate;
     }
 
   ProfileInfo *m_prof;
@@ -1806,15 +1806,15 @@ class TextStreamer
 public:
   TextStreamer(lat::File *file)
     :m_file(file) {}
-  
+
   TextStreamer &operator<<(const std::string &string)
-    { 
+    {
       m_file->write(string.c_str(), string.size());
       return *this;
     }
   TextStreamer &operator<<(const char *text)
     { m_file->write(text, strlen(text)); return *this; }
-  
+
   TextStreamer &operator<<(int num)
     {
       char buffer[32];
@@ -1822,7 +1822,7 @@ public:
       m_file->write(buffer, strlen(buffer));
       return *this;
     }
-  
+
 private:
   lat::File *m_file;
 };
@@ -1844,7 +1844,7 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
     out << "set width 10000\n";
 
     std::multimap<FileInfo *, SymbolInfo *> fileAndSymbols;
-    
+
     for (FlatInfos::const_iterator i = infos.begin();
          i != infos.end();
          i++)
@@ -1863,10 +1863,10 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
     }
 
     FileInfo *prevfile = 0;
-    
+
     for (std::multimap<FileInfo *, SymbolInfo *>::iterator i = fileAndSymbols.begin();
          i != fileAndSymbols.end();
-         i++) 
+         i++)
     {
       SymbolInfo *sym = i->second;
       FileInfo *fileInfo =i->first;
@@ -1874,13 +1874,13 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
       ASSERT(sym);
       ASSERT(file);
       prof.symcache().insert(sym);
-      
-      if (memcmp(fileInfo->NAME.c_str(), "<dynamically", 12)) 
+
+      if (memcmp(fileInfo->NAME.c_str(), "<dynamically", 12))
       {
         if (fileInfo != prevfile)
         {
           out << "file " << fileInfo->NAME << "\n";
-          prevfile = fileInfo; 
+          prevfile = fileInfo;
         }
         out << "echo IGPROF_SYMCHECK <" << (intptr_t) sym << ">\\n\n"
             << "info line *" << toString(sym->FILEOFF)<< "\n";
@@ -1888,18 +1888,18 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
     }
     file->close();
     delete file;
-    
+
     PipeReader gdb("gdb --batch --command=" + std::string(tmpFilename));
-    
+
     std::string oldname;
     std::string suffix;
     SymbolInfo *sym = 0;
-    
+
     while (gdb.output())
     {
       std::string line;
       std::getline(gdb.output(), line);
-      
+
       if (!gdb.output())
         break;
       if (line.empty())
@@ -1907,7 +1907,7 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
 
       lat::RegexpMatch match;
 
-      
+
       if (SYMCHECK_RE.match(line, 0, 0, &match))
       {
         ProfileInfo::SymCache::iterator symitr = prof.symcache().find((SymbolInfo *)(atol(match.matchString(line, 1).c_str())));
@@ -1919,7 +1919,7 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
       {
         ASSERT(sym);
         sym->NAME = match.matchString(line, 1) + suffix;
-        sym = 0; suffix = ""; 
+        sym = 0; suffix = "";
       }
       else if (NO_LINE_NUMBER.match(line, 0, 0, &match))
       {
@@ -1948,7 +1948,7 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
 
     lat::File symbolFile(tmpFilename);
     PipeReader cppfilt("c++filt", &symbolFile);
-    
+
     while (cppfilt.output())
     {
       std::string line;
@@ -1984,12 +1984,12 @@ parseStackLine(const char *line, std::vector<NodeInfo *> &nodestack)
   if (endptr == line+1)
     return 0;
 
-  do 
-  { 
-    ++endptr; 
-  } 
+  do
+  {
+    ++endptr;
+  }
   while (*endptr == ' ' || *endptr == '\t');
-  
+
   int stackSize = nodestack.size();
   ASSERT(newPosition <= stackSize);
   ASSERT(newPosition >= 0);
@@ -2002,29 +2002,29 @@ parseStackLine(const char *line, std::vector<NodeInfo *> &nodestack)
 }
 
 static bool
-parseFunctionRef(const char *lineStart, Position &pos, 
-                 unsigned int &symid, unsigned int fileoff) 
+parseFunctionRef(const char *lineStart, Position &pos,
+                 unsigned int &symid, unsigned int fileoff)
 {
   const char *line = lineStart + pos();
   // Matches "FN(\\d+)\\+\\d+\\s*" and sets symid = $1
   if (line[0] != 'F' && line[1] != 'N')
-    return false; 
+    return false;
   char *endptr = 0;
   int fnRef = strtol(line+2, &endptr, 10);
   if (endptr == line + 2)
-    return false; 
+    return false;
   if (*endptr != '+' )
-    return false; 
+    return false;
   char *endptr2 = 0;
   int offset = strtol(endptr, &endptr2, 10);
   if (endptr == endptr2)
-    return false; 
-  
+    return false;
+
   symid = fnRef;
   fileoff = offset;
 
   while (*endptr2 == ' ' || *endptr2 == '\t')
-    ++endptr2; 
+    ++endptr2;
   pos(endptr2 - lineStart);
   return true;
 }
@@ -2039,12 +2039,12 @@ parseFunctionDef(const char *lineStart, Position &pos, unsigned int &symid)
   char *endptr = 0;
   int fnRef = strtol(line+2, &endptr, 10);
   if (endptr == line + 2)
-    return false; 
+    return false;
   if (*endptr++ != '=')
-    return false; 
+    return false;
   if (*endptr++ != '(')
-    return false; 
-  
+    return false;
+
   symid = fnRef;
 
   pos(endptr - lineStart);
@@ -2052,21 +2052,21 @@ parseFunctionDef(const char *lineStart, Position &pos, unsigned int &symid)
 }
 
 static bool
-parseCounterVal(const char *lineStart, Position &pos, 
-                size_t &ctrid, int64_t &ctrfreq, 
+parseCounterVal(const char *lineStart, Position &pos,
+                size_t &ctrid, int64_t &ctrfreq,
                 int64_t &ctrvalNormal, int64_t &ctrvalPeak)
 {
-  // Matches "V(\\d+):\\((\\d+),(\\d+)(,(\\d+))?\\)\\s*" and then sets the arguments accordingly. 
+  // Matches "V(\\d+):\\((\\d+),(\\d+)(,(\\d+))?\\)\\s*" and then sets the arguments accordingly.
   const char *line = lineStart + pos();
-  
+
   if (line[0] != 'V')
     return false;
-  
+
   char *endptr = 0;
   int cntRef = strtol(++line, &endptr, 10);
   if (endptr == line || *endptr != ':' || *++endptr != '(')
     return false;
-  
+
   char *endptr2 = 0;
   int64_t count1 = strtoll(++endptr, &endptr2, 10);
   if (endptr2 == endptr || *endptr2 != ',')
@@ -2076,7 +2076,7 @@ parseCounterVal(const char *lineStart, Position &pos,
   int64_t count2 = strtoll(++endptr2, &endptr3, 10);
   if (endptr3 == endptr2 || *endptr3 != ',')
     return false;
-  
+
   char *endptr4 = 0;
   int64_t count3 = strtoll(++endptr3, &endptr4, 10);
   if (endptr3 == endptr4)
@@ -2084,7 +2084,7 @@ parseCounterVal(const char *lineStart, Position &pos,
 
   if (*endptr4++ != ')')
     return false;
-  
+
   ctrid = cntRef;
   ctrfreq = count1;
   ctrvalNormal = count2;
@@ -2106,31 +2106,31 @@ parseLeak(const char *lineStart, Position &pos, int64_t &leakAddress, int64_t &l
 {
   // ";LK=\\(0x[\\da-z]+,\\d+\\)\\s*"
   const char *line = lineStart + pos();
-  if (*line != ';' || *++line != 'L' || *++line != 'K' || *++line != '=' 
+  if (*line != ';' || *++line != 'L' || *++line != 'K' || *++line != '='
       || *++line != '(' || *++line != '0' || *++line != 'x')
-    return false; 
-  
+    return false;
+
   char *endptr = 0;
   int64_t address = strtoll(++line, &endptr, 16);
   if (endptr == line)
-    return false; 
-  
+    return false;
+
   if (*endptr++ != ',')
     return false;
-  
+
   char *endptr2 = 0;
   int64_t size = strtoll(endptr, &endptr2, 10);
   if (endptr == line)
     return false;
   if (*endptr2++ != ')')
     return false;
-  
+
   leakAddress = address;
   leakSize = size;
-  
+
   while (*endptr2 == ' ' || *endptr2 == '\t')
     endptr2++;
-  
+
   pos(endptr2 - lineStart);
 
   return true;
@@ -2143,30 +2143,30 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
   typedef std::vector<NodeInfo *> Nodes;
   Nodes nodestack;
   nodestack.reserve(IGPROF_MAX_DEPTH);
- 
+
   verboseMessage("Parsing igprof output file:", filename.c_str());
   FileReader reader(filename);
-  
+
   std::string line;
   line.reserve(FileOpener::INITIAL_BUFFER_SIZE);
   reader.readLine();
   reader.assignLineToString(line);
   m_config->setTickPeriod(parseHeaders(line));
-  
+
   PathCollection paths("PATH");
-  
+
   int lineCount = 1;
   lat::RegexpMatch match;
 
   SymbolInfoFactory symbolsFactory(&prof, m_config->useGdb);
-  
+
   // A vector whose i-th element specifies whether or
   // not the counter file id "i" is a key.
   std::vector<bool> keys;
-  
-  // A vector keeping track of all the pages touched by the 
+
+  // A vector keeping track of all the pages touched by the
   // allocations. We store here the address of the page,
-  // in order to improve lookup whether or not a page is 
+  // in order to improve lookup whether or not a page is
   // already there. This way the total number of pages
   // touched is given by "count".
   std::vector<int64_t> pages;
@@ -2184,19 +2184,19 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
     printProgress();
     reader.readLine();
     reader.assignLineToString(line);
-  
+
     int newPos = parseStackLine(line.c_str(), nodestack);
-    if (! newPos) 
+    if (! newPos)
       continue;
-    
+
     pos(newPos);
 
-    
+
     // Find out the information about the current stack line.
     SymbolInfo *sym;
 
     unsigned int symid = 0xdeadbeef;
-    
+
     if (line.size() <= pos())
     {
       printSyntaxError(line, filename, lineCount, pos());
@@ -2206,11 +2206,11 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
               && parseFunctionRef(line.c_str(), pos, symid, fileoff))
     {
       sym = symbolsFactory.getSymbol(symid);
-      if (!sym) 
+      if (!sym)
       {
-        std::cerr << "Error at line " << lineCount << ": symbol with id " 
-                  << symid << " was referred before being defined in input file.\n" 
-                  << "> " << line << std::endl; 
+        std::cerr << "Error at line " << lineCount << ": symbol with id "
+                  << symid << " was referred before being defined in input file.\n"
+                  << "> " << line << std::endl;
         exit(1);
       }
     }
@@ -2222,11 +2222,11 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       printSyntaxError(line, filename, lineCount, pos());
       exit(1);
     }
-    
+
     NodeInfo* parent = nodestack.empty() ? prof.spontaneous() : nodestack.back();
-    
+
     NodeInfo* child = parent ? parent->getChildrenBySymbol(sym) : 0;
-    
+
     if (! child)
     {
       // Nodes are allocated in a deque, to maximize locality
@@ -2240,7 +2240,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
     }
 
     nodestack.push_back(child);
-    
+
     match.reset();
     pages.clear();
     int64_t fullPagesCount = 0;
@@ -2255,16 +2255,16 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       int64_t ctrvalPeak;
       int64_t leakAddress;
       int64_t leakSize;
-      
+
       if (line.size() == pos())
-        break; 
+        break;
 
       if (line.size() >= pos()+2
           && parseCounterVal(line.c_str(), pos, fileId, ctrfreq, ctrvalNormal, ctrvalPeak))
       {
         // FIXME: should really do:
         // $ctrname = $ctrbyid{$1} || die;
-        
+
         // If the fileId is not among those associated
         // to the key counter, we skip the counter.
         if (keys[fileId] == false)
@@ -2276,24 +2276,24 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       {
         // FIXME: should really do:
         // die if exists $ctrbyid{$1};
-        
+
         std::string ctrname = match.matchString(line, 2);
         IntConverter getIntMatch(line, &match);
         fileId = getIntMatch(1);
 
         // The first counter we meet, we make it the key, unless
-        // the key was already set on command line. 
+        // the key was already set on command line.
         if (m_key.empty())
           setKey(ctrname);
 
-        // Store information about fileId being 
+        // Store information about fileId being
         // a key or not.
         if (keys.size() <= fileId)
-          keys.resize(fileId + 1, false); 
+          keys.resize(fileId + 1, false);
         keys[fileId] = ctrname == m_key;
 
         // Get information from the counter and be ready to
-        // continue.  
+        // continue.
         ctrfreq = getIntMatch(3);
         ctrval = m_config->normalValue() ? getIntMatch(4)
                  : getIntMatch(6);
@@ -2311,7 +2311,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
         // ordered unique list of all the (non completely allocated) pages
         // that got touched. We only track beginning and end page since
         // the others are not fragmented and not really interesting.
-        // This means that an allocation of 2MB has the same cost of an 
+        // This means that an allocation of 2MB has the same cost of an
         // allocation of 5KB or two allocation of 1B that are on different pages.
         // Moreover 4096 allocations of 1B have the same cost of 1 allocation
         // of 1B, if they are continuos (i.e. pooled allocation are considered
@@ -2319,8 +2319,8 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
         if (m_showPages)
         {
           int64_t startPageAddress = leakAddress >> 12;
-          std::vector<int64_t>::iterator spi = std::lower_bound(pages.begin(), 
-                                                                pages.end(), 
+          std::vector<int64_t>::iterator spi = std::lower_bound(pages.begin(),
+                                                                pages.end(),
                                                                 startPageAddress);
 
           // Add contribution to pages if page was never seen.
@@ -2341,7 +2341,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
           if (!m_showPartialPages && fullPages > 0)
             fullPagesCount += fullPages;
           continue;
-        } 
+        }
         else
         {
           // Allocations get handled only when --dump-allocations flag
@@ -2367,7 +2367,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
         exit(1);
       }
 
-      if (filter) 
+      if (filter)
         filter->filter(sym, ctrval, ctrfreq);
 
       child->COUNTER.cnt += ctrval;
@@ -2413,7 +2413,7 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
   firstItem.pre = first;
   firstItem.post = 0;
   stack.reserve(10000);
-  
+
   if (total)
     std::cerr << "\n" << filter->name();
 
@@ -2438,7 +2438,7 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
         StackItem newItem;
         newItem.parent = parent;
         newItem.pre = 0;
-        newItem.post = pre; 
+        newItem.post = pre;
         stack.push_back(newItem);
       }
       // Add all the children of pre as items in the stack.
@@ -2448,7 +2448,7 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
         NodeInfo *child = pre->CHILDREN[ci];
         StackItem newItem;
         newItem.parent = pre;
-        newItem.pre = child; 
+        newItem.pre = child;
         newItem.post = 0;
         stack.push_back(newItem);
       }
@@ -2461,7 +2461,7 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
     newProgress = (100 * count) / total;
     if (newProgress > oldProgress)
     {
-      oldProgress = newProgress; 
+      oldProgress = newProgress;
       std::cerr << ".";
     }
   }
@@ -2472,7 +2472,7 @@ IgProfAnalyzerApplication::verboseMessage(const char *msg, const char *arg)
 {
   if (!m_config->verbose())
     return;
-  std::cerr << msg; 
+  std::cerr << msg;
 
   if (arg)
     std::cerr << " " << arg;
@@ -2513,7 +2513,7 @@ IgProfAnalyzerApplication::prepdata(ProfileInfo& prof)
   walk(prof.spontaneous(), m_nodesStorage.size(), new CheckTreeConsistencyFilter());
 }
 
-class FlatInfoComparator 
+class FlatInfoComparator
 {
 public:
   virtual ~FlatInfoComparator() {}
@@ -2524,14 +2524,14 @@ public:
     {
       int64_t cmp;
       cmp = cmpnodekey(a, b);
-      if (cmp > 0) 
+      if (cmp > 0)
         return true;
-      else if (cmp < 0) 
+      else if (cmp < 0)
         return false;
       cmp = cmpcallers(a, b);
-      if (cmp > 0) 
+      if (cmp > 0)
         return true;
-      else if (cmp < 0) 
+      else if (cmp < 0)
         return false;
       return strcmp(a->name(), b->name()) < 0;
     }
@@ -2547,7 +2547,7 @@ protected:
     {
       return b->DEPTH - a->DEPTH;
     }
-  
+
   int m_ordering;
 };
 
@@ -2574,10 +2574,10 @@ protected:
       if (origA != m_baselineMap->end())
         aOrigVal = origA->second->CUM_KEY[0];
       if (origB != m_baselineMap->end())
-        bOrigVal = origB->second->CUM_KEY[0]; 
+        bOrigVal = origB->second->CUM_KEY[0];
 
       return  -1 * m_ordering * ((bVal-bOrigVal)/bOrigVal - (aVal - aOrigVal)/aOrigVal);
-    } 
+    }
 private:
   FlatInfoMap *m_baselineMap;
 };
@@ -2588,7 +2588,7 @@ public:
   int FILEOFF;
   float PCT;
   float SELF_PCT;
- 
+
   void initFromInfo(FlatInfo *info)
     {
       ASSERT(info);
@@ -2604,36 +2604,36 @@ public:
     {
       return m_info->filename().c_str();
     }
-  
+
   const unsigned int depth()
     {
       return m_info->DEPTH;
     }
 
-  const unsigned int rank() 
+  const unsigned int rank()
     {
       return m_info->rank();
     }
-  
+
   intptr_t symbolId()
     {
       return(intptr_t)(m_info->SYMBOL);
     }
-  
+
   intptr_t fileId()
     {
       return(intptr_t)(m_info->SYMBOL->FILE);
-    } 
+    }
 
 private:
   FlatInfo *m_info;
 };
 
 /** Helper functor to print percentage numbers
-    in different way, depending on whether we are in 
+    in different way, depending on whether we are in
     diff mode or not.
-    
-    @a mode true in case we are in diff mode, 
+
+    @a mode true in case we are in diff mode,
             false otherwise.
 */
 class PercentagePrinter
@@ -2664,7 +2664,7 @@ public:
   int64_t TOTAL_CALLS;
   int64_t SELF_PATHS;
   int64_t TOTAL_PATHS;
- 
+
   OtherGProfRow(void)
     :SELF_COUNTS(0), CHILDREN_COUNTS(0), SELF_CALLS(0),
      TOTAL_CALLS(0), SELF_PATHS(0), TOTAL_PATHS(0)
@@ -2678,13 +2678,13 @@ std::ostream & operator<<(std::ostream &stream, OtherGProfRow& row)
          << row.SELF_PATHS << " " << row.TOTAL_PATHS << "]" << std::endl;
   return stream;
 }
-    
+
 
 template <int ORDER>
 struct CompareCallersRow
 {
   bool operator()(OtherGProfRow *a, OtherGProfRow *b)
-    { 
+    {
       int64_t callsDiff = ORDER * (a->SELF_COUNTS - b->SELF_COUNTS);
       int64_t cumDiff = ORDER * (a->CHILDREN_COUNTS - b->CHILDREN_COUNTS);
       if (callsDiff) return callsDiff < 0;
@@ -2705,23 +2705,23 @@ struct CompareCallersRow
  * CUM_ALL I don't remember what it is.
  */
 
-class MainGProfRow : public GProfRow 
+class MainGProfRow : public GProfRow
 {
 public:
   typedef std::set <OtherGProfRow *, CompareCallersRow<1> > Callers;
   typedef std::set <OtherGProfRow *, CompareCallersRow<-1> > Calls;
-  
+
   int64_t CUM;
   int64_t SELF;
   int64_t KIDS;
   int64_t SELF_ALL[3];
   int64_t CUM_ALL[3];
-  
+
   Callers CALLERS;
   Calls CALLS;
 };
 
-class GProfMainRowBuilder 
+class GProfMainRowBuilder
 {
 public:
   GProfMainRowBuilder(TreeMapBuilderFilter *flatMapBuilder,
@@ -2747,21 +2747,21 @@ public:
     }
 
   void addCaller(SymbolInfo *callerSymbol)
-    { 
+    {
       ASSERT(m_info);
       ASSERT(m_row);
       FlatInfo *origin = (*m_flatMap)[callerSymbol];
       CallInfo *thisCall = origin->getCallee(m_info->SYMBOL);
-   
+
       ASSERT(thisCall);
       if (!thisCall->VALUES[0])
         return;
       OtherGProfRow *callrow = new OtherGProfRow();
       callrow->initFromInfo(origin);
- 
+
       // In diff mode the percentage value is the percentual increment
-      // between the two runs. 
-      // In the normal mode (i.e. no negative counts) it is the 
+      // between the two runs.
+      // In the normal mode (i.e. no negative counts) it is the
       // fraction of the total counts.
       if (m_diffMode)
       {
@@ -2779,14 +2779,14 @@ public:
 
       callrow->SELF_COUNTS = thisCall->VALUES[0];
       callrow->CHILDREN_COUNTS = origin->CUM_KEY[0];
-    
-      callrow->SELF_CALLS = thisCall->VALUES[1];
-      callrow->TOTAL_CALLS = origin->CUM_KEY[1]; 
 
-      callrow->SELF_PATHS = thisCall->VALUES[2]; 
+      callrow->SELF_CALLS = thisCall->VALUES[1];
+      callrow->TOTAL_CALLS = origin->CUM_KEY[1];
+
+      callrow->SELF_PATHS = thisCall->VALUES[2];
       callrow->TOTAL_PATHS = origin->CUM_KEY[2];
       m_row->CALLERS.insert(callrow);
-    }  
+    }
 
   void addCallee(CallInfo *thisCall)
     {
@@ -2820,17 +2820,17 @@ public:
 
       callrow->SELF_COUNTS = thisCall->VALUES[0];
       callrow->CHILDREN_COUNTS = calleeInfo->CUM_KEY[0];
-    
+
       callrow->SELF_CALLS = thisCall->VALUES[1];
       callrow->TOTAL_CALLS = calleeInfo->CUM_KEY[1];
-    
-      callrow->SELF_PATHS = thisCall->VALUES[2]; 
+
+      callrow->SELF_PATHS = thisCall->VALUES[2];
       callrow->TOTAL_PATHS = calleeInfo->CUM_KEY[2];
-    
+
       m_row->CALLS.insert(callrow);
       //ASSERT(callrow->SELF_CALLS <= callrow->TOTAL_CALLS);
     }
-  
+
   void beginEditingWith(FlatInfo *info)
     {
       ASSERT(!m_info);
@@ -2839,7 +2839,7 @@ public:
       m_row = new MainGProfRow();
       m_row->initFromInfo(m_info);
 
-      // In normal mode PCT is the percentage relative to the 
+      // In normal mode PCT is the percentage relative to the
       // total counts.
       // In diff mode we need to lookup the original value for
       // the counter and give the percentage of the increment
@@ -2886,7 +2886,7 @@ public:
   MainGProfRow *build(bool isMax)
     {
       ASSERT(m_row);
-      if (isMax) 
+      if (isMax)
         m_row->KIDS = m_callmax;
       else
         m_row->KIDS = m_info->CUM_KEY[0] - m_info->SELF_KEY[0];
@@ -2894,7 +2894,7 @@ public:
       memcpy(m_row->SELF_ALL, m_info->SELF_KEY, 3*sizeof(int64_t));
       return m_row;
     }
-  
+
   int64_t totals(void)
     {
       return m_totals;
@@ -2914,7 +2914,7 @@ private:
   bool m_diffMode;
   FlatInfoMap   *m_flatMap;
   FlatInfoMap   *m_baselineMap;
-  MainGProfRow  *m_mainCallrow; 
+  MainGProfRow  *m_mainCallrow;
 };
 
 class HeaderPrinter
@@ -2929,18 +2929,18 @@ public:
      m_diffMode(diffMode)
     {}
 
-  void print(const char *description, const char *kind) 
+  void print(const char *description, const char *kind)
     {
-      std::cout << "\n" << std::string(70, '-') << "\n" 
+      std::cout << "\n" << std::string(70, '-') << "\n"
                 << description << "\n\n";
       if (m_diffMode)
         std::cout << "delta %  ";
-      else 
+      else
         std::cout << "% total  ";
       (AlignedPrinter(m_maxval))(kind);
-      if (m_showCalls) 
+      if (m_showCalls)
         (AlignedPrinter(m_maxcnt))("Calls");
-      if (m_showPaths) 
+      if (m_showPaths)
         (AlignedPrinter(m_maxcnt))("Paths");
       std::cout << "Function\n";
     }
@@ -2962,9 +2962,9 @@ max(int64_t a, int64_t b)
 class SortRowBySelf
 {
 public:
-  bool operator()(MainGProfRow *a, MainGProfRow *b) 
+  bool operator()(MainGProfRow *a, MainGProfRow *b)
     {
-      return llabs(a->SELF) > llabs(b->SELF); 
+      return llabs(a->SELF) > llabs(b->SELF);
       //if(a->SELF != b->SELF) return a->SELF > b->SELF;
       //if(a->DEPTH != b->DEPTH) return a->DEPTH < b->DEPTH;
       //return a->NAME < b->NAME;
@@ -2976,8 +2976,8 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
 {
   prepdata(prof);
 
-  // FIXME: make sure that symremap can be called even without 
-  //        passing a flatMap. 
+  // FIXME: make sure that symremap can be called even without
+  //        passing a flatMap.
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
@@ -2992,7 +2992,7 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
     std::cerr << "Could not find any information to print." << std::endl;
     exit(1);
   }
-  
+
   for (FlatInfoMap::const_iterator i = flatMap->begin();
        i != flatMap->end();
        i++)
@@ -3024,7 +3024,7 @@ IgProfAnalyzerApplication::dumpAllocations(ProfileInfo &prof)
 
   prepdata(prof);
 
-  // FIXME: make sure that symremap can be called even without 
+  // FIXME: make sure that symremap can be called even without
   //        passing a flatMap.
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
@@ -3080,7 +3080,7 @@ IgProfAnalyzerApplication::dumpAllocations(ProfileInfo &prof)
     for(std::vector<NodeInfo *>::reverse_iterator ni = nodes.rbegin(), ne = nodes.rend(); ni != ne; ++ni)
       std::cout << "@("<< i << "," << j++ << ")" << *ni << ":" << (*ni)->symbol()->NAME << "\n";
   }
-  
+
   generateFlatReport(prof, callTreeBuilder, 0, sorted);
 }
 
@@ -3089,8 +3089,8 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
 {
   prepdata(prof);
 
-  // FIXME: make sure that symremap can be called even without 
-  //        passing a flatMap. 
+  // FIXME: make sure that symremap can be called even without
+  //        passing a flatMap.
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
@@ -3146,7 +3146,7 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
       std::cout << thousands(value) << " pages)\n";
     else
       std::cout << thousands(value) << " bytes)\n";
-  
+
     int j = 0;
     for(std::vector<NodeInfo *>::reverse_iterator i = nodes.rbegin(), e = nodes.rend(); i != e; i++)
       std::cout << "#" << j++ << " " << (*i)->symbol()->NAME << "\n";
@@ -3165,12 +3165,12 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
   // Sorting flat entries
   verboseMessage("Sorting");
   int rank = 1;
-  FlatVector sorted; 
+  FlatVector sorted;
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
 
-  if (flatMap->empty()) 
+  if (flatMap->empty())
   {
-    std::cerr << "Could not find any information to print." << std::endl; 
+    std::cerr << "Could not find any information to print." << std::endl;
     exit(1);
   }
 
@@ -3180,16 +3180,16 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
     sorted.push_back(i->second);
 
   sort(sorted.begin(), sorted.end(), FlatInfoComparator(m_config->ordering()));
-  
+
   for (FlatVector::const_iterator i = sorted.begin(); i != sorted.end(); i++)
     (*i)->setRank(rank++);
-  
+
   if (m_config->doDemangle() || m_config->useGdb)
   {
     verboseMessage("Resolving symbols");
     symremap(prof, sorted, m_config->useGdb, m_config->doDemangle());
   }
- 
+
   if (sorted.empty()) {
     std::cerr << "Could not find any sorted information to print." << std::endl;
     exit(1);
@@ -3198,8 +3198,8 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
 }
 
 
-/** An helper function to generate a flat profile from the tree information. 
-    
+/** An helper function to generate a flat profile from the tree information.
+
     @a callTreeBuilder which is the filter used to accumulate the tree information.
 
     @a baselineBuilder which is the filter used to accumulate the tree information
@@ -3209,17 +3209,17 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
      ordered.
   */
 void
-IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */, 
-                                              TreeMapBuilderFilter *callTreeBuilder, 
+IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
+                                              TreeMapBuilderFilter *callTreeBuilder,
                                               TreeMapBuilderFilter *baselineBuilder,
                                               FlatVector &sorted)
 {
   verboseMessage("Generating report");
-  
+
   typedef std::vector <MainGProfRow *> CumulativeSortedTable;
   typedef CumulativeSortedTable FinalTable;
   typedef std::vector <MainGProfRow *> SelfSortedTable;
-  
+
   FinalTable table;
   GProfMainRowBuilder builder(callTreeBuilder, baselineBuilder, m_config->diffMode());
   int64_t totals = builder.totals();
@@ -3236,7 +3236,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     // Sort calling and called functions.
     // FIXME: should sort callee and callers
     builder.beginEditingWith(info);
-   
+
     for (FlatInfo::Callers::const_iterator j = info->CALLERS.begin();
          j != info->CALLERS.end();
          j++)
@@ -3246,17 +3246,17 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
          j != info->CALLS.end();
          j++)
       builder.addCallee(*j);
-    table.push_back(builder.build(m_keyMax)); 
+    table.push_back(builder.build(m_keyMax));
     builder.endEditing();
   }
 
   SelfSortedTable selfSortedTable;
-  
+
   for (FinalTable::const_iterator i = table.begin();
        i != table.end();
        i++)
     selfSortedTable.push_back(*i);
- 
+
   stable_sort(selfSortedTable.begin(), selfSortedTable.end(), SortRowBySelf());
   bool diffMode = m_config->diffMode();
   PercentagePrinter printPercentage(diffMode);
@@ -3267,7 +3267,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     bool showpaths = m_config->showPaths();
     bool showlibs = m_config->showLib();
     std::cout << "Counter: ";
-    
+
     if (m_showLocalityMetrics)
       std::cout << m_key << "@SPREAD_FACTOR\n";
     else if (m_showPartialPages)
@@ -3281,10 +3281,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 
     int maxcnt=0;
     if (m_isPerfTicks && ! m_config->callgrind())
-      maxcnt = max(8, max(thousands(static_cast<double>(totals) * tickPeriod, 0, 2).size(), 
+      maxcnt = max(8, max(thousands(static_cast<double>(totals) * tickPeriod, 0, 2).size(),
                           thousands(static_cast<double>(totfreq) * tickPeriod, 0, 2).size()));
     else
-      maxcnt = max(8, max(thousands(totals).size(), 
+      maxcnt = max(8, max(thousands(totals).size(),
                           thousands(totfreq).size()));
     int maxval = maxcnt + (m_isPerfTicks ? 1 : 0);
 
@@ -3294,10 +3294,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 
     HeaderPrinter hp(showpaths, showcalls, maxval, maxcnt, diffMode);
 
-    if (diffMode) 
+    if (diffMode)
       hp.print ("Flat profile (cumulatively different entries only)", "Total");
     else
-      hp.print ("Flat profile (cumulative >= 1%)", "Total"); 
+      hp.print ("Flat profile (cumulative >= 1%)", "Total");
 
     for (FinalTable::const_iterator i = table.begin();
          i != table.end();
@@ -3305,7 +3305,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     {
       MainGProfRow &row = **i;
       printPercentage(row.PCT);
-      
+
       if (m_isPerfTicks && ! m_config->callgrind())
         printf("%*s  ", maxval, thousands(static_cast<double>(row.CUM) * tickPeriod, 0, 2).c_str());
       else
@@ -3315,20 +3315,20 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       p(showcalls, thousands(row.CUM_ALL[1]));
       p(showpaths, thousands(row.SELF_ALL[2]));
       printf("%s [%d]", row.name(), row.rank());
-      if (showlibs) 
+      if (showlibs)
         std::cout << row.filename();
       std::cout << "\n";
       if ((row.PCT < 1. && !diffMode) || row.CUM == 0)
         break;
     }
-    
+
     std::cout << "\n";
-    
+
     if (diffMode)
       hp.print ("Flat profile (self different entries only)", "Self");
     else
-      hp.print ("Flat profile (self >= 0.01%)", "Self"); 
-    
+      hp.print ("Flat profile (self >= 0.01%)", "Self");
+
     for (SelfSortedTable::const_iterator i = selfSortedTable.begin();
          i != selfSortedTable.end();
          i++)
@@ -3341,12 +3341,12 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         printf("%*s  ", maxval, thousands(static_cast<double>(row.SELF) * tickPeriod, 0, 2).c_str());
       else
         printf("%*s  ", maxval, thousands(row.SELF).c_str());
-      
+
       PrintIf p(maxcnt);
       p(showcalls, thousands(row.SELF_ALL[1]));
       p(showpaths, thousands(row.SELF_ALL[2]));
       printf("%s [%d]", row.name(), row.rank());
-      if (showlibs) 
+      if (showlibs)
         std::cout << row.filename();
       std::cout << "\n";
       if ((row.SELF_PCT < 0.01 && !diffMode) || row.SELF == 0)
@@ -3354,24 +3354,24 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     }
     std::cout << "\n\n" << std::string(70, '-') << "\n";
     std::cout << "Call tree profile (cumulative)\n";
-    
+
     for (FinalTable::const_iterator i = table.begin();
          i != table.end();
          i++)
     {
-      int64_t divlen = 34+3*maxval 
-                       + (showcalls ? 1 : 0)*(2*maxcnt+5) 
+      int64_t divlen = 34+3*maxval
+                       + (showcalls ? 1 : 0)*(2*maxcnt+5)
                        + (showpaths ? 1 : 0)*(2*maxcnt+5);
-      
+
       std::cout << "\n";
-      for (int x = 0 ; x <((1+divlen)/2); x++) 
+      for (int x = 0 ; x <((1+divlen)/2); x++)
         printf("- ");
       std::cout << std::endl;
 
       MainGProfRow &mainRow = **i;
 
       if ((mainRow.rank() % 10) == 1)
-      { 
+      {
         printf("%-8s", "Rank");
         if (diffMode)
           printf("delta %%  ");
@@ -3385,16 +3385,16 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
           cntfmt("Calls", "Total");
           printf("  ");
         }
-        
-        if (showpaths) 
+
+        if (showpaths)
         {
-          cntfmt("Paths", "Total"); 
+          cntfmt("Paths", "Total");
           printf("  ");
         }
 
         printf("Function\n");
-      } 
-      
+      }
+
       for (MainGProfRow::Callers::const_iterator c = mainRow.CALLERS.begin();
            c != mainRow.CALLERS.end();
            c++)
@@ -3406,67 +3406,67 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 
         ASSERT(maxval);
         std::cout << std::string(maxval, '.') << "  ";
-        if (m_isPerfTicks && ! m_config->callgrind()) 
-          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * tickPeriod, 0, 2), 
+        if (m_isPerfTicks && ! m_config->callgrind())
+          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * tickPeriod, 0, 2),
                  thousands(static_cast<double>(row.CHILDREN_COUNTS) * tickPeriod, 0, 2));
-        else 
+        else
           valfmt(thousands(row.SELF_COUNTS), thousands(row.CHILDREN_COUNTS));
-        
+
         printf("  ");
-        if (showcalls) 
-        { 
-          cntfmt(thousands(row.SELF_CALLS), 
+        if (showcalls)
+        {
+          cntfmt(thousands(row.SELF_CALLS),
                  thousands(row.TOTAL_CALLS));
           printf("  ");
         }
-  
+
         if (showpaths)
         {
-          cntfmt(thousands(row.SELF_PATHS), 
+          cntfmt(thousands(row.SELF_PATHS),
                  thousands(row.TOTAL_PATHS));
           printf("  ");
         }
         printf("  %s [%d]", row.name(), row.rank());
-        if (showlibs) 
+        if (showlibs)
           std::cout << "  " << row.filename();
         std::cout << "\n";
       }
-      
+
       char rankBuffer[256];
       sprintf(rankBuffer, "[%d]", mainRow.rank());
       printf("%-8s", rankBuffer);
       printPercentage(mainRow.PCT);
 
-      if (m_isPerfTicks && ! m_config->callgrind()) 
+      if (m_isPerfTicks && ! m_config->callgrind())
       {
         (AlignedPrinter(maxval))(thousands(static_cast<double>(mainRow.CUM) * tickPeriod, 0, 2));
         valfmt(thousands(static_cast<double>(mainRow.SELF) * tickPeriod, 0, 2),
                thousands(static_cast<double>(mainRow.KIDS) * tickPeriod, 0, 2));
       }
-      else 
+      else
       {
         (AlignedPrinter(maxval))(thousands(mainRow.CUM));
         valfmt(thousands(mainRow.SELF), thousands(mainRow.KIDS));
       }
       printf("  ");
-      if (showcalls) 
+      if (showcalls)
       {
         (AlignedPrinter(maxcnt))(thousands(mainRow.CUM_ALL[1]));
-        (AlignedPrinter(maxcnt))(""); printf(" "); 
+        (AlignedPrinter(maxcnt))(""); printf(" ");
       }
       if (showpaths)
       {
         (AlignedPrinter(maxcnt))(thousands(mainRow.SELF_ALL[2]));
-        (AlignedPrinter(maxcnt))(""); printf(" "); 
+        (AlignedPrinter(maxcnt))(""); printf(" ");
       }
-      
+
       std::cout << mainRow.name();
-      
-      if (showlibs) 
+
+      if (showlibs)
         std::cout << mainRow.filename();
 
       std::cout << "\n";
-      
+
       for (MainGProfRow::Calls::const_iterator c = mainRow.CALLS.begin();
            c != mainRow.CALLS.end();
            c++)
@@ -3474,32 +3474,32 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         OtherGProfRow &row = **c;
         std::cout << std::string(8, ' ');
         printPercentage(row.PCT);
-        
+
         std::cout << std::string(maxval, '.') << "  ";
-        
-        if (m_isPerfTicks && ! m_config->callgrind()) 
+
+        if (m_isPerfTicks && ! m_config->callgrind())
           valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * tickPeriod, 0, 2),
                  thousands(static_cast<double>(row.CHILDREN_COUNTS) * tickPeriod, 0, 2));
         else
           valfmt(thousands(row.SELF_COUNTS), thousands(row.CHILDREN_COUNTS));
-        
+
         printf("  ");
-        
-        if (showcalls) 
-        { 
-          cntfmt(thousands(row.SELF_CALLS), 
-                 thousands(row.TOTAL_CALLS)); 
+
+        if (showcalls)
+        {
+          cntfmt(thousands(row.SELF_CALLS),
+                 thousands(row.TOTAL_CALLS));
           printf("  ");
         }
         if (showpaths)
         {
-          cntfmt(thousands(row.SELF_PATHS), 
+          cntfmt(thousands(row.SELF_PATHS),
                  thousands(row.TOTAL_PATHS));
           printf("  ");
         }
         printf("  %s [%d]", row.name(), row.rank());
-    
-        if (showlibs) 
+
+        if (showlibs)
           std::cout << "  " << row.filename();
         std::cout << "\n";
       }
@@ -3525,7 +3525,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                   "id,\n"
                   "name TEXT\n"
                   ");\n\n"
-                  "CREATE TABLE symbols (\n" 
+                  "CREATE TABLE symbols (\n"
                   "id,\n"
                   "name TEXT,\n"
                   "filename_id INTEGER CONSTRAINT file_id_exists REFERENCES files(id)\n"
@@ -3545,7 +3545,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                   "CREATE TABLE children (\n"
                   "self_id INTEGER CONSTRAINT self_exists REFERENCES mainrows(id),\n"
                   "parent_id INTEGER CONSTRAINT parent_exists REFERENCES mainrows(id),\n"
-                  "from_parent_count INTEGER,\n" 
+                  "from_parent_count INTEGER,\n"
                   "from_parent_calls INTEGER,\n"
                   "from_parent_paths INTEGER,\n"
                   "pct REAL\n"
@@ -3569,11 +3569,11 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       std::cout << m_key;
 
     std::cout  << "\", " << totals << ", " << totfreq << ", " << m_config->tickPeriod() << ");\n\n";
-                
+
     unsigned int insertCount = 0;
-    std::set<int> filesDone;  
+    std::set<int> filesDone;
     std::set<int> symbolsDone;
-  
+
     for (FinalTable::const_iterator i = table.begin();
          i != table.end();
          i++)
@@ -3588,7 +3588,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       }
 
       if (symbolsDone.find(mainRow.symbolId()) == symbolsDone.end())
-      {  
+      {
         symbolsDone.insert(mainRow.symbolId());
         std::cout << "INSERT INTO symbols VALUES ("
                   << mainRow.symbolId() << ", \"" << mainRow.name() << "\", "
@@ -3596,9 +3596,9 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       }
 
       std::cout << "INSERT INTO mainrows VALUES ("
-                << mainRow.rank() << ", " << mainRow.symbolId() << ", " 
-                << mainRow.SELF << ", " << mainRow.CUM << ", " << mainRow.KIDS << ", " 
-                << mainRow.SELF_ALL[1] << ", " << mainRow.CUM_ALL[1] << ", " 
+                << mainRow.rank() << ", " << mainRow.symbolId() << ", "
+                << mainRow.SELF << ", " << mainRow.CUM << ", " << mainRow.KIDS << ", "
+                << mainRow.SELF_ALL[1] << ", " << mainRow.CUM_ALL[1] << ", "
                 << mainRow.SELF_ALL[2] << ", " << mainRow.CUM_ALL[2] << ", ";
       printPercentage(mainRow.PCT, "%7.2f", "-101");
       std::cout << ");\n";
@@ -3635,7 +3635,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     }
     std::cout << "END TRANSACTION;\n"
                  "CREATE UNIQUE INDEX fileIndex ON files (id);\n"
-                 "CREATE UNIQUE INDEX symbolsIndex ON symbols (id);\n" 
+                 "CREATE UNIQUE INDEX symbolsIndex ON symbols (id);\n"
                  "CREATE INDEX selfCountIndex ON mainrows(self_count);\n"
                  "CREATE INDEX totalCountIndex ON mainrows(cumulative_count);\n"
               << std::endl;
@@ -3657,13 +3657,13 @@ IgProfAnalyzerApplication::callgrind(ProfileInfo & /* prof */)
 
 
 
-void 
+void
 IgProfAnalyzerApplication::run(void)
 {
-  ArgsList args; 
-  for (int i = 0; i < m_argc; i++) 
+  ArgsList args;
+  for (int i = 0; i < m_argc; i++)
     args.push_back(m_argv[i]);
-  
+
   this->parseArgs(args);
 
   ProfileInfo *prof = new ProfileInfo;
@@ -3722,7 +3722,7 @@ parseOptionToInt(const std::string &valueString, const char *msg)
   exit(1);
 }
 
-void 
+void
 unsupportedOptionDeath(const char *option)
 {
   std::cerr << "Option " << option << " is not supported anymore" << std::endl;
@@ -3749,7 +3749,7 @@ unexpectedArgumentDeath(const char *opt, const char *arg, const char *possible)
 void
 IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
 {
-  
+
   ArgsList::const_iterator arg = args.begin();
 
   while (++arg != args.end())
@@ -3772,11 +3772,11 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     else if (is("--value") && left(arg) > 1)
     {
       std::string type = *(++arg);
-      if (type == "peak") 
+      if (type == "peak")
         m_config->setNormalValue(false);
-      else if (type == "normal") 
+      else if (type == "normal")
         m_config->setNormalValue(true);
-      else 
+      else
         unexpectedArgumentDeath("--value", type.c_str(), "normal (default), peak");
     }
     else if (is("--merge-libraries", "-ml"))
@@ -3784,11 +3784,11 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     else if (is("--order", "-o"))
     {
       std::string order = *(arg++);
-      if (order == "ascending") 
+      if (order == "ascending")
         m_config->setOrdering(Configuration::ASCENDING);
-      else if (order == "descending") 
+      else if (order == "descending")
         m_config->setOrdering(Configuration::DESCENDING);
-      else 
+      else
         unexpectedArgumentDeath("-o / --order", order.c_str(), "ascending (default), descending");
     }
     else if (is("--filter-file", "-F"))
@@ -3853,7 +3853,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
           regexpErrorDeath(origRe, pos);
         pos++;
         m_regexps.resize(m_regexps.size() + 1);
-        
+
         RegexpSpec &spec = m_regexps.back();
         spec.re = search;
         spec.with = with;
@@ -3910,7 +3910,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
   if (m_showPages)
   {
     if (!m_key.empty())
-     dieWithUsage("Option --show-pages / --show-partial-pages cannot be used with -r"); 
+     dieWithUsage("Option --show-pages / --show-partial-pages cannot be used with -r");
     setKey("MEM_LIVE");
     m_config->setShowCalls(false);
   }
@@ -3922,23 +3922,23 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     dieWithUsage("ERROR: No input files specified");
 }
 
-void 
+void
 userAborted(int)
 {
   std::cerr << "\nUser interrupted." << std::endl;
   exit(1);
 }
 
-int 
+int
 main(int argc, const char **argv)
 {
   lat::Signal::handleFatal(argv [0]);
   signal(SIGINT, userAborted);
-  try 
+  try
   {
     IgProfAnalyzerApplication *app = new IgProfAnalyzerApplication(argc, argv);
     app->run();
-  } 
+  }
   catch(lat::Error &e) {
 
     std::cerr << "Internal error \"" << e.explain() << "\".\n"
@@ -3952,7 +3952,7 @@ main(int argc, const char **argv)
       "Please file a bug report and some mean to reproduce it to:\n\n"
       "  https://savannah.cern.ch/bugs/?group=cmssw\n\n" << std::endl;
   }
-  catch(...) 
+  catch(...)
   {
     std::cerr << "Internal error.\n"
       "Oh my, you have found a bug in igprof-analyse!\n"
