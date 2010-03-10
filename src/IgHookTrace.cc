@@ -21,64 +21,6 @@ extern "C" void _sigtramp (void);
 # define MAP_ANONYMOUS MAP_ANON
 #endif
 
-#if 0 && __x86_64__ && __linux
-// Linux x86-64 does not use regular call frames, like IA-32 does for
-// example, and it would be a very difficult job to decipher the call
-// stack.  In order to walk the call stack correctly, we have to use
-// the DWARF-2 unwind data.  This alone is incredibly, uselessly slow
-// for our purposes.
-//
-// We avoid using the unwind data by caching frame structures for
-// recently seen functions.  This is slow to start with, but very
-// quickly gets fast enough for our purposes.  Fortunately the x86-64
-// unwind library appears to be robust enough to be called in signal
-// handlers (unlike at least some IA-32 versions).
-//
-// The cache consists of two arrays arranged as an open-addressed
-// unprobed hash table.  Hash collisions overwrite the entry with the
-// latest data.  We try to avoid making this a problem by using a
-// high-quality hash function and pure brute force in the form of a
-// large hash table.  A couple of megabytes goes a long way to help!
-//
-// The first of the cache arrays, of "void *", tracks program counter
-// addresses.  A parallel array of "int" tracks the size of the call
-// frame at that address.  Given a program counter and the canonical
-// frame address (CFA) of the previous (= above) call frame, the new
-// frame address is the previous plus the delta.  We find the address
-// of the caller just above this new frame address.
-//
-// We use the cache as long as we can find the addresses there.  When
-// we fall off the cache, we resort to the language run time unwinder.
-
-struct IgHookTraceArgs
-{
-  struct
-  {
-    void **pc;
-    int **frame;
-  } cache;
-  struct
-  {
-    void **addresses;
-    int top;
-    int size;
-  } stack;
-  void **prevframe;
-};
-
-static _Unwind_Reason_Code
-GCCBackTrace (_Unwind_Context *context, void *arg)
-{
-  IgHookTraceArgs *args = (IgHookTraceArgs *) arg;
-  if (args->stack.top < 0 || args->stack.top >= args->stack.size)
-    return _URC_END_OF_STACK;
-
-  args->stack.addresses [args->stack.top++] = (void *) _Unwind_GetIP (context);
-  args->prevframe = (void **) _Unwind_GetCFA (context);
-  return _URC_NO_REASON;
-}
-#endif
-
 bool
 IgHookTrace::symbol (void *address,
 		     const char *&sym,
@@ -249,72 +191,6 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
     }
 
     return depth;
-#elif 0
-    struct frame
-    {
-	// Normal frame.
-	frame		*rbp;
-	void		*rip;
-	// Signal frame stuff, put in here by kernel.
-	siginfo_t	*info;
-	ucontext_t	*ctx;
-    };
-    register frame      *rbp __asm__ ("rbp");
-    register frame      *rsp __asm__ ("rsp");
-    frame               *fp = rbp;
-    int			depth = 0;
-    char		msgbuf [128];
-
-    // Add fake entry to be compatible with other methods
-    if (depth < nmax)
-	addresses[depth++] = (void *) &IgHookTrace::stacktrace;
-
-    // Top-most frame ends with null pointer; check the rest is reasonable
-    while (depth < nmax /* && fp >= rsp */)
-    {
-        // write(2, msgbuf, sprintf(msgbuf, "trace %d rsp=%p rbp=%p fp=%p rip=%p frbp=%p\n", depth, rsp, rbp, fp, fp->rip, fp->rbp));
-	// Add this stack frame.  The return address is the
-	// instruction immediately after the "call".  The call
-	// instruction itself is 4 or 6 bytes; we guess 4.
-        addresses[depth++] = (char *) fp->rip - 4;
-
-	// Recognise signal frames.
-	//
-        // Check the instructions at the caller's return address.
-	// We take it to be a signal frame if we find the signal
-	// return code sequence there and the thread register
-	// context structure pointer:
-	//
-	//    mov $__NR_rt_sigreturn,%rax
-	//    syscall
-	//
-	// If we don't recognise the signal frame correctly here, we
-	// lose one stack frame: signal delivery is not a call so
-	// when the signal handler is entered, rbp still points to
-	// what it was just before the signal.
-	unsigned char *insn = (unsigned char *) fp->rip;
-        if (insn // recognise __restore_rt
-	    && insn[0] == 0x48 && insn[1] == 0xc7 && insn[2] == 0xc0
-	    && insn[3] == __NR_rt_sigreturn && insn[4] == 0 && insn[5] == 0
-	    && insn[6] == 0 && insn[7] == 0x0f && insn[8] == 0x05
-	    && fp->ctx)
-        {   
-            // write(2, msgbuf, sprintf(msgbuf, " -> signal frame retrip=%p retrbp=%p\n",
-	    // 		             (void *) fp->ctx->uc_mcontext.gregs [REG_RIP],
-	    // 		             (void *) fp->ctx->uc_mcontext.gregs [REG_RBP]));
-	    void *retip = (void *) fp->ctx->uc_mcontext.gregs [REG_RIP];
-            if (depth < nmax)
-		addresses[depth++] = retip;
-
-	    fp = (frame *) fp->ctx->uc_mcontext.gregs [REG_RBP];
-        }
-
-	// Otherwise it's a normal frame, process through frame pointer.
-        else
-            fp = fp->rbp;
-    }
-
-    return depth;
 #elif __APPLE__ && __ppc__
     struct frame { frame *sp; void *cr; char *lr; };
     char		*sigtramplow = (char *) &_sigtramp;
@@ -356,21 +232,6 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
     }
 
     return depth;
-#elif 0 && __linux
-    return backtrace (addresses, nmax);
-#elif __linux
-    if (nmax >= 1)
-    {
-	IgHookTraceArgs args = { { 0, 0 }, { addresses, 0, nmax, },
-				 (void **) __builtin_frame_address(0) };
-	_Unwind_Backtrace (&GCCBackTrace, &args);
-
-	if (args.stack.top > 1 && args.stack.addresses [args.stack.top-1] == 0)
-	    args.stack.top--;
-
-	return args.stack.top;
-    }
-    return 0;
 #else
     return 0;
 #endif
