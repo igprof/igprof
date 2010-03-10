@@ -793,7 +793,7 @@ public:
   :m_isMax(isMax)
   {
     m_filter = "malloc", "calloc", "realloc", "memalign", "posix_memalign",
-               "valloc", "zmalloc", "zcalloc", "zrealloc", "_Znwj",
+               "valloc", "zmalloc", "zcalloc", "zrealloc", "_Znwj", "_Znwm",
                "_Znaj", "_Znam";
   }
 
