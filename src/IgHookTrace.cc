@@ -136,6 +136,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
 //     http://lkml.indiana.edu/hypermail/linux/kernel/0605.2/0016.html
 //
 # define PROBABLY_VSYSCALL_PAGE 0xffffe000
+    HERE:
     struct frame
     {
 	// Normal frame.
@@ -152,21 +153,11 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
     int			depth = 0;
 
     // Add fake entry to be compatible with other methods
-    //
-    // Removing the __extension__ gives a warning which
-    // is acknowledged as a language problem in the C++ Standard Core 
-    // Language Defect Report
-    //
-    // http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#195
-    //
-    // since the suggested decision seems to be that the syntax should
-    // actually be "Conditionally-Supported Behavior" in some 
-    // future C++ standard I simply silence the warning.
     if (depth < nmax)
-	addresses[depth++] = __extension__ (void *) &IgHookTrace::stacktrace;
+	addresses[depth++] = __extension__ &&HERE;
 
     // Top-most frame ends with null pointer; check the rest is reasonable
-    while (depth < nmax && fp >= esp)
+    while (depth < nmax && fp >= esp && fp->eip)
     {
 	// Add this stack frame.  The return address is the
 	// instruction immediately after the "call".  The call
