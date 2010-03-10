@@ -66,7 +66,7 @@ debug (const char *format, ...)
     address suitable for single-instruction branches (see @c direct
     argument to #redirect()) if the architecture so requires.  */
 static IgHook::Status
-allocate (void *&ptr, void *target)
+allocate (void *&ptr, void *target UNUSED)
 {
     // FIXME: a page per trampoline is a bit excessive...
     unsigned int pagesize = getpagesize ();
@@ -437,7 +437,7 @@ parse (const char *func, void *address, unsigned *patches)
     architectures where only a single instruction is replaced in the
     prologue.  */
 static int
-redirect (void *&from, void *to, IgHook::JumpDirection direction)
+redirect (void *&from, void *to, IgHook::JumpDirection direction UNUSED)
 {
 #if __i386__
     // NB: jump offsets are calculated from *after* the jump instruction
@@ -581,7 +581,7 @@ postreentry (void *&from, void *to)
 static void
 prepare (void *address,
 	 void *replacement, void **chain,
-	 void *old, int prologue, unsigned *patches)
+	 void *old, int prologue, unsigned *patches UNUSED)
 {
     // First part: unconditional jump to replacement
     prereentry (address, replacement);
