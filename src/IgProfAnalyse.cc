@@ -2814,12 +2814,12 @@ public:
       return m_info->filename().c_str();
     }
 
-  const unsigned int depth()
+  unsigned int depth()
     {
       return m_info->DEPTH;
     }
 
-  const unsigned int rank()
+  unsigned int rank()
     {
       return m_info->rank();
     }
