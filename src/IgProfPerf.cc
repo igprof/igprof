@@ -47,7 +47,7 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
 
       // Drop two bottom frames, three top ones (stacktrace, me, signal frame).
-      buf->push(addresses+3, depth-4, &entry, 1);
+      buf->push(addresses+3, depth-3, &entry, 1);
     }
   }
   IgProf::enable(false);

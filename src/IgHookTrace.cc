@@ -240,24 +240,21 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
 
     return depth;
 #elif __linux && __x86_64__
-    union { void *ptr; int (*func)(void **, int); } u;
     unw_cursor_t  cur;
     unw_context_t ctx;
-    unw_word_t    ip;
     int		  depth = 0;
-    u.func = &IgHookTrace::stacktrace;
-
-    // Add fake entry to be compatible with other methods
-    if (depth < nmax)
-	addresses[depth++] = u.ptr;
 
     // Walk the stack.
     unw_getcontext(&ctx);
     unw_init_local(&cur, &ctx);
-    while (depth < nmax && unw_step(&cur) > 0)
+    while (depth < nmax)
     {
+      int ret;
+      unw_word_t ip;
       unw_get_reg(&cur, UNW_REG_IP, &ip);
       addresses[depth++] = (void *) ip;
+      if ((ret = unw_step(&cur)) <= 0)
+        break;
     }
 
     return depth;

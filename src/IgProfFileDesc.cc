@@ -74,7 +74,7 @@ add (int fd)
   }
 
   // Drop two bottom frames, four top ones (stacktrace, me, two for hook).
-  buf->push(addresses+4, depth-5, entries, nentries);
+  buf->push(addresses+4, depth-4, entries, nentries);
 }
 
 /** Remove knowledge about the file descriptor.  If we are tracking

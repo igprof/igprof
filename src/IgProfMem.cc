@@ -103,8 +103,8 @@ add(void *ptr, size_t size)
     nentries++;
   }
 
-  // Drop two bottom frames, four top ones (stacktrace, me, two for hook).
-  buf->push(addresses+4, depth-5, entries, nentries);
+  // Drop three top ones (stacktrace, me, hook).
+  buf->push(addresses+3, depth-3, entries, nentries);
 }
 
 /** Remove knowledge about allocation.  If we are tracking leaks,
