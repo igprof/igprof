@@ -190,6 +190,27 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
         break;
     }
 
+#if 0 // Debug code for tracking unwind failures.
+    if (addresses[depth-1] != (void *) 0x40cce9)
+    {
+      char buf [512];
+      write(2, buf, sprintf(buf, "UWTRACE %d\n", depth));
+      for (int i = 0; i < depth; ++i)
+      {
+        const char *sym = 0, *lib = 0;
+        long off = 0, liboff = 0;
+	symbol(addresses[i], sym, lib, off, liboff);
+        write(2, buf, sprintf(buf, " #%-3d 0x%016lx %s %s %lx [%s %s %lx]\n",
+			      i, (unsigned long) addresses[i],
+			      sym ? sym : "(unknown)",
+			      off < 0 ? "-" : "+", labs(off),
+			      lib ? lib : "(unknown)",
+			      liboff < 0 ? "-" : "+", labs(liboff)));
+      }
+      write(2, buf, sprintf(buf, " UWEND\n"));
+    }
+#endif
+
     return depth;
 #elif __APPLE__ && __ppc__
     struct frame { frame *sp; void *cr; char *lr; };
