@@ -93,8 +93,8 @@ dothrow (IgHook::SafeData<igtrace_dothrow_t> &hook,
 	char		buf [2048];
 	const char	*sym = 0;
 	const char	*lib = 0;
-	int		symoff = 0;
-	int		liboff = 0;
+	long		symoff = 0;
+	long		liboff = 0;
 
         pthread_mutex_lock(&s_demanglelock);
 	const char *tname = (tinfo ? tinfo->name() : 0);
@@ -164,8 +164,10 @@ dothrow (IgHook::SafeData<igtrace_dothrow_t> &hook,
 		lib = "<unknown library>";
 
 	    write (2, buf, sprintf (buf,
-				    "  %3d: %-10p %.500s + %d [%.500s + %d]\n",
-				    i-1, stack [i], sym, symoff, lib, liboff));
+				    "  %3d: %-10p %.500s %s %ld [%.500s %s %ld]\n",
+				    i-1, stack [i], sym, (symoff < 0 ? "-" : "+"),
+				    labs(symoff), lib, (liboff < 0 ? "-" : "+"),
+				    labs(liboff)));
 	}
         pthread_mutex_unlock(&s_demanglelock);
     }

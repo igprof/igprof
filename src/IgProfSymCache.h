@@ -31,8 +31,8 @@ public:
     Symbol	*next;		//< The next symbol in the hash bin chain.
     void	*address;	//< Instruction pointer value.
     const char	*name;		//< Name of the symbol (function) if known.
-    int		symoffset;	//< Offset from the beginning of symbol.
-    int		binoffset;	//< Offset from the beginning of executable object.
+    long	symoffset;	//< Offset from the beginning of symbol.
+    long	binoffset;	//< Offset from the beginning of executable object.
     Binary	*binary;	//< The binary object containing this symbol.
     int		id;		//< Reference ID in final output, -1 if unset.
   };

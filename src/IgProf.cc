@@ -122,7 +122,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
     IgProfSymCache::Symbol *sym = info.symcache->get(frame->address);
 
     if (sym->id >= 0)
-      fprintf (info.output, "C%d FN%d+%d", info.depth, sym->id, sym->symoffset);
+      fprintf (info.output, "C%d FN%d+%ld", info.depth, sym->id, sym->symoffset);
     else
     {
       const char	*symname = sym->name;
@@ -137,11 +137,11 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
       }
 
       if (sym->binary->id >= 0)
-	fprintf(info.output, "C%d FN%d=(F%d+%d N=(%s))+%d",
+	fprintf(info.output, "C%d FN%d=(F%d+%ld N=(%s))+%ld",
 		info.depth, sym->id, sym->binary->id, sym->binoffset,
 		symname, sym->symoffset);
       else
-	fprintf(info.output, "C%d FN%d=(F%d=(%s)+%d N=(%s))+%d",
+	fprintf(info.output, "C%d FN%d=(F%d=(%s)+%ld N=(%s))+%ld",
 		info.depth, sym->id, (sym->binary->id = info.nlibs++),
 		sym->binary->name ? sym->binary->name : "",
 		sym->binoffset, symname, sym->symoffset);
@@ -620,12 +620,14 @@ IgProf::panic(const char *file, int line, const char *func, const char *expr)
   {
     const char	*sym = 0;
     const char	*lib = 0;
-    int		offset = 0;
-    int		liboffset = 0;
+    long	offset = 0;
+    long	liboffset = 0;
 
     IgHookTrace::symbol(trace[i], sym, lib, offset, liboffset);
-    fprintf(stderr, "  %p %s + %d [%s + %d]\n",
-	    trace[i], sym ? sym : "?", offset, lib ? lib : "?", liboffset);
+    fprintf(stderr, "  %p %s %s %ld [%s %s %ld]\n",
+	    trace[i], sym ? sym : "?",
+	    (offset < 0 ? "-" : "+"), labs(offset), lib ? lib : "?",
+	    (liboffset < 0 ? "-" : "+"), labs(liboffset));
   }
 
   // abort();

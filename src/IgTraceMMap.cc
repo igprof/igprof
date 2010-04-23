@@ -321,8 +321,8 @@ munmapreport(void *addr, size_t len)
     char	buf [2048];
     const char	*sym = 0;
     const char	*lib = 0;
-    int		symoff = 0;
-    int		liboff = 0;
+    long	symoff = 0;
+    long	liboff = 0;
 
     write(2, buf, xsprintf(buf, sizeof(buf),
 			   "*** MUNMAP by %.500s [thread %lu pid %ld]:"
@@ -378,8 +378,8 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
     char	buf [2048];
     const char	*sym = 0;
     const char	*lib = 0;
-    int		symoff = 0;
-    int		liboff = 0;
+    long	symoff = 0;
+    long	liboff = 0;
 
     write(2, buf, xsprintf(buf, sizeof(buf),
 			   "*** MMAP%s by %.500s [thread %lu pid %ld]:"

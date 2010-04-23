@@ -25,8 +25,8 @@ bool
 IgHookTrace::symbol (void *address,
 		     const char *&sym,
 		     const char *&lib,
-		     int &offset,
-		     int &liboffset)
+		     long &offset,
+		     long &liboffset)
 {
     sym = lib = 0;
     offset = 0;

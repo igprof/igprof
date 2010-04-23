@@ -186,8 +186,8 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
     {
       const char  *sym = 0;
       const char  *lib = 0;
-      int         offset = 0;
-      int         liboffset = 0;
+      long        offset = 0;
+      long        liboffset = 0;
 
       IgHookTrace::symbol(s->address, sym, lib, offset, liboffset);
       IgProf::debug ("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,

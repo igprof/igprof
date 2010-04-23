@@ -181,10 +181,13 @@ IgTrace::panic (const char *file, int line, const char *func, const char *expr)
     {
 	const char	*sym = 0;
 	const char	*lib = 0;
-	int		offset = 0;
-	int		liboffset = 0;
+	long		offset = 0;
+	long		liboffset = 0;
 	IgHookTrace::symbol (trace [i], sym, lib, offset, liboffset);
-	fprintf (stderr, "  %p %s + %d [%s + %d]\n", trace [i], sym, offset, lib, liboffset);
+	fprintf (stderr, "  %p %s %s %ld [%s %s %ld]\n",
+		 trace [i], sym, (offset < 0 ? "-" : "+"),
+		 labs(offset), lib, (liboffset < 0 ? "-" : "+"),
+		 labs(liboffset));
     }
 
     // abort ();
@@ -236,7 +239,7 @@ IgTrace::filter (const char *info, void *stack [], int depth)
 	    bool	passthis = true;
 	    const char	*sym = 0;
 	    const char	*lib = 0;
-	    int		junk = 0;
+	    long	junk = 0;
 	    
             if (! IgHookTrace::symbol (stack[i], sym, lib, junk, junk))
 		continue;
