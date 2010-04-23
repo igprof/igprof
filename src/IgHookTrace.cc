@@ -1,5 +1,6 @@
 #include "IgHookTrace.h"
 #include <cstdlib>
+#include <cstring>
 #include <cstdio>
 #include <dlfcn.h>
 #include <unistd.h>
@@ -20,6 +21,8 @@ extern "C" void _sigtramp (void);
 #if !defined MAP_ANONYMOUS && defined MAP_ANON
 # define MAP_ANONYMOUS MAP_ANON
 #endif
+
+#define UNUSED __attribute__((unused))
 
 bool
 IgHookTrace::symbol (void *address,
@@ -64,8 +67,26 @@ IgHookTrace::tosymbol (void *address)
 	? info.dli_saddr : address;
 }
 
+void *
+IgHookTrace::initcache (int nframes UNUSED)
+{
+#if __linux && __x86_64__
+    return unw_tdep_make_frame_cache (nframes);
+#else
+    return 0;
+#endif
+}
+
+void
+IgHookTrace::delcache (void *cache UNUSED)
+{
+#if __linux && __x86_64__
+    unw_tdep_free_frame_cache ((unw_tdep_frame_t *) cache);
+#endif
+}
+
 int
-IgHookTrace::stacktrace (void **addresses, int nmax)
+IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
 {
 #if __linux && __i386__
 // Safer assumption for the VSYSCALL_PAGE.
@@ -173,21 +194,30 @@ IgHookTrace::stacktrace (void **addresses, int nmax)
 
     return depth;
 #elif __linux && __x86_64__
-    unw_cursor_t  cur;
-    unw_context_t ctx;
-    int		  depth = 0;
+    unw_cursor_t     cur;
+    unw_context_t    ctx;
+    unw_context_t    saved;
+    unw_tdep_frame_t *fcache = (unw_tdep_frame_t *) cache;
+    int		     depth = nmax;
+    int		     ret;
 
-    // Walk the stack.
+    // If we have a cache, first try fast trace. Fall back on slow trace.
     unw_getcontext(&ctx);
+    memcpy(&saved, &ctx, sizeof(ctx));
+
     unw_init_local(&cur, &ctx);
-    while (depth < nmax)
+    if (! cache || (ret = unw_tdep_trace(&cur, addresses, &depth, fcache)) < 0)
     {
-      int ret;
-      unw_word_t ip;
-      unw_get_reg(&cur, UNW_REG_IP, &ip);
-      addresses[depth++] = (void *) ip;
-      if ((ret = unw_step(&cur)) <= 0)
-        break;
+	depth = 0;
+        unw_init_local(&cur, &saved);
+        while (depth < nmax)
+        {
+            unw_word_t ip;
+            unw_get_reg(&cur, UNW_REG_IP, &ip);
+            addresses[depth++] = (void *) ip;
+            if ((ret = unw_step(&cur)) <= 0)
+	      break;
+        }
     }
 
 #if 0 // Debug code for tracking unwind failures.

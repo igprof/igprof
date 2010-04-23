@@ -41,9 +41,10 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
   bool enabled = IgProf::disable(false);
   if (enabled)
   {
+    void *cache = IgProf::tracecache();
     if (IgProfTrace *buf = IgProf::buffer(s_moduleid))
     {
-      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
+      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
 
       // Drop two bottom frames, three top ones (stacktrace, me, signal frame).

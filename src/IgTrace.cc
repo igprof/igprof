@@ -176,7 +176,7 @@ IgTrace::panic (const char *file, int line, const char *func, const char *expr)
     fprintf (stderr, "%s:%d: %s: assertion failure: %s\n", file, line, func, expr);
 
     void *trace [128];
-    int levels = IgHookTrace::stacktrace (trace, 128);
+    int levels = IgHookTrace::stacktrace (trace, 128, 0);
     for (int i = 2; i < levels; ++i)
     {
 	const char	*sym = 0;

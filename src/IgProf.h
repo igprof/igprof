@@ -28,6 +28,7 @@ public:
   static bool		enable(bool globally);
   static bool		disable(bool globally);
   static IgProfTrace *	buffer(int moduleid);
+  static void *		tracecache(void);
 };
 
 #endif // IG_PROF_IG_PROF_H

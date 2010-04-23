@@ -75,7 +75,7 @@ domalloc (IgHook::SafeData<igtrace_domalloc_t> &hook, size_t size)
     if (enabled)
     {
         void *stack [800];
-        int depth = IgHookTrace::stacktrace (stack, sizeof (stack)/sizeof(stack[0]));
+        int depth = IgHookTrace::stacktrace (stack, sizeof (stack)/sizeof(stack[0]), 0);
 
         // If the filters pass, walk the stack to print out information.
         if (IgTrace::filter (0, stack, depth))

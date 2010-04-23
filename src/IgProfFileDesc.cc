@@ -45,12 +45,13 @@ static int			s_moduleid	= -1;
 static void __attribute__((noinline))
 add (int fd)
 {
+  void *cache = IgProf::tracecache();
   IgProfTrace *buf = IgProf::buffer(s_moduleid);
   if (! buf)
     return;
 
   void			*addresses[IgProfTrace::MAX_DEPTH];
-  int			depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
+  int			depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
   IgProfTrace::Record	entries [2];
   int			nentries = 0;
 

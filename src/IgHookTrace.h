@@ -4,7 +4,10 @@
 class IgHookTrace
 {
 public:
-    static int		stacktrace (void **addresses, int nmax);
+    static void *	initcache (int nframes);
+    static void		delcache (void *cache);
+
+    static int		stacktrace (void **addresses, int nmax, void *cache);
     static void *	tosymbol (void *address);
     static bool		symbol (void *address, const char *&sym,
 		    		const char *&lib, long &offset,
