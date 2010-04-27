@@ -1,0 +1,53 @@
+---
+title: Running IgProf
+layout: default
+---
+
+### Profile software
+
+To profile you just prefix the command line with `igprof` and options of your
+choice.  The profile outputs from long runs can be large so it's advisable to
+compress the data.  You would run the performance profiler with compressed
+output like this:
+
+    (time igprof -d -t cmsRun -pp -z -o igprof.myrun.gz
+     cmsRun myrun.cfg) >& out.myrun.txt </dev/null &
+
+If you'd like to run the memory profiler instead:
+
+    (time igprof -d -t cmsRun -mp -z -o igprof.myrun.gz \
+     cmsRun myrun.cfg) >& out.myrun.txt </dev/null &
+
+Or perhaps both at the same time?
+
+    (time igprof -d -t cmsRun -pp -mp -z -o igprof.myrun.gz \
+     cmsRun myrun.cfg) >& out.myrun.txt </dev/null &
+
+The above commands send the job output and the final profile to files in the
+current directory.  The `-pp` option enables the performance profiler and the
+`-mp` option the memory profiler.  The `-d` option adds a little more
+information about the workings of the profiler itself, mainly to the very
+beginning and end of the job.  It helps to see the profiler is active and
+working correctly.
+
+The `-o` option sets the name for the profile output file.  If you don't give a
+name, then a file `igprof.NNNNN` will be created, where `NNNNN` is the process
+id.  The `-z` option tells igprof to compress the profile output file using
+gzip.  The `-t` option constraints which processes can be profiled, which is
+useful in case the process launches subprocesses.  In the above examples we
+restrict the profiling to `cmsRun`; by default igprof would profile all
+processes.
+
+### Analyse results
+
+Once you've run the profiler, you can analyse the results like this:
+
+    igprof-analyse -d -g -v igprof.* | less
+
+The `igprof-analyse` command produces the actual profile statistics for the
+run, or mulitple runs if you give it several statistics files.  The output can
+be quite large so you'll generally want to read it using a pager such as `less`
+or save it in a file.  You can also produce the output in HTML format and look
+at it with your web browser.
+
+Enjoy!

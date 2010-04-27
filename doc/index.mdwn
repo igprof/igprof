@@ -1,0 +1,58 @@
+---
+title: Introduction
+layout: default
+---
+Welcome to IgProf, the Ignominous Profiler.  IgProf is a simple nice tool for
+measuring and analysing application memory and performance characteristics.
+IgProf requires no changes to the application or the build process.  It
+currently works on Linux (IA32) and Mac OS X (PPC).
+
+Few profilers are capable of correctly profiling CMS' C++ software.  IgProf is
+a fast, light weight and correctly handles dynamically loaded shared libraries,
+threads and sub-processes started by the application.  It requires no special
+privileges to run.  The performance reports can be customised by applying
+filters and may include results from any number of profiling runs.  This means
+you can both dig into the details and see the big picture from combined
+workloads.
+
+The performance profiling adds ~1% to application run time and ~40 MB to memory
+usage.  The memory profiling overhead depends heavily on the application's
+memory allocation patterns: the smaller and the more there are allocations and
+the higher the recycling rate, the more overhead.  For a fairly typical CMSSW
+task loading ~400 shared libraries, running for about an hour and using ~500 MB
+memory, on Scientific Linux 3 IgProf adds 15-30% to run time and ~50 MB to
+memory size, and on Scientific Linux 4 respectively 50-75% and ~250 MB.
+Usually IgProf is about a factor of ten to fifty faster than valgrind or
+callgrind.
+
+### Presentations and documents
+
+* Giulio's and Lassi's Sept 2004 ([presentation][presentation-2004],
+  [paper][paper-2004] and [abstract][abstract-2004]) at CHEP'04.
+* Giulio's Nov 2003 [presentation][cms-cpt-presentation-2003] in the core
+  software session in the
+  [CMS CPT week](http://indico.cern.ch/conferenceDisplay.py?confId=a035751#s21).
+* Giulio's July 2003 [OProfile][oprofile-2003] and [MemProfLib][] presentations
+  in the
+  [LCG applications area meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a031779).
+* Giulio's March 2003 [Profiling OSCAR][] presentaion in the
+  [SPROM meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a03580).
+* Giulio's Sept 2002 [OProfile introduction][] in the
+  [CMS AFT meeting in CMS week](http://indico.cern.ch/conferenceDisplay.py?confId=a021337#s3).
+
+### Other profilers
+
+If developing on a Mac OS X is an option, even if you otherwise develop on Linux, consider using [Shark][].  For very precise but much more expensive profiling you can use [callgrind and valgrind][].  [OProfile][] is another statistical profiler that uses CPU performance counters; it requires system privileges unless you use the snapshot interface developed by Giulio Eulisse.  At present OProfile gives only flat profiles, not call trees, but allows a wide range of very interesting metrics to measure, such as cache miss rate.  It can also profile the whole system, not just one application.  CMSSW includes a builtin SimpleProfiler you may wish to try.
+
+[Shark]: http://developer.apple.com/tools/sharkoptimize.html
+[callgrind and valgrind]: http://www.valgrind.org
+[oprofile]: http://oprofile.sourceforge.net
+
+[paper-2004]: http://indico.cern.ch/getFile.py/access?contribId=63&amp;sessionId=6&amp;resId=0&amp;materialId=paper&amp;confId=0
+[presentation-2004]: http://indico.cern.ch/getFile.py/access?contribId=63&amp;sessionId=6&amp;resId=0&amp;materialId=slides&amp;confId=0
+[abstract-2004]: http://indico.cern.ch/contributionDisplay.py?contribId=63&sessionId=6&confId=0
+[cms-cpt-presentation-2003]: http://indico.cern.ch/getFile.py/access?resId=0&amp;materialId=0&amp;contribId=s21t2&amp;sessionId=s21&amp;subContId=1&amp;confId=a035751
+[oprofile-2003]: http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=1&materialId=0&confId=a031779
+[MemProfLib]: http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=0&materialId=0&confId=a031779
+[Profiling Oscar]: http://indico.cern.ch/getFile.py/access?contribId=s1t6&amp;resId=0&amp;materialId=0&amp;confId=a03580
+[Oprofile Introduction]: http://indico.cern.ch/getFile.py/access?contribId=s3t7&sessionId=s3&resId=1&materialId=0&confId=a021337

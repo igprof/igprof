@@ -1,0 +1,45 @@
+---
+title: Analysing IgProf results
+layout: default
+---
+Assuming you created profile statistics [as shown on the running
+page](running.html), the run generated a file with statistics for some number
+of profiler counters.  The possible ones are `PERF_TICKS`, `MEM_LIVE`,
+`MEM_LIVE_PEAK`, `MEM_TOTAL` and `MEM_MAX`.  To analyse results you
+pick one of the counters and generate the profile output.  For example to find
+out where memory is getting leaked, you would look at `MEM_LIVE` like this:
+
+    igprof-analyse -g -d -v -p -r MEM_LIVE igprof.myrun.gz 2>&1 | less -S
+
+The `-g` and `-d` options are given for more accurate and appealing
+presentation of function names.  The `-v` option just gives you more
+information of the analysis itself, it's mostly useful when the profile
+statistics are huge and take a while to process.  The `-p` option adds an extra
+column to show how many unique ways there were to reach that call, which is
+useful to know.  The `-r` option selects the statistic to report.
+
+The meaning of the counters is as follows:
+
+* `PERF_TICKS` statistically samples the application every 1-10 ms and records
+  the call stacks.  Over longer run periods functions that execute frequently
+  tend to show high in the profile output.  The exact sampling frequency is
+  system-dependent.  The performance profiling is very cheap, adding &lt;2% to the
+  program run time, so you can use this as a quick means to identify largest
+  resource usages.  You might want to use callgrind or some other tool for more
+  detailed analysis.  `MEM_LIVE` records the "live" memory -- memory that wasn't
+  freed -- at the end of the application's run.  The statistic is accurate (not
+  statistical) and records the number of bytes allocated and the number of calls
+  involved.
+* `MEM_LIVE_PEAK` is similar to `MEM_LIVE`, but records the peak amount of
+  memory allocated by any one function at any one time.  It indicates how much
+  memory the application would use if all of its parts held to all of their
+  live allocations simultaneously.  Note that it does _not_ tell you how much
+  the whole application allocate at its largest; that will be less than
+  `MEM_LIVE_PEAK`, but the latter will give a useful worst-case upper bound.
+* `MEM_TOTAL` records the total amount of memory allocated by any function.
+  You can use it to locate functions that allocate excessive amounts of memory
+  even if they don't leak it.  It can also be used to hint at pieces of code
+  that may cause poor memory locality, which is could easily cause performance
+  degradation throughout the programme with no one place being particularly
+  slow.
+* `MEM_MAX` records the largest single allocation by any function.

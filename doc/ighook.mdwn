@@ -1,0 +1,15 @@
+---
+title: IgHook
+layout: default
+---
+IgHook is a dynamic instrumentation library written by Lassi Tuura.  It
+provides functionality to tap into any routine in an existing programme or
+library, and to maintain records: capturing stack traces, efficiently keeping
+track of which functions were called and how often, or keeping tabs on
+resources allocated and released to find leaks.
+
+IgHook currently works on Linux (IA32 and, mostly, X86_64) and Mac OS X (PPC).
+It is used by IgProf profiling tools and was used to implement TraceOnThrow
+debugging utility in COBRA: ability to dump a stack trace whenever an exception
+is thrown anywhere in the application.
+

@@ -1,0 +1,121 @@
+<html>
+<head>
+<style>
+html {
+font-family: sans-serif;
+}
+
+#nav 
+{
+padding:5px 10px;
+background:#fff;
+}
+
+#main {
+-float:right;
+-max-width:700px;
+padding:10px;
+background:#fff;
+}
+
+h2 {
+margin:0 0 1em;
+}
+
+
+#wrap 
+{
+max-width:1000px;
+margin:0 auto;
+background:#fff;
+}
+
+#footer {
+clear: both;
+padding: 5px 10px;
+background: #fff;
+text-align: center;
+font-size: 50%;
+}
+
+#header {
+text-align: center;
+font-size: 190%;
+font-weight: bold;
+}
+
+
+#sidebar {
+float:right;
+width:230px;
+padding:0 20px;
+margin:0 20px 20px;
+background:#f8f8f8;
+border:thin solid #eee;
+text-size: 80%;
+}
+
+#sidebar ul {margin-left: 0; padding-left: 0;}
+#sidebar ul li {margin-left: 1.2em; padding-left: 0;}
+
+#footer p {
+margin:0;
+}
+
+pre {
+overflow: auto;
+}
+
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="header">
+    IgProf, The Ignominous Profiler
+  </div>
+  <div id="nav">
+  </div>
+  <div id="sidebar">
+    <h3 id='quick_start'>Quick start</h3>
+    <ul>
+    <li><a href='index.html'>Introduction</a></li>
+    <li><a href='CMSSW.html'>IgProf in CMSSW</a></li>
+    <li><a href='running.html'>Running igprof</a></li>
+    <li><a href='analysis.html'>Analysing results</a></li>
+    </ul>
+
+    <h3 id='details'>Details</h3>
+    <ul>
+    <li>
+    <a href='text-output-format.html'>Full details on analysis output</a>
+    </li>
+
+    <li>
+    <p>How IgProf works</p>
+    <ul>
+    <li><a href='dump-format.html'>Profile output file format</a></li>
+    <li><a href='ighook.html'>The IgHook tapping library</a></li>
+    </ul>
+    </li>
+
+    <li>
+    <p><a href='authors.html'>Authors</a></p>
+    </li>
+    <li>
+    <p><a href='history.html'>History</a></p>
+    </li>
+    </ul>
+
+  </div>
+  <div id="main">
+    <h2>{{page.title}}</h2>
+
+    {{content}}
+
+  </div>
+  <div id="footer">
+  Copyright 2002-2010 Giulio Eulisse &amp; Lassi Tuura
+  </div>
+</div>
+</body>
+</html>
