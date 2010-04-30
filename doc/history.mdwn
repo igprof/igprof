@@ -1,6 +1,11 @@
 ---
 title: IgProf history
 layout: default
+related:
+ - { name: Top, link: . }
+ - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
+ - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
+ - { name: Project, link: http://sourceforge.net/projects/igprof/ }
 ---
 While the current version of IgProf is entirely the work of Lassi Tuura and
 Giulio Eulisse, it borrows most of the ideas from several other projects.  Our

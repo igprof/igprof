@@ -1,6 +1,11 @@
 ---
 title: Analysing IgProf results
 layout: default
+related:
+ - { name: Top, link: . }
+ - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
+ - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
+ - { name: Project, link: http://sourceforge.net/projects/igprof/ }
 ---
 Assuming you created profile statistics [as shown on the running
 page](running.html), the run generated a file with statistics for some number

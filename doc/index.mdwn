@@ -1,11 +1,16 @@
 ---
-title: Introduction
+title: IgProf, The Ignominous Profiler
 layout: default
+related:
+ - { name: Top, link: . }
+ - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
+ - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
+ - { name: Project, link: http://sourceforge.net/projects/igprof/ }
 ---
 Welcome to IgProf, the Ignominous Profiler.  IgProf is a simple nice tool for
 measuring and analysing application memory and performance characteristics.
 IgProf requires no changes to the application or the build process.  It
-currently works on Linux (IA32) and Mac OS X (PPC).
+currently works on Linux (ia32, x86_64).  Eons ago it worked also on Mac OS X (PPC).
 
 Few profilers are capable of correctly profiling CMS' C++ software.  IgProf is
 a fast, light weight and correctly handles dynamically loaded shared libraries,
@@ -15,30 +20,33 @@ filters and may include results from any number of profiling runs.  This means
 you can both dig into the details and see the big picture from combined
 workloads.
 
-The performance profiling adds ~1% to application run time and ~40 MB to memory
-usage.  The memory profiling overhead depends heavily on the application's
-memory allocation patterns: the smaller and the more there are allocations and
-the higher the recycling rate, the more overhead.  For a fairly typical CMSSW
-task loading ~400 shared libraries, running for about an hour and using ~500 MB
-memory, on Scientific Linux 3 IgProf adds 15-30% to run time and ~50 MB to
-memory size, and on Scientific Linux 4 respectively 50-75% and ~250 MB.
-Usually IgProf is about a factor of ten to fifty faster than valgrind or
-callgrind.
+The performance profiling adds negligbly to application run time and ~40 MB to
+memory usage.  The memory profiling overhead depends heavily on the application's
+memory allocation patterns: the smaller allocations and the higher the rate, the
+more overhead.  For a fairly typical CMSSW task on 64-bit Scientific Linux 5,
+loading some 600 shared libraries, using 1 GB memory and allocating at roughly
+million allocations per second rate averaged over an hour or so, the run time
+overhead is ~250% and memory use increase ~1 GB. On 32-bit Linux the overhead
+is much less, about ~50% increase in run time, in some cases as little as 15%.
+Usually IgProf is considerably faster than valgrind or callgrind for the job.
 
 ### Presentations and documents
 
-* Giulio's and Lassi's Sept 2004 ([presentation][presentation-2004],
-  [paper][paper-2004] and [abstract][abstract-2004]) at CHEP'04.
-* Giulio's Nov 2003 [presentation][cms-cpt-presentation-2003] in the core
-  software session in the
-  [CMS CPT week](http://indico.cern.ch/conferenceDisplay.py?confId=a035751#s21).
-* Giulio's July 2003 [OProfile][oprofile-2003] and [MemProfLib][] presentations
-  in the
-  [LCG applications area meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a031779).
-* Giulio's March 2003 [Profiling OSCAR][] presentaion in the
-  [SPROM meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a03580).
-* Giulio's Sept 2002 [OProfile introduction][] in the
-  [CMS AFT meeting in CMS week](http://indico.cern.ch/conferenceDisplay.py?confId=a021337#s3).
+* L. Tuura: _Efficient memory management,_ First INFN International School on architectures, tools and methodologies for developing efficient large scale scientific computing applications ([ESC09](http://web.infn.it/esc09/)), Bertinoro, Italy, 2009 ([slides](http://agenda.infn.it/getFile.py/access?contribId=20&amp;sessionId=2&amp;resId=0&amp;materialId=slides&amp;confId=1387)).
+
+* P. Elmer, G. Eulisse, L. Tuura, V. Innocente: _CMS software performance strategies,_ Proc. Computing In High Energy And Nuclear Physics ([CHEP09](http://www.particle.cz/conferences/chep2009/)), Prague, Czech Republic, 2009 ([slides](http://indico.cern.ch/getFile.py/access?contribId=482&sessionId=59&resId=0&materialId=slides&confId=35523)).
+
+* L. Tuura, V. Innocente, G. Eulisse: _Analysing CMS software performance using IgProf, OProfile and callgrind,_ Proc. Computing In High Energy And Nuclear Physics ([CHEP07](http://www.chep2007.com/)), Victoria, Canada, 2007, [doi:10.1088/1742-6596/119/4/042030](http://dx.doi.org/10.1088/1742-6596/119/4/042030) ([paper](http://www.iop.org/EJ/article/1742-6596/119/4/042030/jpconf8_119_042030.pdf), [slides](http://indico.cern.ch/getFile.py/access?contribId=259&sessionId=28&resId=0&materialId=slides&confId=3580)).
+
+* G. Eulisse, L. Tuura: _IgProf profiling tool,_ Proc. Computing In High Energy And Nuclear Physics ([CHEP 2004](http://www.chep2004.org/)), Interlaken, Switzerland, 2004 ([paper](http://indico.cern.ch/getFile.py/access?contribId=63&sessionId=6&resId=0&materialId=paper&confId=0), [slides](http://indico.cern.ch/getFile.py/access?contribId=63&sessionId=6&resId=0&materialId=slides&confId=0), [abstract](http://indico.cern.ch/contributionDisplay.py?contribId=63&sessionId=6&confId=0)).
+
+* G. Eulisse: Core software session [presentation](http://indico.cern.ch/getFile.py/access?resId=0&amp;materialId=0&amp;contribId=s21t2&amp;sessionId=s21&amp;subContId=1&amp;confId=a035751) at November 2003 [CMS CPT week](http://indico.cern.ch/conferenceDisplay.py?confId=a035751#s21).
+
+* G. Eulisse: [OProfile](http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=1&materialId=0&confId=a031779) and [MemProfLib](http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=0&materialId=0&confId=a031779) presentations at July 2003 [LCG applications area meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a031779).
+
+* G. Eulisse: _Profiling OSCAR_ [presentation](http://indico.cern.ch/getFile.py/access?contribId=s1t6&amp;resId=0&amp;materialId=0&amp;confId=a03580) in the March 2003 [SPROM meeting](http://indico.cern.ch/conferenceDisplay.py?confId=a03580).
+
+* G. Eulisse: _OProfile Introduction_ [presentation](http://indico.cern.ch/getFile.py/access?contribId=s3t7&sessionId=s3&resId=1&materialId=0&confId=a021337) in September 2002 [CMS AFT meeting in CMS week](http://indico.cern.ch/conferenceDisplay.py?confId=a021337#s3).
 
 ### Other profilers
 
@@ -47,12 +55,3 @@ If developing on a Mac OS X is an option, even if you otherwise develop on Linux
 [Shark]: http://developer.apple.com/tools/sharkoptimize.html
 [callgrind and valgrind]: http://www.valgrind.org
 [oprofile]: http://oprofile.sourceforge.net
-
-[paper-2004]: http://indico.cern.ch/getFile.py/access?contribId=63&amp;sessionId=6&amp;resId=0&amp;materialId=paper&amp;confId=0
-[presentation-2004]: http://indico.cern.ch/getFile.py/access?contribId=63&amp;sessionId=6&amp;resId=0&amp;materialId=slides&amp;confId=0
-[abstract-2004]: http://indico.cern.ch/contributionDisplay.py?contribId=63&sessionId=6&confId=0
-[cms-cpt-presentation-2003]: http://indico.cern.ch/getFile.py/access?resId=0&amp;materialId=0&amp;contribId=s21t2&amp;sessionId=s21&amp;subContId=1&amp;confId=a035751
-[oprofile-2003]: http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=1&materialId=0&confId=a031779
-[MemProfLib]: http://indico.cern.ch/getFile.py/access?contribId=s1t2&resId=0&materialId=0&confId=a031779
-[Profiling Oscar]: http://indico.cern.ch/getFile.py/access?contribId=s1t6&amp;resId=0&amp;materialId=0&amp;confId=a03580
-[Oprofile Introduction]: http://indico.cern.ch/getFile.py/access?contribId=s3t7&sessionId=s3&resId=1&materialId=0&confId=a021337
