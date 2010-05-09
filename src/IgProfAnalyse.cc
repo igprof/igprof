@@ -36,7 +36,7 @@ class IgTokenizer
 {
 public:
   IgTokenizer(FILE *in, const char *filename);
-  void            getToken(const char *delim, const char *prefix = 0);
+  void            getToken(const char *delim);
   int64_t         getTokenLL(const char *delim, size_t base = 10);
   int64_t         getTokenLL(char delim, size_t base = 10);
   void            getTokenS(std::string &result, char delim);
@@ -158,7 +158,7 @@ IgTokenizer::getTokenS(std::string &result, char delim)
     
   */
 void
-IgTokenizer::getToken(const char *delim, const char *prefix)
+IgTokenizer::getToken(const char *delim)
 {
   fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
 }
@@ -757,8 +757,8 @@ Configuration::Configuration()
    m_showCalls(-1),
    m_verbose(false),
    m_normalValue(true),
-   m_diffMode(false),
    m_mergeLibraries(false),
+   m_diffMode(false),
    minCountValue(-1),
    maxCountValue(-1),
    minCallsValue(-1),
@@ -1502,7 +1502,7 @@ protected:
       
       FIXME: recode to use PCRE directly!
    */
-  void convertSymbol(NodeInfo *node)
+  void convertSymbol(NodeInfo */*node*/)
     {
 /*      int reOffsets[1024];
       int reSizes[1024];
