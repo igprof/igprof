@@ -1,116 +1,105 @@
 #ifndef IG_RESOLVE_SYMBOLS
 #define IG_RESOLVE_SYMBOLS
-
-#include <classlib/iotools/InputStream.h>
-#include <classlib/iotools/StorageInputStream.h>
-#include <classlib/iotools/BufferInputStream.h>
-#include <classlib/iobase/File.h>
-#include <classlib/iobase/FileError.h>
-#include <classlib/iobase/Filename.h>
-#include <classlib/utils/DebugAids.h>
-#include <classlib/utils/StringOps.h>
-#include <classlib/utils/Regexp.h>
-#include <classlib/utils/RegexpMatch.h>
-#include <classlib/utils/Argz.h>
-#include <classlib/iobase/Pipe.h>
-#include <classlib/iotools/IOChannelInputStream.h>
-#include <classlib/iotools/InputStream.h>
-#include <classlib/iotools/InputStreamBuf.h>
-#include <classlib/zip/GZIPInputStream.h>
-#include <classlib/zip/BZIPInputStream.h>
-#include <classlib/zip/ZipInputStream.h>
-#include <classlib/iobase/SubProcess.h>
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <string>
 #include <list>
-#include <iostream>
 #include <cmath>
 #include <sys/stat.h>
 #include <map>
 #include <stdint.h>
+#include <stdio.h>
+#include <vector>
+#include <cassert>
+#include <errno.h>
+#include <cstdarg>
 
-// FIXME: Doh... Why did I not use isspace?? Is this actually faster? To check.
-bool isWhitespace(char c)
+/** Gets a token delimited by @a separator from the @a file and write it,
+    0 terminated in the buffer found in @a buffer.
+    
+    Notice that if the token is larger than @a maxSize, the buffer is
+    reallocated and @a maxSize is updated to the new size.
+
+    The trailing separator after a token is not put in the token and is left 
+    in the buffer. If @a nextChar is not 0, the delimiter is put there.
+    
+    @a in the file to be read.
+    
+    @a buffer a pointer to the buffer where to put the tokens. The buffer will
+     be redimensioned accordingly, if the token is larger of the buffer.
+     
+    @a maxSize, a pointer to the size of the buffer. Notice that in case the 
+     buffer is reallocated to have more space, maxSize is updated with the new 
+     size.
+     
+    @a firstChar 
+ 
+    @return the size of the token. 
+  */
+size_t
+fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
+          int *firstChar)
 {
-  //^ \t\n\r\f\v
-  if (c == ' '
-      || c == '\t'
-      || c == '\n'
-      || c == '\r'
-      || c == '\f'
-      || c == '\v') return true;
-  return false;
+  // if the passed first character is EOF or a separator,
+  // return an empty otherwise use it as first character
+  // of the buffer. 
+  if (*firstChar == EOF || (int) separators[0] == *firstChar || strchr(separators + 1, *firstChar))
+  { 
+    (*buffer)[0] = 0;
+    return 0;
+  }
+  else
+    (*buffer)[0] = *firstChar;
+
+  size_t i = 1;
+
+  while (true)
+  {
+    if (i >= *maxSize)
+    {
+      *maxSize += 1024;
+      *buffer = (char*) realloc(*buffer, *maxSize);
+      if (!*buffer)
+      {
+        fprintf(stderr, "Token too long. Not enough memory.");
+        exit(1);
+      }
+    }
+    
+    int c = fgetc(in);
+    
+    if (c == EOF)
+    {
+      if (ferror(in))
+      {
+        fprintf(stderr, "Error while reading file.");
+        exit(1);
+      }
+      else if (feof(in))
+      {
+        fprintf(stderr, "Premature end of file.");
+        exit(1);
+      }
+      assert(false);
+    }
+    
+    if (separators[0] == c || strchr(separators + 1, c))
+    {
+      (*buffer)[i] = 0;
+      *firstChar = c;
+      return i;
+    }
+
+    (*buffer)[i++] = c;
+  }
 }
-
-class PipeReader
+/**Skip all the characters contained in @a skipped*/
+void
+skipchars(FILE *in, const char *skipped, int *nextChar)
 {
-public:
-  PipeReader(const std::string &args, lat::IOChannel *source=0)
-    : m_argz(args),
-      m_is(0),
-      m_isbuf(0),
-      m_cmd(0)
-    {
-      static lat::File s_stderr(lat::Filename::null(), lat::IOFlags::OpenRead | lat::IOFlags::OpenWrite);
-      lat::IOChannel *nil = 0;
-
-      if (!source)
-        m_cmd = new lat::SubProcess(m_argz.argz(), 
-                                    lat::SubProcess::One | lat::SubProcess::Read | lat::SubProcess::NoCloseError,
-                                    &m_pipe, nil, &s_stderr);
-      else
-        m_cmd = new lat::SubProcess(m_argz.argz(), 
-                                    lat::SubProcess::One | lat::SubProcess::Read | lat::SubProcess::NoCloseError,
-                                    source, m_pipe.sink(), &s_stderr);
-      m_is = new lat::IOChannelInputStream(m_pipe.source());
-      m_isbuf = new lat::InputStreamBuf(m_is);
-      m_istd  = new std::istream(m_isbuf);    
-    }
-  
-  ~PipeReader(void)
-    {
-      if (m_pipe.source())
-        m_pipe.source()->close();
-      delete m_isbuf;
-      delete m_istd;
-      delete m_is;
-      delete m_cmd;
-    }
-  
-  std::istream &output(void)
-    {
-      return *m_istd;
-    }
-private:
-  lat::Argz m_argz;
-  lat::Pipe m_pipe;
-  std::istream *m_istd;
-  lat::IOChannelInputStream *m_is;
-  lat::InputStreamBuf *m_isbuf;
-  lat::SubProcess *m_cmd;
-};
-
-bool skipWhitespaces(const char *srcbuffer, const char **destbuffer)
-{
-  if (!isWhitespace(*srcbuffer++))
-    return false;
-  while (isWhitespace(*srcbuffer))
-    srcbuffer++;
-  *destbuffer = srcbuffer;
-  return true;
-}
-
-bool skipString(const char *strptr, const char *srcbuffer, const char **dstbuffer)
-{
-  // Skips strings of the form '\\s+strptr\\s+' starting from buffer.
-  // Returns a pointer to the first char which does not match the above regexp,
-  // or 0 in case the regexp is not matched.
-  if(strncmp(srcbuffer, strptr, strlen(strptr))) 
-    return false;
-  *dstbuffer = srcbuffer + strlen(strptr);
-  return true;
+  while(strchr(skipped, *nextChar))
+    *nextChar = fgetc(in);
 }
 
 class FileInfo
@@ -138,17 +127,21 @@ private:
   };
 public:
   std::string NAME;
-  FileInfo(void) : NAME("<dynamically generated>") {}
+  FileInfo(void) 
+    : NAME("<dynamically generated>"),
+      m_useGdb(false) 
+    {}
   FileInfo(const std::string &name, bool useGdb)
-    : NAME(name)
+    : NAME(name),
+      m_useGdb(useGdb)
     {
       if (useGdb)
-      {
-        ASSERT(lat::Filename(name).isDirectory() == false);
         this->createOffsetMap();
-      }
     }
 
+  /** Resolves a symbol by looking up the offset of
+      its code in the symbol map for this file.
+    */
   const char *symbolByOffset(Offset offset)
     {
       if (m_symbolCache.empty())
@@ -177,116 +170,133 @@ public:
         return 0;
       return i->OFFSET;      
     }
+
+  /** Return true if gdb can be used to better determine symbols inside
+      files.
+    */
+  bool canUseGdb(void)
+    {
+      return m_useGdb;
+    }
+
 private:
+  /** Creates a map of the offsets at which all the
+      symbols in the file get loaded WRT the base address at which a given
+      loadable object is going to be loaded.
+    */
   void createOffsetMap(void)
     {
       // FIXME: On macosx we should really use otool
 #ifndef __APPLE__
-      std::string commandLine = "objdump -p " + std::string(NAME);
-      PipeReader objdump(commandLine);
+      char *commandLine = 0;
+      asprintf(&commandLine, "objdump -p %s", NAME.c_str());
     
-      std::string oldname;
-      std::string suffix;
+      FILE *pipe = popen(commandLine, "r");
+      if (!pipe || ferror(pipe))
+      {
+        fprintf(stderr, "Error while invoking objdump");
+        exit(1);
+      }
       Offset vmbase = 0;
       bool matched = false;
-
-      while (objdump.output())
+      size_t bufferSize = 1024;
+      char *buffer = (char*) malloc(bufferSize);
+      int nextChar = fgetc(pipe);
+      
+      while (nextChar != EOF)
       {
         // Checks the following regexp
         //    
         //    LOAD\\s+off\\s+(0x[0-9A-Fa-f]+)\\s+vaddr\\s+(0x[0-9A-Fa-f]+)
         // 
         // and sets vmbase to be $2 - $1 of the first matched entry.
-      
-        std::string line;
-        std::getline(objdump.output(), line);
-    
-        if (!objdump.output()) 
-          break;
-        if (line.empty()) 
+        skipchars(pipe, "\n\t ", &nextChar);
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
+        if (strncmp("LOAD", buffer, 4)) 
           continue;
-      
-        const char *lineptr = line.c_str();
-        if (!skipWhitespaces(lineptr, &lineptr)) 
+        skipchars(pipe, "\n\t ", &nextChar);
+
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
+        if (strncmp("off", buffer, 3))
           continue;
-        if (!skipString("LOAD", lineptr, &lineptr)) 
-          continue;
-        if (!skipWhitespaces(lineptr, &lineptr)) 
-          continue;
-        if (!skipString("off", lineptr, &lineptr)) 
-          continue;
+        skipchars(pipe, "\n\t ", &nextChar);
+
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         char *endptr = 0;
-        Offset initialBase = strtol(lineptr, &endptr, 16);
-        if (lineptr == endptr) 
+        Offset initialBase = strtol(buffer, &endptr, 16);
+        if (buffer == endptr) 
           continue;
-        lineptr = endptr;
-        if (!skipWhitespaces(lineptr, &lineptr))
+        skipchars(pipe, "\n\t ", &nextChar);
+        
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
+        if (strncmp("vaddr", buffer, 5))
           continue;
-        if (!skipString("vaddr", lineptr, &lineptr))
+        skipchars(pipe, "\n\t ", &nextChar);
+
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
+        Offset finalBase = strtol(buffer, &endptr, 16);
+        if (buffer == endptr)
           continue;
-        if (!skipWhitespaces(lineptr, &lineptr))
-          continue;
-        Offset finalBase = strtol(lineptr, &endptr, 16);
-        if (lineptr == endptr)
-          continue;
+        skipchars(pipe, "\n\t ", &nextChar);
+
         vmbase = finalBase - initialBase;
         matched = true;
         break;
       }
     
+      fclose(pipe);
+
       if (!matched)
       {
-        std::cerr << "Cannot determine VM base address for " 
-                  << NAME << std::endl;
-        std::cerr << "Error while running `objdump -p " + std::string(NAME) + "`" << std::endl;
+        fprintf(stderr, "Cannot determine VM base address for %s\n"
+                        "Error while running \"objdump -p %s\"\n", NAME.c_str(), NAME.c_str());
         exit(1);
       }
-    
-      PipeReader nm("nm -t d -n " + std::string(NAME));
-      while (nm.output())
+
+      free(commandLine);
+      asprintf(&commandLine, "nm -t d -n %s", NAME.c_str());
+      pipe = popen(commandLine, "r");
+      if (!pipe || ferror(pipe))
+        return;
+
+      nextChar = fgetc(pipe);
+
+      while (nextChar != EOF)
       {
-        std::string line;
-        std::getline(nm.output(), line);
-    
-        if (!nm.output()) break;
-        if (line.empty()) continue;
+        skipchars(pipe, "\n\t ", &nextChar);
         // If line does not match "^(\\d+)[ ]\\S[ ](\S+)$", exit.
-        const char *begin = line.c_str();
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         char *endptr = 0;
-        Offset address = strtol(begin, &endptr, 10);
-        if (endptr == begin) 
+        Offset address = strtol(buffer, &endptr, 10);
+        if (buffer == endptr) 
           continue; 
+        skipchars(pipe, "\t\n ", &nextChar);
 
-        if (*endptr++ != ' ') 
-          continue; 
-
-        if (isWhitespace(*endptr++))  
-          continue; 
-        if (*endptr++ != ' ')  
-          continue; 
-
-        char *symbolName = endptr;
-      
-        while (*endptr && !isWhitespace(*endptr))
-          endptr++;
-        if (*endptr != 0)
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
+        if (buffer[1] != 0)
           continue;
+        skipchars(pipe, "\t\n ", &nextChar);
+
+        fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         // If line starts with '.' forget about it.
-        if (symbolName[0] == '.')
+        if (buffer[0] == '.')
           continue;
+        skipchars(pipe, "\t\n ", &nextChar);
+
         // Create a new symbol with the given fileoffset.
         // The symbol is automatically saved in the FileInfo cache by offset.
         // If a symbol with the same offset is already there, the new one 
         // replaces the old one.
         Offset offset = address - vmbase;
         if (m_symbolCache.size() && (m_symbolCache.back().OFFSET == offset))
-          m_symbolCache.back().NAME = symbolName;
+          m_symbolCache.back().NAME = buffer;
         else
-          m_symbolCache.push_back(CacheItem(address-vmbase, symbolName));
+          m_symbolCache.push_back(CacheItem(address-vmbase, buffer));
       }
+      free(commandLine);
 #endif /* __APPLE__ */
     }
-
+  bool        m_useGdb;
   SymbolCache m_symbolCache;
 };
 

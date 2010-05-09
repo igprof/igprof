@@ -2,25 +2,6 @@
 #define IG_PROF_ANALYZE
 
 #include "IgResolveSymbols.h"
-#include <classlib/iotools/InputStream.h>
-#include <classlib/iotools/StorageInputStream.h>
-#include <classlib/iotools/BufferInputStream.h>
-#include <classlib/iobase/File.h>
-#include <classlib/iobase/FileError.h>
-#include <classlib/iobase/Filename.h>
-#include <classlib/utils/DebugAids.h>
-#include <classlib/utils/StringOps.h>
-#include <classlib/utils/Regexp.h>
-#include <classlib/utils/RegexpMatch.h>
-#include <classlib/utils/Argz.h>
-#include <classlib/iobase/Pipe.h>
-#include <classlib/iotools/IOChannelInputStream.h>
-#include <classlib/iotools/InputStream.h>
-#include <classlib/iotools/InputStreamBuf.h>
-#include <classlib/zip/GZIPInputStream.h>
-#include <classlib/zip/BZIPInputStream.h>
-#include <classlib/zip/ZipInputStream.h>
-#include <classlib/iobase/SubProcess.h>
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -31,32 +12,13 @@
 #include <sys/stat.h>
 #include <map>
 #include <stdint.h>
+#define __STDC_FORMAT_MACROS 1
 #include <inttypes.h>
 #include <cstdio>
-
-class IntConverter
-{
-public:
-  IntConverter(const std::string &string, lat::RegexpMatch *match)
-    :m_string(string.c_str()),
-     m_match(match) {}
-
-  IntConverter(const char *string, lat::RegexpMatch *match)
-    :m_string(string),
-     m_match(match) {}
-  
-  int64_t operator()(int position, int base=10)
-    {
-      return strtoll(m_string + m_match->matchPos(position), 0, base);
-    }
-private:
-  const char *m_string;
-  lat::RegexpMatch *m_match;
-};
+#include <cassert>
 
 /** This class is the payload for a node in the stacktrace
-    and holds all the information about the counter that 
-    we looking at.
+    and holds all the information about the counter that we looking at.
   */
 struct Counter
 {
@@ -146,195 +108,76 @@ private:
   const ArgsList::const_iterator m_end;
 };
 
-
-class FileOpener 
+/** Format a message on stderr and exit with exitcode 1. */
+void
+die(const char *format, ...)
 {
-public:
-  static const int INITIAL_BUFFER_SIZE=40000000;
-  FileOpener(void)
-    : m_buffer(new char[INITIAL_BUFFER_SIZE]),
-      m_posInBuffer(INITIAL_BUFFER_SIZE),
-      m_lastInBuffer(INITIAL_BUFFER_SIZE),
-      m_eof(false),
-      m_bufferSize(INITIAL_BUFFER_SIZE)
-    {}
-  
-  virtual ~FileOpener(void)
-    {
-      for (Streams::reverse_iterator i = m_streams.rbegin();
-           i != m_streams.rend();
-           i++)
-      {
-        delete *i;
-      }
-      free(m_buffer);
-    }
-  
-  lat::InputStream &stream(void)
-    {
-      return *m_streams.back();
-    }
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  exit(1);
+}
 
-  void addStream(lat::InputStream *stream)
-    {
-      m_streams.push_back(stream);
-    }
-
-  void resizeBuffer(int size)
-    {
-      char * buffer = new char[size];
-      memmove(buffer, m_buffer, m_bufferSize);
-      delete[] m_buffer;
-      m_buffer = buffer;
-      m_bufferSize = size;
-    } 
+/** @return FILE which reads the profile dump called @a filename.
  
-  void readLine()
-    {
-      int beginInBuffer = m_posInBuffer;
-
-      while (m_posInBuffer < m_lastInBuffer)
-      {
-        if (m_buffer[m_posInBuffer++] == '\n')
-        {
-          m_curString = m_buffer + beginInBuffer;
-          m_curStringSize = m_posInBuffer-beginInBuffer-1;
-          return;
-        }
-      }
-      int remainingsSize = m_lastInBuffer-beginInBuffer;
-      ASSERT(remainingsSize <= m_bufferSize);
-
-      if (remainingsSize == m_bufferSize)
-        resizeBuffer(remainingsSize * 2);
-
-      if (remainingsSize)
-        memmove(m_buffer, m_buffer + beginInBuffer, remainingsSize);
- 
-      int readSize = this->stream().read(m_buffer + remainingsSize, m_bufferSize-remainingsSize);
-
-      if (!readSize)
-      { 
-        m_eof = true;
-        m_curString = m_buffer;
-        m_curStringSize = remainingsSize;
-        return;
-      }
-
-      m_posInBuffer = 0;
-      m_lastInBuffer = remainingsSize + readSize;
-      return this->readLine();
-    }
-  
-  void assignLineToString(std::string &str)
-    {
-      str.assign(m_curString, m_curStringSize);
-    }
-  
-  bool eof(void) {return m_eof;}
-private:
-  typedef std::list<lat::InputStream *> Streams; 
-  Streams m_streams;
-  char *m_buffer;
-  int m_posInBuffer;
-  int m_lastInBuffer;
-  int m_eof;
-  const char *m_curString;
-  int m_curStringSize;
-  int m_bufferSize;
-};
-
-class FileReader : public FileOpener
+    @a filename the filename to be opened.
+ */
+FILE *
+openDump(const char *filename, const char *cmd = 0)
 {
-public:
-  FileReader(const std::string &filename)
-    : FileOpener(),
-      m_file(openFile(filename))
-    { 
-      ASSERT(m_file);
-      lat::StorageInputStream *storageInput = new lat::StorageInputStream(m_file);
-      lat::BufferInputStream *bufferStream = new lat::BufferInputStream(storageInput);
-      addStream(storageInput);
-      addStream(bufferStream);
+  // If filename is not a real file, simply exit.
+  if (access(filename, R_OK))
+  {
+    if (errno == ENOENT)
+      die("%s does not exists", filename);
+    else if (errno == EACCES)
+      die("%s is not readable", filename);
+    else
+      die("Unable to open file %s", filename);
+  }
 
-      FILE *f = fopen(filename.c_str(), "r"); 
-      fread(m_fileHeader, 4, 1, f);
-      fclose(f);
-    
-      if (m_fileHeader[0] == 0x1f 
-          && m_fileHeader[1] == 0x8b) 
-        addStream(new lat::GZIPInputStream(bufferStream));
-      else if (m_fileHeader[3] == 0x04 
-               && m_fileHeader[2] == 0x03
-               && m_fileHeader[1] == 0x4b
-               && m_fileHeader[0] == 0x50) 
-        addStream(new lat::ZipInputStream(bufferStream));
-      else if (m_fileHeader[0] == 'B' 
-               && m_fileHeader[1] == 'Z' 
-               && m_fileHeader[2] == 'h') 
-        addStream(new lat::BZIPInputStream(bufferStream));
-    }
-  ~FileReader(void)
-    {
-      m_file->close();
-    }
-private:
-  static lat::File *openFile(const std::string &filename)
-    {
-      try 
-      {
-        lat::File *file = new lat::File(filename);
-        return file;
-      }
-      catch(lat::FileError &e)
-      {
-        std::cerr << "ERROR: Unable to open file " << filename << " for input." 
-                  << std::endl;
-        exit(1);
-      }
-    }
-  lat::File *m_file;
-  unsigned char m_fileHeader[4];
-};
+  // Determine the kind of file (compressed or not) from the header.
+  FILE *f = fopen(filename, "r");
+  if (!f || ferror(f))
+    die("Cannor open %s.", filename);
 
-class PathCollection
-{
-public:
-  typedef lat::StringList Paths;
-  typedef Paths::const_iterator Iterator;
-  PathCollection(const char *variableName)
-    {
-      char *value = getenv(variableName);
-      if (!value)
-        return;
-      m_paths = lat::StringOps::split(value, ':', lat::StringOps::TrimEmpty);
-    }
+  unsigned char header[128];
+  fread(header, 4, 1, f);
+  fclose(f);
+  std::string command;
   
-  std::string which (const std::string &name)
-    {
-      for (Iterator s = m_paths.begin();
-           s != m_paths.end();
-           s++)
-      {
-        lat::Filename filename(*s, name);
-        if (filename.exists())
-          return std::string(filename);
-      }
-      return "";
-    }
+  // If a command to be run on the file if specified,
+  // just run it.
+  // If the file is compressed, uncompress it.
+  // Otherwise just read the file.
+  if (cmd)
+    command = std::string(cmd) + filename;
+  else if (header[0] == 0x1f && header[1] == 0x8b)
+    command = std::string("gzip -dc ") + filename;
+  else if (header[0] == 'B'
+           && header[1] == 'Z' 
+           && header[2] == 'h')
+    command = std::string("bzip2 -dc ") + filename;
   
-  Iterator begin(void) { return m_paths.begin(); }
-  Iterator end(void) { return m_paths.end(); }  
-private:
-  Paths m_paths;
-};
+  FILE *in;
+  if (command.empty())
+    in = fopen(filename, "r");
+  else
+    in = popen(command.c_str(), "r");
+
+  if (!in)
+    die("Cannot open %s.", filename);
+
+  return in;
+}
 
 std::string 
 thousands(int64_t value, int leftPadding=0)
 {
   // Converts an integer value to a string
   // adding `'` to separate thousands and possibly
-  ASSERT(leftPadding >= 0);
+  assert(leftPadding >= 0);
   int64_t n = 1; int digitCount = 0;
   std::string result = "";
   bool sign = value >= 0; 
@@ -350,7 +193,7 @@ thousands(int64_t value, int leftPadding=0)
   while ((value / n))
   {
     int digit = (value / n) % 10;
-    ASSERT(digit < 10);
+    assert(digit < 10);
     if ((! digitCount) && (n != 1))
     { result = "'" + result; }
     d[0] = static_cast<char>('0'+ static_cast<char>(digit));
@@ -361,7 +204,7 @@ thousands(int64_t value, int leftPadding=0)
   
   if (leftPadding)
   {
-    ASSERT(leftPadding-digitCount > 0);
+    assert(leftPadding-digitCount > 0);
     result = std::string("", leftPadding-digitCount) + result;
   }
   return(sign ? "" : "-")  + result;
@@ -374,7 +217,7 @@ thousands(double value, int leftPadding, int decimalPositions)
   decimalPositions += value < 0 ? 1 : 0;
   int padding = leftPadding-decimalPositions;
   std::string result = thousands(int64_t(value), padding > 0 ? padding : 0);
-  ASSERT(decimalPositions < 63);
+  assert(decimalPositions < 63);
   char buffer[64];
   double decimal = fabs(value-int64_t(value));
   sprintf(buffer+1, "%.2f", decimal);
@@ -388,10 +231,9 @@ toString(int64_t value)
 {
   // FIXME: not thread safe... Do we actually care? Probably not.
   static char buffer [1024];
-  sprintf(buffer,"%" PRIi64,value);
+  sprintf(buffer,"%" PRIi64, value);
   return buffer;
 }
-
 
 class AlignedPrinter
 {

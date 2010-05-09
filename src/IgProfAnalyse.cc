@@ -1,15 +1,4 @@
 #include "IgProfAnalyse.h"
-#include <classlib/utils/DebugAids.h>
-#include <classlib/utils/Callback.h>
-#include <classlib/utils/Hook.h>
-#include <classlib/utils/Error.h>
-#include <classlib/utils/Signal.h>
-#include <classlib/utils/Regexp.h>
-#include <classlib/iobase/File.h>
-#include <classlib/iobase/TempFile.h>
-#include <classlib/iotools/StorageInputStream.h>
-#include <classlib/iotools/BufferInputStream.h>
-#include <classlib/iotools/IOChannelOutputStream.h>
 #include <iostream>
 #include <fstream>
 #include <cstdarg>
@@ -28,45 +17,250 @@
 #include <cstdio>
 #include <cfloat>
 #include <iomanip>
+#include <unistd.h>
+#include <sstream>
+#include <cassert>
+//#include <pcre.h>
 
 #define IGPROF_MAX_DEPTH 1000
 
 void dummy(void) {}
 
-void
-dieWithUsage(const char *message = 0)
-{
-  // The following options
-  //
-  // * --list-filter / -lf
-  // * -f FILTER[, FILTER]
-  // * -F/--filter-module [FILE]
-  // * --callgrind
-  //
-  // which where present in the old perl version
-  // are either obsolete or not supported at the moment
-  // by igprof-analyse. We do not show them in the usage, but
-  // we do show a different message if someone uses them.
-  if (message)
-    std::cerr << message << "\n";
 
-  std::cerr << ("igprof-analyse\n"
-                "  {[-r/--report KEY[,KEY]...], --show-pages, --show-page-ranges, --show-locality-metrics}"
-                "  [-o/--order ORDER]\n"
-                "  [-p/--paths] [-c/--calls] [--value peak|normal]\n"
-                "  [-mr/--merge-regexp REGEXP]\n"
-                "  [-ml/--merge-libraries REGEXP]\n"
-                "  [-nf/--no-filter]\n"
-                "  { [-t/--text], [-s/--sqlite], [--top <n>], [--tree] }\n"
-                "  [--libs] [--demangle] [--gdb] [-v/--verbose]\n"
-                "  [-b/--baseline FILE [--diff-mode]]\n"
-                "  [-Mc/--max-count-value <value>] [-mc/--min-count-value <value>]\n"
-                "  [-Mf/--max-calls-value <value>] [-mc/--min-calls-value <value>]\n"
-                "  [-Ma/--max-average-value <value>] [-ma/--min-average-value <value>]\n"
-                "  [--] [FILE]...\n") << std::endl;
-  exit(1);
+/** Helper class which is responsible for parsing an IgProf dump.
+    
+    This is done with a separate class to avoid polluting the internal state
+    of the IgProfAnalyzerApplication with the state of the parser.
+  */
+class IgTokenizer
+{
+public:
+  IgTokenizer(FILE *in, const char *filename);
+  void            getToken(const char *delim, const char *prefix = 0);
+  int64_t         getTokenLL(const char *delim, size_t base = 10);
+  int64_t         getTokenLL(char delim, size_t base = 10);
+  void            getTokenS(std::string &result, char delim);
+  void            getTokenS(std::string &result, const char *delim);
+  double          getTokenD(const char *delim);
+  double          getTokenD(char delim);
+  int             nextChar(void)
+    {
+      return m_next;
+    }
+  size_t          lineNum(void)
+    {
+      return m_lineCount;
+    }
+  
+  /** Checks that the next char is @a skipped */
+  void            skipChar(int skipped)
+    {
+      if (m_next!= skipped)
+        syntaxError();
+      m_next = fgetc(m_in);
+      return;
+    }
+
+  /** Checks that @a str is the next string in the file. */  
+  void            skipString(const char *str, size_t size = 0)
+    {
+      if (!size)
+        size = strlen(str);
+      for (size_t i = 0; i != size; ++i)
+      {
+        char skipped = str[i];
+        skipChar(skipped);
+      }
+      return;
+    }
+
+  /** Increments the number of lines and skips the \n. 
+    */
+  void skipEol(void)
+    {
+      skipChar('\n');
+      m_lineCount++;
+    }
+  /** @return a pointer to the buffer holding the current token (including 
+      the separators).
+    */
+  const char     *buffer(void)
+    {
+      return m_buffer;
+    }
+
+  void            syntaxError();
+private:  
+  FILE                *m_in;
+  // Internal state of the tokenizer.
+  /** The size of the buffer where read token are put.
+      Notice that it will grow as larger token not fitting the initial size are
+      found.
+    */
+  size_t              m_bufferSize;
+  /** The where read token are put.
+      Notice that it will grow as larger token not fitting the initial size
+      are found. 
+    */
+  char                *m_buffer;
+  /// The next char after the current token.
+  int                 m_next;
+  size_t              m_lineCount;
+  std::string         m_filename;
+};
+
+/** Initialises the parser extracting needed stuff from the passed ProfileInfo.
+
+    @a in the file to be read and tokenized.
+
+    @a filename string to be printed as filename on error.
+    
+  */
+IgTokenizer::IgTokenizer(FILE *in, const char *filename)
+  : m_in(in),
+    m_bufferSize(1024),
+    m_lineCount(0),
+    m_filename(filename)
+{
+  m_buffer = (char *) malloc(m_bufferSize);
+  m_next = fgetc(in);
 }
 
+/** Fills m_buffer with the next token delimited by a seguence of @a delim
+    
+    It also fills the @a result string with the contents of the token buffer.
+  */
+void
+IgTokenizer::getTokenS(std::string &result, const char *delim)
+{
+  fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
+  result.assign(m_buffer);
+}
+
+/** Fills m_buffer with the next token delimited by a seguence of @a delim
+    
+    It also fills the @a result string with the contents of the token buffer.
+    
+    Notice that given the fact that there is no ambiguity on the delimiter,
+    we simply skip it.
+  */
+void
+IgTokenizer::getTokenS(std::string &result, char delim)
+{
+  char buf[2] = {delim, 0};
+  getTokenS(result, buf);
+  m_next = fgetc(m_in);
+}
+
+
+/** Fills m_buffer with the next token delimited by a sequence of 
+    @a delim (including the delimiters).
+    
+  */
+void
+IgTokenizer::getToken(const char *delim, const char *prefix)
+{
+  fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
+}
+
+/** Fills m_buffer with the next token delimited by a sequence of 
+    @a delim (including the delimiters). Then returns the long long found
+    at @a offset in the buffer.
+    
+    @a base the base to be used for the translation.
+  */ 
+int64_t
+IgTokenizer::getTokenLL(const char *delim, size_t base)
+{
+  char *endptr = 0;
+  size_t size = fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
+  int64_t result = strtoll(m_buffer, &endptr, base);
+  if (endptr != m_buffer + size)
+    syntaxError();
+  return result;
+}
+
+/** Fills m_buffer with the next token delimited by a sequence of 
+    @a delim (including the delimiters). Then returns the long long found
+    at @a offset in the buffer.
+    
+    @a base the base to be used for the translation.
+
+    Notice that since there is no ambiguity on the delimiter, we simply
+    skip it.
+  */
+int64_t
+IgTokenizer::getTokenLL(char delim, size_t base)
+{
+  char buf[2] = {delim, 0};
+  int64_t result = getTokenLL(buf, base);
+  m_next = fgetc(m_in);
+  return result;
+}
+
+/** 
+    Fills m_buffer with the next token delimited by a sequence of 
+    @a delim (including the delimiters). Then returns the long long found
+    at @a offset in the buffer.
+    
+    @a base the base to be used for the translation.
+  */ 
+double
+IgTokenizer::getTokenD(const char *delim)
+{
+  char *endptr = 0;
+  size_t size = fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
+  double result = strtod(m_buffer, &endptr);
+  if (endptr != m_buffer + size)
+    syntaxError();
+  return result;
+}
+
+double
+IgTokenizer::getTokenD(char delim)
+{
+  char buf[2] = {delim, 0};
+  double result = getTokenD(buf);
+  skipChar(delim);
+  return result;
+}
+
+/** 
+    Pretty prints a "syntax error" message, including line number and last
+    token read.
+  */
+void
+IgTokenizer::syntaxError()
+{
+  die("\nSyntax error in file \"%s\" at line %d.\nLast token read \"%s\".\n",
+      m_filename.c_str(), m_lineCount, m_buffer);
+}
+
+// The following options
+//
+// * --list-filter / -lf
+// * -f FILTER[, FILTER]
+// * -F/--filter-module [FILE]
+// * --callgrind
+//
+// which where present in the old perl version
+// are either obsolete or not supported at the moment
+// by igprof-analyse. We do not show them in the usage, but
+// we do show a different message if someone uses them.
+const char USAGE[] = "igprof-analyse\n"
+    "  {[-r/--report KEY[,KEY]...], --show-pages, --show-page-ranges, --show-locality-metrics}"
+    "  [-o/--order ORDER]\n"
+    "  [-p/--paths] [-c/--calls] [--value peak|normal]\n"
+    "  [-mr/--merge-regexp REGEXP]\n"
+    "  [-ml/--merge-libraries REGEXP]\n"
+    "  [-nf/--no-filter]\n"
+    "  { [-t/--text], [-s/--sqlite], [--top <n>], [--tree] }\n"
+    "  [--libs] [--demangle] [--gdb] [-v/--verbose]\n"
+    "  [-b/--baseline FILE [--diff-mode]]\n"
+    "  [-Mc/--max-count-value <value>] [-mc/--min-count-value <value>]\n"
+    "  [-Mf/--max-calls-value <value>] [-mc/--min-calls-value <value>]\n"
+    "  [-Ma/--max-average-value <value>] [-ma/--min-average-value <value>]\n"
+    "  [--] [FILE]...\n";
 float percent(int64_t a, int64_t b)
 {
   double value = static_cast<double>(a) / static_cast<double>(b);
@@ -78,15 +272,16 @@ float percent(int64_t a, int64_t b)
   return value * 100.;
 }
 
-
 class SymbolInfo
 {
 public:
   std::string NAME;
-  FileInfo  *FILE;
-  int     FILEOFF;
+  FileInfo    *FILE;
+  int64_t     FILEOFF;
   SymbolInfo(const char *name, FileInfo *file, int fileoff)
-    : NAME(name), FILE(file), FILEOFF(fileoff), RANK(-1) {}
+    : NAME(name), FILE(file), FILEOFF(fileoff), RANK(-1) 
+    {}
+
   int rank(void) { return RANK; }
   void setRank(int rank) { RANK = rank; }
 private:
@@ -106,7 +301,7 @@ struct RangeInfo
   RangeInfo(uint64_t iStartAddr, uint64_t iEndAddr)
   : startAddr(iStartAddr), endAddr(iEndAddr)
   {
-    ASSERT(iStartAddr < iEndAddr);
+    assert(iStartAddr < iEndAddr);
   }
 
   // One page range is less than the other if its final address is less than the
@@ -121,14 +316,13 @@ struct RangeInfo
     if (endAddr - startAddr + 1 <= 0)
       std::cerr << endAddr << " " << startAddr << std::endl;
 
-    ASSERT(endAddr - startAddr + 1 > 0);
+    assert(endAddr - startAddr + 1 > 0);
     return endAddr - startAddr + 1;
   }
 };
 
 
 typedef std::vector<RangeInfo>  Ranges;
-
 
 void debugRanges(const char * name, const Ranges &ranges)
 {
@@ -175,7 +369,7 @@ countPages(Ranges &ranges)
   size_t numOfPages = 0;
   for (size_t ri = 0, re = ranges.size(); ri != re; ++ri)
   {
-    ASSERT(ranges[ri].size() > 0);
+    assert(ranges[ri].size() > 0);
     numOfPages += ranges[ri].size();
   }
 
@@ -223,7 +417,7 @@ void mergeRanges(Ranges &dest, Ranges &source)
 
   while (di < dest.size() && si < source.size())
   {
-    ASSERT(temp.size());
+    assert(temp.size());
     RangeInfo &current = temp.back();
     const RangeInfo &nextDest = dest[di];
     const RangeInfo &nextSource = source[si];
@@ -256,7 +450,7 @@ void mergeRanges(Ranges &dest, Ranges &source)
     if (temp.size() && temp.back().endAddr < temp.back().startAddr)
     {
       std::cerr << temp.back().endAddr << " " << temp.back().startAddr << std::endl;
-      ASSERT(false);
+      assert(false);
     }
   }
 
@@ -299,7 +493,7 @@ void mergeRanges(Ranges &dest, Ranges &source)
 //    debugRanges("new parent", temp);
 //  }
 
-//  ASSERT(countPages(temp) >= countPages(source));
+//  assert(countPages(temp) >= countPages(source));
 
   temp.reserve(temp.size());
   dest.swap(temp);
@@ -348,7 +542,7 @@ public:
 
   void removeChild(NodeInfo *node) {
 
-    ASSERT(node);
+    assert(node);
     Nodes::iterator new_end = std::remove_if(CHILDREN.begin(),
                                              CHILDREN.end(),
                                              std::bind2nd(std::equal_to<NodeInfo *>(), node));
@@ -563,7 +757,6 @@ Configuration::Configuration()
    m_showCalls(-1),
    m_verbose(false),
    m_normalValue(true),
-   m_tickPeriod(0.01),
    m_diffMode(false),
    minCountValue(-1),
    maxCountValue(-1),
@@ -717,7 +910,7 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
   for (size_t i = 0, e = node->CHILDREN.size(); i != e; i++)
   {
     NodeInfo *nodeChild = node->CHILDREN[i];
-    ASSERT(nodeChild);
+    assert(nodeChild);
     if (!nodeChild->symbol())
       continue;
     NodeInfo *parentChild = parent->getChildrenBySymbol(nodeChild->symbol());
@@ -727,7 +920,7 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
       continue;
     }
 
-    ASSERT(parentChild != nodeChild);
+    assert(parentChild != nodeChild);
     parentChild->COUNTER.add(nodeChild->COUNTER, isMax);
     mergeToNode(parentChild, nodeChild, isMax);
   }
@@ -756,19 +949,34 @@ public:
   : m_isMax(isMax)
   {}
 
+  /** Check if the symbol comes from the injected 
+      igprof / ighook libraries and and merge it in that case.
+    */
   virtual void post(NodeInfo *parent,
                     NodeInfo *node)
     {
       if (!parent)
         return;
 
-      ASSERT(node);
-      ASSERT(node->originalSymbol());
-      ASSERT(node->originalSymbol()->FILE);
-
-      if (strstr(node->originalSymbol()->FILE->NAME.c_str(), "IgProf.")
-          || strstr(node->originalSymbol()->FILE->NAME.c_str(), "IgHook."))
+      assert(node);
+      assert(node->originalSymbol());
+      assert(node->originalSymbol()->FILE);
+      const std::string &filename = node->originalSymbol()->FILE->NAME;
+      // In case the filename is longer than 20 characters, we only look for
+      // the last 20 character since the igprof library name is going to be
+      // smaller than that.  We do not do a reverse search, because that seems
+      // to be much slower that a forward search.
+      size_t size = node->originalSymbol()->FILE->NAME.size();
+      size_t chkOffset = size > 20 ? size - 20 : 0;
+      // Handle the different library name(s) when compiled inside CMSSW.
+      // We cannot ignore the old library names yet, because there 
+      // are plenty of reports that still use them.
+      if (strstr(filename.c_str() + chkOffset, "libigprof."))
+        mergeToNode(parent, node, m_isMax);
+      if (strstr(filename.c_str() + chkOffset, "IgProf.")
+          || strstr(filename.c_str() + chkOffset, "IgHook."))
       {
+        std::cerr << "Merging" << std::endl;
         mergeToNode(parent, node, m_isMax);
       }
     }
@@ -795,9 +1003,9 @@ public:
 
   virtual void post(NodeInfo *parent, NodeInfo *node)
     {
-      ASSERT(node);
-      ASSERT(node->symbol());
-      ASSERT(m_filter.contains(std::string("_Znaj")));
+      assert(node);
+      assert(node->symbol());
+      assert(m_filter.contains(std::string("_Znaj")));
       if (!parent)
         return;
 
@@ -849,7 +1057,6 @@ public:
 
   void run(void);
   void parseArgs(const ArgsList &args);
-  void readDump(ProfileInfo &prof, const std::string& filename, StackTraceFilter *filter = 0);
   void analyse(ProfileInfo &prof, TreeMapBuilderFilter *baselineBuilder);
   void generateFlatReport(ProfileInfo &prof,
                           TreeMapBuilderFilter *callTreeBuilder,
@@ -858,6 +1065,7 @@ public:
   void callgrind(ProfileInfo &prof);
   void topN(ProfileInfo &prof);
   void tree(ProfileInfo &prof);
+  void readDump(ProfileInfo *prof, const std::string &filename, StackTraceFilter *filter);
   void dumpAllocations(ProfileInfo &prof);
   void prepdata(ProfileInfo &prof);
   void summarizePageInfo(FlatVector &sorted);
@@ -923,23 +1131,6 @@ IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv
    m_tickPeriod(0.01)
 {}
 
-float
-parseHeaders(const std::string &headerLine)
-{
-  lat::Regexp matchHeader("^P=\\(.*T=(.*)\\)");
-  lat::RegexpMatch match;
-
-  if (!matchHeader.match(headerLine, 0, 0, &match))
-  {
-    std::cerr << "\nThis does not look like an igprof profile stats:\n  "
-              << headerLine << std::endl;
-    exit(1);
-  }
-  ASSERT(match.numCaptures() == 1);
-  std::string result = match.matchString(headerLine.c_str(), 1);
-  return atof(result.c_str());
-}
-
 static int s_counter = 0;
 
 void
@@ -950,65 +1141,50 @@ printProgress(void)
     std::cerr << "o";
 }
 
-int
-index(const std::string &s, char c)
+/**
+  This helper function beautifies a symbol name in the following fashion:
+
+  * If the symbol name is in the form '@?.*' we rewrite it using the
+    file name it belongs to (or <dynamically-generate_>) and the offset 
+    in the file.
+  * Moreover if the useGdb option is specified and the file is a regular one
+    it uses a combination of gdb, nm and objdump (as documented in
+    FileInfo::symbolByOffset).
+*/
+void
+symlookup(FileInfo *file, int fileoff, std::string& symname, bool useGdb)
 {
-  int pos = 0;
-  for (std::string::const_iterator i = s.begin();
-       i != s.end();
-       i++)
-  {
-    if (*i == c)
-      return pos;
-    pos++;
-  }
-  return -1;
-}
-
-class Position
-{
-public:
-  unsigned int operator()(void) { return m_pos; }
-  void operator()(unsigned int newPos) { m_pos = newPos; }
-private:
-  unsigned int m_pos;
-};
-
-
-
-std::string
-symlookup(FileInfo *file, int fileoff, const std::string& symname, bool useGdb)
-{
-  // This helper function beautifies a symbol name in the following fashion:
-  // * If the useGdb option is true, it uses the symbol offset to look up,
-  //   via nm, the closest matching symbol.
-  // * If the useGdb option is not given and the symbol starts with @?
-  // * If any of the above match, it simply
-  ASSERT(file);
+  assert(file);
   std::string result = symname;
-  if ((symname.size() > 1 && symname[0] == '@' && symname[1] == '?') && file->NAME.size() && (fileoff > 0))
+  if ((symname.size() > 1 && symname[0] == '@' && symname[1] == '?') 
+      && file->NAME.size() && (fileoff > 0))
   {
     char buffer[1024];
-    if (file->NAME == "<dynamically generated>" )
+    if (file->NAME == "<dynamically generated>")
     {
       sprintf(buffer, "@?0x%x{<dynamically-generated>}", fileoff);
-      result = std::string() + buffer;
+      result = buffer;
     }
     else
     {
       sprintf(buffer, "+%d}",fileoff);
-      result = std::string("@{")
-               + lat::Filename(file->NAME).asFile().nondirectory().name()
-               + buffer;
+      // Finds the filename by looking up for the last / in the path 
+      // and picking up only the remaining.
+      // Notice that this works also in the case / is not found
+      // because in that case npos is returned and npos + 1 == 0. 
+      // The standard infact defines npos to be the largest possible unsigned integer.
+      result = "@{" + file->NAME.substr(file->NAME.find_last_of('/') + 1) + buffer;
     }
   }
 
-  if (useGdb && lat::Filename(file->NAME).isRegular())
+  struct stat st; 
+  if (useGdb && ::stat(file->NAME.c_str(), &st) == 0 && S_ISREG(st.st_mode))
   {
     const char *name = file->symbolByOffset(fileoff);
-    if (name) return name;
+    if (name) 
+      result = name;
   }
-  return result;
+  symname.swap(result);
 }
 
 void
@@ -1042,7 +1218,7 @@ public:
   virtual void post(NodeInfo *,
                     NodeInfo *node)
     {
-      ASSERT(node);
+      assert(node);
       Counter &counter = node->COUNTER;
       if (counter.freq != 0)
         counter.cnt = 4096 * counter.freq / counter.cnt;
@@ -1077,7 +1253,7 @@ public:
     */
   virtual void pre(NodeInfo *, NodeInfo *node)
     {
-      ASSERT(node);
+      assert(node);
       Counter &counter = node->COUNTER;
       counter.cfreq = counter.freq;
       counter.ccnt = counter.cnt;
@@ -1086,7 +1262,7 @@ public:
 
   virtual void post(NodeInfo *parent, NodeInfo *node)
     {
-      ASSERT(node);
+      assert(node);
       if (!parent)
         return;
       parent->COUNTER.accumulate(node->COUNTER, m_isMax);
@@ -1102,7 +1278,7 @@ public:
         debugRanges("child", node->CUM_RANGES);
         debugRanges("new parent", parent->CUM_RANGES);
       }
-      ASSERT(countPages(parent->CUM_RANGES) >= countPages(node->CUM_RANGES));
+      assert(countPages(parent->CUM_RANGES) >= countPages(node->CUM_RANGES));
     }
 
   virtual std::string name(void) const { return "cumulative info"; }
@@ -1128,7 +1304,7 @@ public:
       if (!parent)
       {
         m_noParentCount++;
-        ASSERT(m_noParentCount == 1);
+        assert(m_noParentCount == 1);
       }
     }
   virtual std::string name(void) const { return "Check consitency of tree"; }
@@ -1209,10 +1385,10 @@ public:
     {
       if (!parent)
         return;
-      ASSERT(parent);
-      ASSERT(node);
-      ASSERT(node->symbol());
-      ASSERT(node->symbol()->FILE);
+      assert(parent);
+      assert(node);
+      assert(node->symbol());
+      assert(node->symbol()->FILE);
 
       std::deque<NodeInfo *> todos;
       todos.insert(todos.begin(), node->CHILDREN.begin(), node->CHILDREN.end());
@@ -1288,7 +1464,7 @@ class RegexpFilter : public CollapsingFilter
 {
   struct Regexp
   {
-    lat::Regexp   *re;
+    //pcre          *re;
     std::string   with;
   };
 
@@ -1301,7 +1477,11 @@ public:
     {
       m_regexps.resize(m_regexps.size() + 1);
       Regexp &regexp = m_regexps.back();
-      regexp.re = new lat::Regexp(specs[i].re);
+      const char *errptr = NULL; 
+      // int erroff = 0;
+      // regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, NULL);
+      if (errptr)
+        die("Error while compiling regular expression");
       regexp.with = specs[i].with;
     }
   }
@@ -1313,9 +1493,14 @@ protected:
   /** Applies the text substitution to the symbol
       belonging to @a node or the filename where the @a node
       is found.
+      
+      FIXME: recode to use PCRE directly!
    */
   void convertSymbol(NodeInfo *node)
     {
+/*      int reOffsets[1024];
+      int reSizes[1024];
+      
       if (m_symbols.find(node->symbol()->NAME) != m_symbols.end())
         return;
 
@@ -1347,6 +1532,7 @@ protected:
 
         break;
       }
+*/
     }
   CollapsedSymbols m_symbols;
 private:
@@ -1367,8 +1553,8 @@ public:
     {
       if (!parent)
         return;
-      ASSERT(node);
-      ASSERT(node->originalSymbol());
+      assert(node);
+      assert(node->originalSymbol());
       // Check if the symbol refers to a definition in the c++ "std" namespace.
       const char *symbolName = node->originalSymbol()->NAME.c_str();
 
@@ -1428,7 +1614,7 @@ public:
   CallInfo *getCallee(SymbolInfo *symbol, bool create=false)
     {
       static CallInfo dummy(0);
-      ASSERT(symbol);
+      assert(symbol);
       dummy.SYMBOL = symbol;
       Calls::const_iterator i = CALLS.find(&dummy);
       if (i != CALLS.end())
@@ -1457,14 +1643,14 @@ public:
 
   std::string filename(void)
     {
-      ASSERT(SYMBOL);
-      ASSERT(SYMBOL->FILE);
+      assert(SYMBOL);
+      assert(SYMBOL->FILE);
       return SYMBOL->FILE->NAME;
     }
 
   const char *name(void)
     {
-      ASSERT(SYMBOL);
+      assert(SYMBOL);
       return SYMBOL->NAME.c_str();
     }
 
@@ -1473,11 +1659,11 @@ public:
   SymbolInfo *SYMBOL;
   int DEPTH;
   int rank(void) {
-    ASSERT(SYMBOL);
+    assert(SYMBOL);
     return SYMBOL->rank();
   }
   void setRank(int rank) {
-    ASSERT(SYMBOL);
+    assert(SYMBOL);
     SYMBOL->setRank(rank);
   }
 
@@ -1498,125 +1684,150 @@ class SymbolInfoFactory
 public:
   typedef std::map<std::string, SymbolInfo *> SymbolsByName;
 
+  /** 
+      Initialises the SymbolInfoFactory. In particular,
+      it reads the $PATH variable and saves the splitted
+      filenames in one single place.
+    */
   SymbolInfoFactory(ProfileInfo *prof, bool useGdb)
-    :m_prof(prof), m_useGdb(useGdb)
-    {}
+    : m_prof(prof), m_useGdb(useGdb)
+    {
+      char *paths = strdup(getenv("PATH"));
+      if (!paths)
+        return;
+
+      char *bkpt, *path;
+      std::string tmpPath;
+      for (path = strtok_r(paths, ":", &bkpt);
+           path;
+           path = strtok_r(NULL, ":", &bkpt))
+      {
+        if (!path[0])
+        {
+          m_paths.push_back("./");
+          break;
+        }
+
+        tmpPath = path;
+        if (tmpPath[tmpPath.size() - 1] != '/')
+          tmpPath += "/";
+
+        m_paths.push_back(tmpPath);
+      }
+      free(paths);
+    }
 
   SymbolInfo *getSymbol(unsigned int id)
     {
-      ASSERT( id <= m_symbols.size());
+      assert( id <= m_symbols.size());
       return m_symbols[id];
     }
 
   FileInfo *getFile(unsigned int id)
     {
-      ASSERT(id <= m_files.size());
+      assert(id <= m_files.size());
       return m_files[id];
     }
 
   FileInfo *createFileInfo(const std::string &origname, unsigned int fileid)
     {
+      if ((m_files.size() >= fileid + 1)  && m_files[fileid] == 0)
+        die("Error in igprof input file.");
 
-      static PathCollection paths("PATH");
-      if ((m_files.size() >= fileid + 1)  && m_files[fileid] == 0){
-        std::cerr << "Error in igprof input file." << std::endl;
-        exit(1);
-      }
-      // FIXME: die if exists $filebyid{$1};
-      std::string absname = origname;
-      if (index(origname, '/') == -1)
-        absname = paths.which(origname);
-
-      absname = lat::Filename(absname).truename();
-      // TODO:
-      // $absname =(abs_path($origname) || $origname)
-      //     if length($origname);
-      FilesByName::iterator fileIter = m_namedFiles.find(absname);
+      // First of all, we make sure that the origname was not already put in
+      // the map by someone else. This should actually be the most common 
+      // case (i.e. actual paths to non symlinks which exist).
+      FilesByName::iterator fileIter = m_namedFiles.find(origname);
       if (fileIter != m_namedFiles.end())
         return fileIter->second;
+
+      std::string abspath;
+
+      bool isDirectory = false;
+      bool found = false;
+
+      // FIXME: die if exists $filebyid{$1};
+      if (origname.empty())
+        return insertFileInfo(fileid, "<dynamically generated>", false);
+      // First of all we get an absolute path if origname is
+      // not already. 
+
+      // If it is an absolute filename already, we do nothing.
+      // If it is not we iterate over the paths, looking for 
+      // a file that can be opened for reading and that is
+      // not a directory.
+      if (origname.c_str()[0] == '/')
+      {
+        char *rp = checkValidFile(origname.c_str(), isDirectory);
+        if (rp && !isDirectory)
+        {
+          found = true;
+          abspath.assign(rp);
+          free(rp);
+        }
+      }
       else
       {
-        FileInfo *file;
-
-        if (lat::Filename(absname).isDirectory() == true)
-          file = new FileInfo("<dynamically generated>", false);
-        else
-          file = new FileInfo(absname, m_useGdb);
-
-        m_namedFiles.insert(FilesByName::value_type(absname, file));
-        int oldsize = m_files.size();
-        int missingSize = fileid + 1 - oldsize;
-        if (missingSize > 0)
+        // We try to look up in the paths for a valid file
+        // if we don't find it, we simply use the original
+        // name, origname.
+        for (size_t i = 0, e = m_paths.size(); i != e; ++i)
         {
-          m_files.resize(fileid + 1);
-          for (int i = oldsize; i < oldsize + missingSize; i++)
-            ASSERT(m_files[i] == 0);
+          // Notice that m_paths elements are already terminated
+          // by a slash.
+          abspath = m_paths[i];
+          abspath += origname;
+          
+          char *rp = checkValidFile(abspath.c_str(), isDirectory);
+          if (!rp || isDirectory)
+          {
+            abspath.clear();
+            continue;
+          }
+          found = true;
+          abspath.assign(rp);
+          break;
         }
-        m_files[fileid] = file;
-        return file;
       }
+      
+      if (!found)
+        abspath = origname;
+      
+      fileIter = m_namedFiles.find(abspath);
+      if (fileIter != m_namedFiles.end())
+        return fileIter->second;
+      else if (isDirectory == true)
+        return insertFileInfo(fileid, "<dynamically generated>", false);
+      else if (!found && !origname.empty())
+        return insertFileInfo(fileid, origname, false);
+      else
+        return insertFileInfo(fileid, abspath, m_useGdb);
     }
 
-
-  SymbolInfo *createSymbolInfo(const std::string &line, unsigned int symid,
-                               Position &pos, int lineCount)
+  /** 
+      Creates a SymbolInfo object using the information read from @a parser.
+    */
+  SymbolInfo *createSymbolInfo(std::string &symname, size_t fileoff, FileInfo *file, unsigned int symid)
     {
       // Regular expressions matching the file and symbolname information.
-      static lat::Regexp fRE("F(\\d+)\\+(-?\\d+) N=\\((.*?)\\)\\)\\+\\d+\\s*");
-      static lat::Regexp fWithFilenameRE("F(\\d+)=\\((.*?)\\)\\+(-?\\d+) N=\\((.*?)\\)\\)\\+\\d+\\s*");
-      static lat::RegexpMatch match;
-
-      FileInfo *file = 0;
-      std::string symname;
-      unsigned int fileoff;
-
-      match.reset();
-
-      if (fRE.match(line, pos(), 0, &match))
-      {
-        IntConverter getIntMatch(line, &match);
-        fileoff = getIntMatch(2);
-        symname = match.matchString(line, 3);
-        int fileId = getIntMatch(1);
-        file = getFile(fileId);
-        ASSERT(file);
-      }
-      else if (fWithFilenameRE.match(line, pos(), 0, &match))
-      {
-        IntConverter getIntMatch(line, &match);
-        fileoff = getIntMatch(3);
-        symname = match.matchString(line, 4);
-        file = createFileInfo(match.matchString(line, 2),
-                              getIntMatch(1));
-        ASSERT(file);
-      }
-      else
-      {
-        std::string fn = file ? file->NAME : "Unknown";
-        printSyntaxError(line, fn.c_str(), lineCount, pos());
-        exit (1);
-      }
-
-      pos(match.matchEnd());
-
-      symname = symlookup(file, fileoff, symname, m_useGdb);
+      symlookup(file, fileoff, symname, m_useGdb);
 
       SymbolInfoFactory::SymbolsByName::iterator symiter = namedSymbols().find(symname);
 
       if (symiter != namedSymbols().end())
       {
-        ASSERT(symiter->second);
-        if (m_symbols.size() < symid+1) {
+        assert(symiter->second);
+        if (m_symbols.size() < symid+1)
           m_symbols.resize(symid+1);
-        }
+
         m_symbols[symid] = symiter->second;
-        ASSERT(getSymbol(symid) == symiter->second);
+        assert(getSymbol(symid) == symiter->second);
         return symiter->second;
       }
 
       SymbolInfo *sym = new SymbolInfo(symname.c_str(), file, fileoff);
       namedSymbols().insert(SymbolInfoFactory::SymbolsByName::value_type(symname, sym));
-      ASSERT(symid >= m_symbols.size());
+      assert(symid >= m_symbols.size());
       m_symbols.resize(symid + 1);
       m_symbols[symid] = sym;
       return sym;
@@ -1630,6 +1841,67 @@ public:
     }
 
 private:
+
+  /** Helper to insert a given fileinfo entry into the map. 
+    */
+  FileInfo  *insertFileInfo(size_t fileid, const std::string &name, bool useGdb)
+  {
+    FileInfo *file = new FileInfo(name, useGdb);
+    m_namedFiles.insert(FilesByName::value_type(name, file)); 
+    int oldsize = m_files.size();
+    int missingSize = fileid + 1 - oldsize;
+    if (missingSize > 0)
+    {   
+      m_files.resize(fileid + 1); 
+      for (int i = oldsize; i < oldsize + missingSize; i++)
+        assert(m_files[i] == 0); 
+    } 
+    m_files[fileid] = file;
+    return file;
+  }
+
+  /** If the filename points to a valid file which can be read, @returns
+      its realpath.
+      If not, return NULL. 
+
+      In case the file is a directory we return the realpath, but set @a
+      isDirectory to true.
+
+      @a filename the path of the file to be checked.
+
+      @a isDirectory set to true if the filename is associated to a directory.
+    */ 
+  char *checkValidFile(const char *filename, bool &isDirectory)
+    {
+      isDirectory = false;
+      char *rp = realpath(filename, 0);
+    
+      // If the realpath does not exists, this is either a broken path or a
+      // broken link. Hence the loader would have ignored it, hence we do as
+      // well.
+      if (!rp)
+        return NULL;
+  
+      // If the file is a directory, the loader would not have picked it
+      // up, hence we ignore it as well.
+      struct stat s;
+      stat(rp, &s);
+
+      if (!S_ISREG(s.st_mode))
+      {
+        isDirectory = true;
+        return NULL;
+      }
+
+      // If the file is not readable the loader would have not
+      // picked it up, hence we ignore.
+     
+      if (access(rp, R_OK) == -1)
+        return NULL;
+
+      return rp; 
+   }
+
   typedef std::vector<FileInfo *> Files;
   typedef std::map<std::string, FileInfo *> FilesByName;
   typedef std::vector<SymbolInfo *> Symbols;
@@ -1638,6 +1910,7 @@ private:
   FilesByName m_namedFiles;
   ProfileInfo *m_prof;
   bool m_useGdb;
+  std::vector<std::string>      m_paths;
 };
 
 struct SuffixOps
@@ -1648,12 +1921,12 @@ struct SuffixOps
     {
       size_t tickPos = fullSymbol.rfind("'");
       if (tickPos == std::string::npos)
-      {
+      { 
         oldSymbol = fullSymbol;
         suffix = "";
         return;
       }
-      ASSERT(tickPos < fullSymbol.size());
+      assert(tickPos < fullSymbol.size());
       oldSymbol.assign(fullSymbol.c_str(), tickPos - 1);
       suffix.assign(fullSymbol.c_str() + tickPos);
     }
@@ -1663,7 +1936,7 @@ struct SuffixOps
       size_t tickPos = fullSymbol.rfind("'");
       if (tickPos == std::string::npos)
         return fullSymbol;
-      ASSERT(tickPos < fullSymbol.size());
+      assert(tickPos < fullSymbol.size());
       return std::string(fullSymbol.c_str(), tickPos - 1);
     }
 };
@@ -1834,7 +2107,7 @@ public:
               m_topNStackTrace[min].begin());
   }
 
-  virtual void post(NodeInfo */*parent*/, NodeInfo */*node*/)
+  virtual void post(NodeInfo * /*parent*/, NodeInfo * /*node*/)
   {
     if (!m_currentStackTrace.empty())
       m_currentStackTrace.pop_back();
@@ -1894,11 +2167,11 @@ public:
   */
   virtual void pre(NodeInfo *parent, NodeInfo *node)
     {
-      ASSERT(node);
+      assert(node);
       SymbolInfo *sym = symfor(node);
-      ASSERT(sym);
+      assert(sym);
       FlatInfo *symnode = FlatInfo::getInMap(m_flatMap, sym);
-      ASSERT(symnode);
+      assert(symnode);
 
       if (!m_firstInfo)
         m_firstInfo = symnode;
@@ -1912,7 +2185,7 @@ public:
       {
         SymbolInfo *parsym = parent->symbol();
         FlatInfo *parentInfo = FlatInfo::getInMap(m_flatMap, parsym, false);
-        ASSERT(parentInfo);
+        assert(parentInfo);
 
         symnode->CALLERS.insert(parsym);
 
@@ -1934,14 +2207,12 @@ public:
   virtual void post(NodeInfo *,
                     NodeInfo *node)
     {
-      ASSERT(node);
-      ASSERT(node->symbol());
+      assert(node);
+      assert(node->symbol());
       if (m_seen.count(node->symbol()->NAME) <= 0)
         std::cerr << "Error: " << node->symbol()->NAME << std::endl;
 
-      ASSERT(m_seen.count(node->symbol()->NAME) > 0);
       m_seen.erase(node->symbol()->NAME);
-      ASSERT(m_seen.count(node->symbol()->NAME) == 0);
     }
 
   virtual std::string name() const { return "tree map builder"; }
@@ -1949,7 +2220,7 @@ public:
 
   void getTotals(int64_t &totals, int64_t &totfreqs)
     {
-      ASSERT(m_firstInfo);
+      assert(m_firstInfo);
       totals = m_firstInfo->CUM_KEY[0];
       totfreqs = m_firstInfo->CUM_KEY[1];
     }
@@ -1978,7 +2249,7 @@ private:
 
   SymbolInfo *symfor(NodeInfo *node)
     {
-      ASSERT(node);
+      assert(node);
       SymbolInfo *reportSymbol = node->reportSymbol();
       if (reportSymbol)
       {
@@ -1989,7 +2260,7 @@ private:
 
       std::string suffix = "";
 
-      ASSERT(node->originalSymbol());
+      assert(node->originalSymbol());
       std::string symbolName = node->originalSymbol()->NAME;
 
       SeenSymbols::iterator i = m_seen.find(symbolName);
@@ -2010,9 +2281,9 @@ private:
         else
           reportSymbol = s->second;
       }
-      ASSERT(node);
+      assert(node);
       node->reportSymbol(reportSymbol);
-      ASSERT(node->symbol());
+      assert(node->symbol());
       m_seen.insert(SeenSymbols::value_type(node->symbol()->NAME,
                                             node->symbol()));
       return node->symbol();
@@ -2038,64 +2309,44 @@ private:
   bool        m_isMax;
 };
 
-class TextStreamer
+void 
+symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool demangle)
 {
-public:
-  TextStreamer(lat::File *file)
-    :m_file(file) {}
+  size_t bufferSize = 1024;
+  char *buffer = (char*) malloc(bufferSize);
 
-  TextStreamer &operator<<(const std::string &string)
-    {
-      m_file->write(string.c_str(), string.size());
-      return *this;
-    }
-  TextStreamer &operator<<(const char *text)
-    { m_file->write(text, strlen(text)); return *this; }
-
-  TextStreamer &operator<<(int num)
-    {
-      char buffer[32];
-      sprintf(buffer, "%d", num);
-      m_file->write(buffer, strlen(buffer));
-      return *this;
-    }
-
-private:
-  lat::File *m_file;
-};
-
-static lat::Regexp SYMCHECK_RE("IGPROF_SYMCHECK <(.*)>");
-static lat::Regexp STARTS_AT_RE(".*starts at .* <([A-Za-z0-9_]+)(\\+\\d+)?>");
-static lat::Regexp NO_LINE_NUMBER("^No line number .*? <([A-Za-z0-9_]+)(\\+\\d+)?>");
-
-
-void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool demangle)
-{
-  typedef std::vector<FlatInfo *> FlatInfos;
+  char SET_WIDTH[] = "set width 10000\n";
+  char gdbFilename[] = "/tmp/igprof-analyse.gdb.XXXXXXXX";
 
   if (usegdb)
   {
-    lat::Filename tmpFilename("/tmp/igprof-analyse.gdb.XXXXXXXX");
-    lat::File *file = lat::TempFile::file(tmpFilename);
-    TextStreamer out(file);
-    out << "set width 10000\n";
+    int gdbScript = mkstemp(gdbFilename);
+    FILE *out = fdopen(gdbScript, "w");
+    write(gdbScript, SET_WIDTH, strlen(SET_WIDTH));
 
     std::multimap<FileInfo *, SymbolInfo *> fileAndSymbols;
 
-    for (FlatInfos::const_iterator i = infos.begin();
-         i != infos.end();
-         i++)
+    for (size_t ii = 0, ei = infos.size(); ii != ei; ++ii)
     {
-      SymbolInfo *sym = (*i)->SYMBOL;
-      if (!sym)
+      SymbolInfo *sym = infos[ii]->SYMBOL;
+
+      if (!sym || !sym->FILE)
         continue;
-      if ((! sym->FILE) || (! sym->FILEOFF) || (!sym->FILE->NAME.size()))
-      {
+      
+      // Only symbols that are marked to be lookup-able by gdb will be looked
+      // up. This excludes, for example dynamically generated symbols or
+      // symbols from files that are not in path anymore.
+      if (!sym->FILE->canUseGdb())
         continue;
-      }
-      if (sym->FILE->symbolByOffset(sym->FILEOFF)) {
+
+      if (!sym->FILEOFF || sym->FILE->NAME.empty())
         continue;
-      }
+        
+      // We lookup with gdb only those symbols that cannot be
+      // resolved correctly via nm.
+      if (sym->FILE->symbolByOffset(sym->FILEOFF))
+        continue;
+
       fileAndSymbols.insert(std::pair<FileInfo *, SymbolInfo *>(sym->FILE, sym));
     }
 
@@ -2106,296 +2357,145 @@ void symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, boo
          i++)
     {
       SymbolInfo *sym = i->second;
-      FileInfo *fileInfo =i->first;
+      FileInfo *fileInfo = i->first;
 
-      ASSERT(sym);
-      ASSERT(file);
+      assert(sym);
+      assert(fileInfo);
+      assert(!fileInfo->NAME.empty());
+      
       prof.symcache().insert(sym);
 
       if (memcmp(fileInfo->NAME.c_str(), "<dynamically", 12))
       {
         if (fileInfo != prevfile)
         {
-          out << "file " << fileInfo->NAME << "\n";
+          fprintf(out, "file %s\n", fileInfo->NAME.c_str());
           prevfile = fileInfo;
         }
-        out << "echo IGPROF_SYMCHECK <" << (intptr_t) sym << ">\\n\n"
-            << "info line *" << toString(sym->FILEOFF)<< "\n";
+
+        fprintf(out, "echo IGPROF_SYMCHECK <%" PRId64 ">\\n\ninfo line *%" PRId64 "\n",
+                (int64_t) sym, sym->FILEOFF);
       }
     }
-    file->close();
-    delete file;
-
-    PipeReader gdb("gdb --batch --command=" + std::string(tmpFilename));
-
+    fflush(out);
+    close(gdbScript);
+    asprintf(&buffer, "gdb --batch --command=%s", gdbFilename);
+    FILE *gdb = popen(buffer, "r");
+    if (!gdb)
+      die("Error while running gdb.");
+    
     std::string oldname;
     std::string suffix;
     SymbolInfo *sym = 0;
-
-    while (gdb.output())
+    IgTokenizer t(gdb, buffer);
+    
+    std::string result;
+    while (!feof(gdb))
     {
-      std::string line;
-      std::getline(gdb.output(), line);
-
-      if (!gdb.output())
-        break;
-      if (line.empty())
-        continue;
-
-      lat::RegexpMatch match;
-
-
-      if (SYMCHECK_RE.match(line, 0, 0, &match))
+      result.clear();
+      t.getTokenS(result, "<\n");
+      // In case < is not found in the line, we skip it.
+      if (t.nextChar() == '\n')
       {
-        ProfileInfo::SymCache::iterator symitr = prof.symcache().find((SymbolInfo *)(atol(match.matchString(line, 1).c_str())));
-        ASSERT(symitr !=prof.symcache().end());
+        t.skipEol();
+        continue;
+      }
+      else if (!strncmp(result.c_str(), "IGPROF_SYMCHECK", 15))
+      {
+        t.skipChar('<');
+        int64_t symid = t.getTokenLL('>');
+        t.skipEol();
+        ProfileInfo::SymCache::iterator symitr = prof.symcache().find((SymbolInfo *)(symid));
+        assert(symitr !=prof.symcache().end());
         sym = *symitr;
         SuffixOps::splitSuffix(sym->NAME, oldname, suffix);
       }
-      else if (STARTS_AT_RE.match(line, 0, 0, &match))
+      else if (!strncmp(result.c_str(), "Line", 4)
+               || !strncmp(result.c_str(), "No line number", 14))
       {
-        ASSERT(sym);
-        sym->NAME = match.matchString(line, 1) + suffix;
+        t.skipChar('<');
+        assert(sym);
+        t.getTokenS(sym->NAME, '+');
+        t.getToken(">");
+        t.skipChar('>');
+        t.getToken("\n");
+        t.skipEol();
+        sym->NAME += suffix;
         sym = 0; suffix = "";
       }
-      else if (NO_LINE_NUMBER.match(line, 0, 0, &match))
-      {
-        ASSERT(sym);
-        sym->NAME = match.matchString(line, 1) + suffix;
-        sym = 0; suffix = "";
-      }
+      else
+        t.syntaxError();
     }
-    unlink(tmpFilename);
+    pclose(gdb);
+    unlink(gdbFilename);
   }
+
+  char cppfiltFilename[] = "/tmp/igprof-analyse.c++filt.XXXXXXXX";
 
   if (demangle)
   {
-    lat::Filename tmpFilename("/tmp/igprof-analyse.c++filt.XXXXXXXX");
-    lat::File *file = lat::TempFile::file(tmpFilename);
-    TextStreamer out(file);
+    int f = mkstemp(cppfiltFilename);
+    FILE *out = fdopen(f, "w");
 
-    for (FlatInfos::const_iterator i = infos.begin(); i != infos.end(); i++)
+    for (size_t ii = 0, ei = infos.size(); ii != ei; ++ii)
     {
-      SymbolInfo *symbol = (*i)->SYMBOL;
-      ASSERT(symbol);
-      out << (intptr_t)(symbol) << ": " << symbol->NAME << "\n";
+      SymbolInfo *symbol = infos[ii]->SYMBOL;
+      assert(symbol);
+      fprintf(out, "%" PRIdPTR ": %s\n", (intptr_t) symbol, symbol->NAME.c_str());
     }
-    file->close();
-    delete file;
+    fflush(out);
+    close(f);
+    
+    asprintf(&buffer, "c++filt <%s", cppfiltFilename);
 
-    lat::File symbolFile(tmpFilename);
-    PipeReader cppfilt("c++filt", &symbolFile);
+    FILE *cppfilt = popen(buffer, "r");
 
-    while (cppfilt.output())
+    if (!cppfilt)
+      die("Error while running c++filt.");
+    
+    // Read the full output.
+    IgTokenizer t(cppfilt, buffer);
+    while (!feof(cppfilt))
     {
-      std::string line;
-      std::getline(cppfilt.output(), line);
-      if (! cppfilt.output())
-        break;
-      if (line.empty())
-        continue;
-      const char *lineStart = line.c_str();
-      char *endptr = 0;
-
-      SymbolInfo *symbolPtr = (SymbolInfo *)(strtol(lineStart, &endptr, 10));
-      ASSERT(endptr != lineStart);
-      ASSERT(*endptr == ':');
-      symbolPtr->NAME.assign(endptr+2, lineStart+line.size() - (endptr+2));
+      SymbolInfo *symbolPtr = (SymbolInfo *)(t.getTokenLL(':'));
+      t.skipChar(' ');
+      t.getTokenS(symbolPtr->NAME, "\n");
+      t.skipEol();
     }
-    unlink(tmpFilename);
+    pclose(cppfilt);
+    unlink(cppfiltFilename);
   }
+  free(buffer);
 }
 
-
-// Regular expressions matching the symbol information header.
-static lat::Regexp vWithDefinitionRE("V(\\d+)=\\((.*?)\\):\\((\\d+),(\\d+)(,(\\d+))?\\)\\s*");
-
-static int
-parseStackLine(const char *line, std::vector<NodeInfo *> &nodestack)
-{
-  // Matches the same as matching "^C(\\d+)\\s*" and resize nodestack to $1.
-  if ((line[0] == 0) || line[0] != 'C')
-    return 0;
-  char *endptr = 0;
-  int newPosition = strtol(line+1, &endptr, 10) - 1;
-  if (endptr == line+1)
-    return 0;
-
-  do
-  {
-    ++endptr;
-  }
-  while (*endptr == ' ' || *endptr == '\t');
-
-  int stackSize = nodestack.size();
-  ASSERT(newPosition <= stackSize);
-  ASSERT(newPosition >= 0);
-  int difference = newPosition - stackSize;
-  if (difference > 0)
-    nodestack.resize(newPosition);
-  else
-    nodestack.erase(nodestack.begin() + newPosition, nodestack.end());
-  return endptr - line;
-}
-
-static bool
-parseFunctionRef(const char *lineStart, Position &pos,
-                 unsigned int &symid, unsigned int fileoff)
-{
-  const char *line = lineStart + pos();
-  // Matches "FN(\\d+)\\+\\d+\\s*" and sets symid = $1
-  if (line[0] != 'F' && line[1] != 'N')
-    return false;
-  char *endptr = 0;
-  int fnRef = strtol(line+2, &endptr, 10);
-  if (endptr == line + 2)
-    return false;
-  if (*endptr != '+' )
-    return false;
-  char *endptr2 = 0;
-  int offset = strtol(endptr, &endptr2, 10);
-  if (endptr == endptr2)
-    return false;
-
-  symid = fnRef;
-  fileoff = offset;
-
-  while (*endptr2 == ' ' || *endptr2 == '\t')
-    ++endptr2;
-  pos(endptr2 - lineStart);
-  return true;
-}
-
-static bool
-parseFunctionDef(const char *lineStart, Position &pos, unsigned int &symid)
-{
-  const char *line = lineStart + pos();
-  // Matches FN(\\d+)=\\( and sets symid = $1
-  if (line[0] != 'F' && line[1] != 'N')
-    return false;
-  char *endptr = 0;
-  int fnRef = strtol(line+2, &endptr, 10);
-  if (endptr == line + 2)
-    return false;
-  if (*endptr++ != '=')
-    return false;
-  if (*endptr++ != '(')
-    return false;
-
-  symid = fnRef;
-
-  pos(endptr - lineStart);
-  return true;
-}
-
-static bool
-parseCounterVal(const char *lineStart, Position &pos,
-                size_t &ctrid, int64_t &ctrfreq,
-                int64_t &ctrvalNormal, int64_t &ctrvalPeak)
-{
-  // Matches "V(\\d+):\\((\\d+),(\\d+)(,(\\d+))?\\)\\s*" and then sets the arguments accordingly.
-  const char *line = lineStart + pos();
-
-  if (line[0] != 'V')
-    return false;
-
-  char *endptr = 0;
-  int cntRef = strtol(++line, &endptr, 10);
-  if (endptr == line || *endptr != ':' || *++endptr != '(')
-    return false;
-
-  char *endptr2 = 0;
-  int64_t count1 = strtoll(++endptr, &endptr2, 10);
-  if (endptr2 == endptr || *endptr2 != ',')
-    return false;
-
-  char *endptr3 = 0;
-  int64_t count2 = strtoll(++endptr2, &endptr3, 10);
-  if (endptr3 == endptr2 || *endptr3 != ',')
-    return false;
-
-  char *endptr4 = 0;
-  int64_t count3 = strtoll(++endptr3, &endptr4, 10);
-  if (endptr3 == endptr4)
-    return false;
-
-  if (*endptr4++ != ')')
-    return false;
-
-  ctrid = cntRef;
-  ctrfreq = count1;
-  ctrvalNormal = count2;
-  ctrvalPeak= count3;
-  while (*endptr4 == ' ' || *endptr4 == '\t')
-    endptr4++;
-  pos(endptr4 - lineStart);
-  return true;
-}
-
-static bool
-parseCounterDef(const std::string &line, int pos, int /* flags */, lat::RegexpMatch *match)
-{
-  return vWithDefinitionRE.match(line, pos, 0, match);
-}
-
-static bool
-parseLeak(const char *lineStart, Position &pos, int64_t &leakAddress, int64_t &leakSize)
-{
-  // ";LK=\\(0x[\\da-z]+,\\d+\\)\\s*"
-  const char *line = lineStart + pos();
-  if (*line != ';' || *++line != 'L' || *++line != 'K' || *++line != '='
-      || *++line != '(' || *++line != '0' || *++line != 'x')
-    return false;
-
-  char *endptr = 0;
-  int64_t address = strtoll(++line, &endptr, 16);
-  if (endptr == line)
-    return false;
-
-  if (*endptr++ != ',')
-    return false;
-
-  char *endptr2 = 0;
-  int64_t size = strtoll(endptr, &endptr2, 10);
-  if (endptr == line)
-    return false;
-  if (*endptr2++ != ')')
-    return false;
-
-  leakAddress = address;
-  leakSize = size;
-
-  while (*endptr2 == ' ' || *endptr2 == '\t')
-    endptr2++;
-
-  pos(endptr2 - lineStart);
-
-  return true;
-}
-
+/**
+    Reads a dump and fills in ProfileInfo with the needed information.
+  */
 void
-IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filename, StackTraceFilter *filter)
+IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
+                                    const std::string &filename, 
+                                    StackTraceFilter *filter)
 {
-  ProfileInfo::Nodes &nodes = prof.nodes();
-  typedef std::vector<NodeInfo *> Nodes;
-  Nodes nodestack;
+  std::vector<NodeInfo *> nodestack;
   nodestack.reserve(IGPROF_MAX_DEPTH);
 
+  ProfileInfo::Nodes      &nodes = prof->nodes();
+
+  FILE *inFile = openDump(filename.c_str());
+  IgTokenizer t(inFile, filename.c_str());
   verboseMessage("Parsing igprof output file:", filename.c_str());
-  FileReader reader(filename);
 
-  std::string line;
-  line.reserve(FileOpener::INITIAL_BUFFER_SIZE);
-  reader.readLine();
-  reader.assignLineToString(line);
-  m_tickPeriod = parseHeaders(line);
+  // Parse the header line, which has form:
+  // ^P=\(ID=[0-9]* N=\(.*\) T=[0-9]+.[0-9]*\)
+  t.skipString("P=(ID=");
+  t.getToken(" ");
+  t.skipString(" N=(");
+  t.getToken(")");
+  t.skipString(") T=");
+  m_tickPeriod = t.getTokenD(')');
+  t.skipEol();
 
-  PathCollection paths("PATH");
-
-  int lineCount = 1;
-  lat::RegexpMatch match;
-
-  SymbolInfoFactory symbolsFactory(&prof, m_config->useGdb);
+  SymbolInfoFactory symbolsFactory(prof, m_config->useGdb);
 
   // A vector whose i-th element specifies whether or
   // not the counter file id "i" is a key.
@@ -2409,62 +2509,119 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
   std::vector<RangeInfo> ranges;
   ranges.reserve(20000);
 
-  while (! reader.eof())
+  // String to hold the name of the function.
+  std::string fn;
+
+  while (!feof(inFile))
   {
     // One node per line.
     // int fileid;
     unsigned int fileoff = 0xdeadbeef;
     // int ctrval;
     // int ctrfreq;
-    Position pos;
 
     printProgress();
-    reader.readLine();
-    reader.assignLineToString(line);
+    // Matches the same as matching "^C(\\d+)\\s*" and resize nodestack to $1.
+    t.skipChar('C');
+    
+    int64_t newPosition = t.getTokenLL(' ', 10) - 1;
 
-    int newPos = parseStackLine(line.c_str(), nodestack);
-    if (! newPos)
-      continue;
+    if (newPosition < 0)
+      t.syntaxError();
 
-    pos(newPos);
-
+    int64_t stackSize = nodestack.size();
+    if (newPosition > stackSize)
+      die("Internal error on line %d", t.lineNum());
+    
+    int difference = newPosition - stackSize;
+    if (difference > 0)
+      nodestack.resize(newPosition);
+    else
+      nodestack.erase(nodestack.begin() + newPosition, nodestack.end());
 
     // Find out the information about the current stack line.
-    SymbolInfo *sym;
+    SymbolInfo *sym = 0;
 
-    unsigned int symid = 0xdeadbeef;
-
-    if (line.size() <= pos())
+    // Match either a function reference header:
+    //
+    //    FN[0-9]+\+
+    //
+    // or a function definition header
+    // 
+    //    FN[0-9]+=
+    //
+    t.skipString("FN", 2);
+    int64_t symid = t.getTokenLL("+=", 10);
+    
+    // In case the symbol was already seen, get the file offset and
+    // retrieve the symbol info.
+    if (t.nextChar() == '+')
     {
-      printSyntaxError(line, filename, lineCount, pos());
-      exit(1);
-    }
-    else  if (line.size() > pos()+2
-              && parseFunctionRef(line.c_str(), pos, symid, fileoff))
-    {
+      t.skipChar('+');
+      fileoff = t.getTokenLL(" \n");
       sym = symbolsFactory.getSymbol(symid);
+
       if (!sym)
-      {
-        std::cerr << "Error at line " << lineCount << ": symbol with id "
-                  << symid << " was referred before being defined in input file.\n"
-                  << "> " << line << std::endl;
-        exit(1);
-      }
+        die("Error at line %d: symbol with id %d was referred before being"
+            " defined in input file.\n", 0, symid);
     }
-    else if (line.size() > pos()+2
-             && parseFunctionDef(line.c_str(), pos, symid))
-      sym = symbolsFactory.createSymbolInfo(line, symid, pos, lineCount);
-    else
+    else if (t.nextChar() == '=')
     {
-      printSyntaxError(line, filename, lineCount, pos());
-      exit(1);
+      // Check if this is either a file reference:
+      //
+      //    =\(F(\d+)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)
+      //
+      // or a file definition:
+      //
+      //    =\(F(\d+)=\((.*?)\)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)
+      //
+      // and create a symbol info accordingly.
+
+      t.skipString("=(F");
+      
+      FileInfo *fileinfo = 0;
+      std::string symname;
+      
+      size_t fileId = t.getTokenLL("+=", 10);
+
+      // In case we are looking at a file definition, get the filename
+      // else, make sure that the separator is a "+".
+      if (t.nextChar() == '=')
+      {
+        t.skipString("=(", 2);
+        t.getTokenS(fn, ')');
+        fileinfo = symbolsFactory.createFileInfo(fn, fileId);
+      }
+      else if (t.nextChar() == '+')
+        fileinfo = symbolsFactory.getFile(fileId);
+      else
+        t.syntaxError();
+
+      t.skipChar('+');
+
+      // In any case, get the file offset.
+      fileoff = t.getTokenLL(' ', 10);
+      // Done that, read the symbol name and offset.
+      t.skipString("N=(", 3);
+      t.getTokenS(symname, ')');
+      if (symname == "@?(nil")
+      {
+        symname = "@?(nil)";
+        t.skipString("))+", 3);
+      }
+      else
+        t.skipString(")+", 2);
+      // Ignore the symbol offset as it is not used.
+      t.getTokenLL(" \n", 10);
+      sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);      
     }
+    else
+      t.syntaxError();
 
-    NodeInfo* parent = nodestack.empty() ? prof.spontaneous() : nodestack.back();
-
+    NodeInfo* parent = nodestack.empty() ? prof->spontaneous() : nodestack.back();
     NodeInfo* child = parent ? parent->getChildrenBySymbol(sym) : 0;
 
-    if (! child)
+    if (!child)
     {
       // Nodes are allocated in a deque, to maximize locality
       // and reduce the actual number of allocations.
@@ -2477,46 +2634,40 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
     }
 
     nodestack.push_back(child);
-
-    match.reset();
     ranges.clear();
 
-    // Read the counter information.
+    // In case we reached an end of line, iterate.
+    if (t.nextChar() == '\n')
+    {
+      t.skipEol();
+      continue;
+    }
+    
+    // Parse counters
     while (true)
     {
-      size_t fileId;
-      int64_t ctrval;
-      int64_t ctrfreq;
-      int64_t ctrvalNormal;
-      int64_t ctrvalPeak;
-      int64_t leakAddress;
-      int64_t leakSize;
-
-      if (line.size() == pos())
+      t.getToken("=:;\n");
+      
+      if (t.nextChar() == '\n' || t.nextChar() == ';')
         break;
+      
+      if (t.buffer()[0] != ' ' || t.buffer()[1] != 'V')
+        t.syntaxError();
 
-      if (line.size() >= pos()+2
-          && parseCounterVal(line.c_str(), pos, fileId, ctrfreq, ctrvalNormal, ctrvalPeak))
+      char *endptr;
+      int64_t fileId = strtoll(t.buffer() + 2, &endptr, 10);
+      if (endptr == t.buffer() + 2)
+        t.syntaxError();
+      
+      // Check if we are defining a new counter and possibly register it,
+      // if it is of the kind we are interested in.
+      if (t.nextChar() == '=')
       {
-        // FIXME: should really do:
-        // $ctrname = $ctrbyid{$1} || die;
-
-        // If the fileId is not among those associated
-        // to the key counter, we skip the counter.
-        if (keys[fileId] == false)
-          continue;
-        ctrval = m_config->normalValue() ? ctrvalNormal : ctrvalPeak;
-      }
-      else if (line.size() >= pos()+2
-               && parseCounterDef(line, pos(), 0, &match))
-      {
-        // FIXME: should really do:
-        // die if exists $ctrbyid{$1};
-
-        std::string ctrname = match.matchString(line, 2);
-        IntConverter getIntMatch(line, &match);
-        fileId = getIntMatch(1);
-
+        t.skipString("=(", 2);
+        // Get the counter name.
+        std::string ctrname;
+        t.getTokenS(ctrname, ")");
+        t.skipString("):(");
         // The first counter we meet, we make it the key, unless
         // the key was already set on command line.
         if (m_key.empty())
@@ -2527,49 +2678,24 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
         if (keys.size() <= fileId)
           keys.resize(fileId + 1, false);
         keys[fileId] = ctrname == m_key;
-
-        // Get information from the counter and be ready to
-        // continue.
-        ctrfreq = getIntMatch(3);
-        ctrval = m_config->normalValue() ? getIntMatch(4)
-                 : getIntMatch(6);
-        pos(match.matchEnd());
-        match.reset();
-
-        // Ignore in case we don't care about the counter and continue.
-        if (!keys[fileId])
-          continue;
       }
-      else if (line.size() >= pos()+3
-               && parseLeak(line.c_str(), pos, leakAddress, leakSize))
-      {
-        // In case we are not looking at pages or allocation, simply continue the loop.
-        if (!(m_showPages  || m_config->dumpAllocations || m_showPageRanges))
-          continue;
-        // In the case we specify one of the --show-pages --show-page-ranges
-        // or --show-locality-metrics options, we keep track
-        // of the page ranges that are referenced by all the allocations
-        // (LK counters in the report).
-        //
-        // We first fill a vector with all the ranges, then we sort it later on
-        // collapsing all the adjacent ranges.
-        ASSERT(leakSize > 0);
-        ranges.push_back(RangeInfo(leakAddress, (leakAddress + leakSize + 1)));
-        RangeInfo &range = ranges.back();
-        if (m_showPages || m_showPageRanges)
-        {
-          range.startAddr = range.startAddr >> 12;
-          range.endAddr = range.endAddr >> 12;
-        }
-        ASSERT(range.size() > 0);
-        continue;
-      }
+      else if (t.nextChar() == ':')
+        t.skipString(":(", 2);
       else
-      {
-        printSyntaxError(line, filename, lineCount, pos());
-        exit(1);
-      }
+        t.syntaxError();
+      
+      // Get the counter counts.
+      int64_t ctrfreq = t.getTokenLL(',');
+      int64_t ctrvalNormal = t.getTokenLL(',');
+      int64_t ctrvalPeak = t.getTokenLL(')');
 
+      // If the fileId is not among those associated
+      // to the key counter, we skip the counter.
+      if (keys[fileId] == false)
+        continue;
+      
+      int64_t ctrval = m_config->normalValue() ? ctrvalNormal : ctrvalPeak;
+      
       if (filter)
         filter->filter(sym, ctrval, ctrfreq);
 
@@ -2577,25 +2703,67 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
       child->COUNTER.freq += ctrfreq;
     }
 
-    // Sort the ranges and collapse them, if any.
-    if (!ranges.size())
+    // Check wether we reached the end of line or we need to start parsing 
+    // leaks.
+    if (t.nextChar() == '\n')
     {
-      lineCount++;
+      t.skipEol();
       continue;
     }
-
-    std::sort(ranges.begin(), ranges.end());
-    mergeSortedRanges(ranges);
-    mergeRanges(child->RANGES, ranges);
-
-    lineCount++;
+    else if (t.nextChar() == ';')
+      t.skipChar(';');
+    else
+      t.syntaxError();
+    
+    // Parse leaks. They have the form
+    // "LK=\\(0x[\\da-z]+,\\d+\\)[;]*"
+    while (true)
+    {
+      t.skipString("LK=(", 4);
+      
+      // Get the leak address and size.
+      int64_t leakAddress = t.getTokenLL(',', 16);
+      int64_t leakSize = t.getTokenLL(')', 10);
+      
+      // In the case we specify one of the --show-pages --show-page-ranges
+      // or --show-locality-metrics options, we keep track
+      // of the page ranges that are referenced by all the allocations
+      // (LK counters in the report).
+      //
+      // We first fill a vector with all the ranges, then we sort it later on
+      // collapsing all the adjacent ranges.
+      if (m_showPages  || m_config->dumpAllocations || m_showPageRanges)
+      {
+        assert(leakSize > 0);
+        ranges.push_back(RangeInfo(leakAddress, (leakAddress + leakSize + 1)));
+        RangeInfo &range = ranges.back();
+        if (m_showPages || m_showPageRanges)
+        {
+          range.startAddr = range.startAddr >> 12;
+          range.endAddr = range.endAddr >> 12;
+        }
+        assert(range.size() > 0);
+      }
+      if (t.nextChar() == '\n')
+        break;
+      else if (t.nextChar() == ';')
+        t.skipChar(';');
+      else
+        t.syntaxError();
+    }
+    
+    // Sort the ranges and collapse them, if any.
+    if (ranges.size())
+    {
+      std::sort(ranges.begin(), ranges.end());
+      mergeSortedRanges(ranges);
+      mergeRanges(child->RANGES, ranges);
+    }
+    t.skipEol();
   }
-
+  
   if (keys.empty())
-  {
-    std::cerr << "No counter values in profile data." << std::endl;
-    exit(1);
-  }
+    die("No counter values in profile data.");
 }
 
 struct StackItem
@@ -2611,8 +2779,8 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
   //     This method applies one filter at the time. Is it worth to do
   //     the walk only once for all the filters? Should increase locality
   //     as well...
-  ASSERT(filter);
-  ASSERT(first);
+  assert(filter);
+  assert(first);
   std::vector<StackItem> stack;
   stack.resize(1);
   StackItem &firstItem = stack.back();
@@ -2651,7 +2819,7 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
       // Add all the children of pre as items in the stack.
       for (size_t ci = 0, ce = pre->CHILDREN.size(); ci != ce; ++ci)
       {
-        ASSERT(pre);
+        assert(pre);
         NodeInfo *child = pre->CHILDREN[ci];
         StackItem newItem;
         newItem.parent = pre;
@@ -2792,13 +2960,13 @@ private:
 class GProfRow
 {
 public:
-  int FILEOFF;
-  float PCT;
-  float SELF_PCT;
+  int64_t FILEOFF;
+  float   PCT;
+  float   SELF_PCT;
 
   void initFromInfo(FlatInfo *info)
     {
-      ASSERT(info);
+      assert(info);
       m_info = info;
     }
 
@@ -2853,7 +3021,7 @@ public:
   void operator()(float value, const char *numeric = "%7.1f  ", const char *overflow = "    new  ")
   {
     if (m_mode && value == FLT_MAX)
-      printf(overflow);
+      printf(overflow, "");
     else
       printf(numeric, value);
   }
@@ -2955,12 +3123,12 @@ public:
 
   void addCaller(SymbolInfo *callerSymbol)
     {
-      ASSERT(m_info);
-      ASSERT(m_row);
+      assert(m_info);
+      assert(m_row);
       FlatInfo *origin = (*m_flatMap)[callerSymbol];
       CallInfo *thisCall = origin->getCallee(m_info->SYMBOL);
 
-      ASSERT(thisCall);
+      assert(thisCall);
       if (!thisCall->VALUES[0])
         return;
       OtherGProfRow *callrow = new OtherGProfRow();
@@ -2997,8 +3165,8 @@ public:
 
   void addCallee(CallInfo *thisCall)
     {
-      ASSERT(m_info);
-      ASSERT(m_row);
+      assert(m_info);
+      assert(m_row);
       // calleeInfo is the global information about this symbol
       // thisCall contains the information when this symbol is called by m_info
       FlatInfo *calleeInfo = (*m_flatMap)[thisCall->SYMBOL];
@@ -3010,7 +3178,7 @@ public:
         m_callmax = thisCall->VALUES[0];
 
       OtherGProfRow *callrow = new OtherGProfRow();
-      ASSERT(calleeInfo);
+      assert(calleeInfo);
       callrow->initFromInfo(calleeInfo);
       if (m_diffMode)
       {
@@ -3035,13 +3203,13 @@ public:
       callrow->TOTAL_PATHS = calleeInfo->CUM_KEY[2];
 
       m_row->CALLS.insert(callrow);
-      //ASSERT(callrow->SELF_CALLS <= callrow->TOTAL_CALLS);
+      //assert(callrow->SELF_CALLS <= callrow->TOTAL_CALLS);
     }
 
   void beginEditingWith(FlatInfo *info)
     {
-      ASSERT(!m_info);
-      ASSERT(!m_row);
+      assert(!m_info);
+      assert(!m_row);
       m_info = info;
       m_row = new MainGProfRow();
       m_row->initFromInfo(m_info);
@@ -3082,8 +3250,8 @@ public:
 
   void endEditing(void)
     {
-      ASSERT(m_info);
-      ASSERT(m_row);
+      assert(m_info);
+      assert(m_row);
       m_info = 0;
       m_origInfo = 0;
       m_row = 0;
@@ -3092,7 +3260,7 @@ public:
 
   MainGProfRow *build(bool isMax)
     {
-      ASSERT(m_row);
+      assert(m_row);
       if (isMax)
         m_row->KIDS = m_callmax;
       else
@@ -3258,10 +3426,7 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
 
   if (flatMap->empty())
-  {
-    std::cerr << "Could not find any information to print." << std::endl;
-    exit(1);
-  }
+    die("Could not find any information to print.");
 
   for (FlatInfoMap::const_iterator i = flatMap->begin();
        i != flatMap->end();
@@ -3687,7 +3852,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         else
           printPercentage(row.PCT);
 
-        ASSERT(maxval);
+        assert(maxval);
         std::cout << std::string(maxval, '.') << "  ";
         if (m_isPerfTicks && ! m_config->callgrind())
           valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * m_tickPeriod, 0, 2),
@@ -3950,7 +4115,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
   }
   else
   {
-    ASSERT(false);
+    assert(false);
   }
 }
 
@@ -3960,7 +4125,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 void
 IgProfAnalyzerApplication::callgrind(ProfileInfo & /* prof */)
 {
-  ASSERT(false);
+  assert(false);
 }
 
 
@@ -3980,7 +4145,7 @@ IgProfAnalyzerApplication::run(void)
   if (!m_config->baseline().empty())
   {
     std::cerr << "Reading baseline" << std::endl;
-    this->readDump(*prof, m_config->baseline(), new BaseLineFilter);
+    readDump(prof, m_config->baseline(), new BaseLineFilter);
     prepdata(*prof);
     baselineBuilder = new TreeMapBuilderFilter(m_keyMax, prof);
     walk(prof->spontaneous(), m_nodesStorage.size(), baselineBuilder);
@@ -3994,7 +4159,7 @@ IgProfAnalyzerApplication::run(void)
 
   for (size_t i = 0, e = m_inputFiles.size(); i != e; ++i)
   {
-    this->readDump(*prof, m_inputFiles[i], stackTraceFilter);
+    readDump(prof, m_inputFiles[i], stackTraceFilter);
     verboseMessage("");
   }
 
@@ -4065,7 +4230,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     NameChecker is(*arg);
     ArgsLeftCounter left(args.end());
     if (is("--help"))
-      dieWithUsage();
+      die(USAGE);
     else if (is("--verbose", "-v"))
       m_config->setVerbose(true);
     else if (is("--report", "-r") && left(arg))
@@ -4205,7 +4370,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     else if ((*arg)[0] == '-')
     {
       std::cerr << "Unknown option " << (*arg) << std::endl;
-      dieWithUsage();
+      die(USAGE);
     }
     else
       m_inputFiles.push_back(*arg);
@@ -4215,41 +4380,32 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
   if (m_showPages)
   {
     if (!m_key.empty())
-     dieWithUsage("Option --show-pages / --show-page-ranges cannot be used with -r");
+      die("Option --show-pages / --show-page-ranges cannot be used with -r\n%s", USAGE);
     setKey("MEM_LIVE");
     m_config->setShowCalls(false);
   }
 
   if (m_config->diffMode() && m_config->baseline().empty())
-    dieWithUsage("Option --diff-mode / -D requires --baseline / -b");
+    die("Option --diff-mode / -D requires --baseline / -b\n%s", USAGE);
 
   if (m_inputFiles.empty())
-    dieWithUsage("ERROR: No input files specified");
+    die("ERROR: No input files specified.\n%s", USAGE);
 }
 
 void
 userAborted(int)
 {
-  std::cerr << "\nUser interrupted." << std::endl;
-  exit(1);
+  die("\nUser interrupted.");
 }
 
 int
 main(int argc, const char **argv)
 {
-  lat::Signal::handleFatal(argv [0]);
   signal(SIGINT, userAborted);
   try
   {
     IgProfAnalyzerApplication *app = new IgProfAnalyzerApplication(argc, argv);
     app->run();
-  }
-  catch(lat::Error &e) {
-
-    std::cerr << "Internal error \"" << e.explain() << "\".\n"
-      "Oh my, you have found a bug in igprof-analyse!\n"
-      "Please file a bug report and some mean to reproduce it to:\n\n"
-      "  https://savannah.cern.ch/bugs/?group=cmssw\n\n" << std::endl;
   }
   catch(std::exception &e) {
     std::cerr << "Internal error: \"" << e.what() << "\".\n"
