@@ -493,9 +493,6 @@ public:
   void setNormalValue(bool value) { m_normalValue = value; }
   bool normalValue(void) { return m_normalValue; }
 
-  void setTickPeriod(float value) { m_tickPeriod = value; }
-  float tickPeriod(void) {return m_tickPeriod; }
-
   void setMergeLibraries(bool value) { m_mergeLibraries = value; }
   bool mergeLibraries(void) { return m_mergeLibraries; }
 
@@ -540,7 +537,6 @@ private:
   int m_showCalls;
   bool m_verbose;
   bool m_normalValue;
-  float m_tickPeriod;
   bool m_mergeLibraries;
   std::string m_baseline;
   bool m_diffMode;
@@ -911,6 +907,7 @@ private:
   bool                          m_showPages;
   bool                          m_showLocalityMetrics;
   size_t                        m_topN;
+  float                         m_tickPeriod;
 };
 
 
@@ -922,7 +919,8 @@ IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv
    m_showPageRanges(false),
    m_showPages(false),
    m_showLocalityMetrics(false),
-   m_topN(0)
+   m_topN(0),
+   m_tickPeriod(0.01)
 {}
 
 float
@@ -2390,7 +2388,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo &prof, const std::string &filena
   line.reserve(FileOpener::INITIAL_BUFFER_SIZE);
   reader.readLine();
   reader.assignLineToString(line);
-  m_config->setTickPeriod(parseHeaders(line));
+  m_tickPeriod = parseHeaders(line);
 
   PathCollection paths("PATH");
 
@@ -3413,7 +3411,7 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
     if (!value)
       break;
     if (m_isPerfTicks)
-      std::cout << thousands(static_cast<double>(value) * m_config->tickPeriod(), 0, 2)
+      std::cout << thousands(static_cast<double>(value) * m_tickPeriod, 0, 2)
                 << " seconds)\n";
     else if (m_showLocalityMetrics)
       std::cout << thousands(value) << " spread factor)\n";
@@ -3555,12 +3553,10 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     else
       std::cout << m_key << "\n";
 
-    float tickPeriod = m_config->tickPeriod();
-
     int maxcnt=0;
     if (m_isPerfTicks && ! m_config->callgrind())
-      maxcnt = max(8, max(thousands(static_cast<double>(totals) * tickPeriod, 0, 2).size(),
-                          thousands(static_cast<double>(totfreq) * tickPeriod, 0, 2).size()));
+      maxcnt = max(8, max(thousands(static_cast<double>(totals) * m_tickPeriod, 0, 2).size(),
+                          thousands(static_cast<double>(totfreq) * m_tickPeriod, 0, 2).size()));
     else
       maxcnt = max(8, max(thousands(totals).size(),
                           thousands(totfreq).size()));
@@ -3588,7 +3584,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         printPercentage(row.PCT);
 
       if (m_isPerfTicks && ! m_config->callgrind())
-        printf("%*s  ", maxval, thousands(static_cast<double>(row.CUM) * tickPeriod, 0, 2).c_str());
+        printf("%*s  ", maxval, thousands(static_cast<double>(row.CUM) * m_tickPeriod, 0, 2).c_str());
       else
         printf("%*s  ", maxval, thousands(row.CUM).c_str());
 
@@ -3622,7 +3618,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         printPercentage(row.SELF_PCT, "%7.2f  ");
 
       if (m_isPerfTicks && ! m_config->callgrind())
-        printf("%*s  ", maxval, thousands(static_cast<double>(row.SELF) * tickPeriod, 0, 2).c_str());
+        printf("%*s  ", maxval, thousands(static_cast<double>(row.SELF) * m_tickPeriod, 0, 2).c_str());
       else
         printf("%*s  ", maxval, thousands(row.SELF).c_str());
 
@@ -3694,8 +3690,8 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         ASSERT(maxval);
         std::cout << std::string(maxval, '.') << "  ";
         if (m_isPerfTicks && ! m_config->callgrind())
-          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * tickPeriod, 0, 2),
-                 thousands(static_cast<double>(row.CHILDREN_COUNTS) * tickPeriod, 0, 2));
+          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * m_tickPeriod, 0, 2),
+                 thousands(static_cast<double>(row.CHILDREN_COUNTS) * m_tickPeriod, 0, 2));
         else
           valfmt(thousands(row.SELF_COUNTS), thousands(row.CHILDREN_COUNTS));
 
@@ -3730,9 +3726,9 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
 
       if (m_isPerfTicks && ! m_config->callgrind())
       {
-        (AlignedPrinter(maxval))(thousands(static_cast<double>(mainRow.CUM) * tickPeriod, 0, 2));
-        valfmt(thousands(static_cast<double>(mainRow.SELF) * tickPeriod, 0, 2),
-               thousands(static_cast<double>(mainRow.KIDS) * tickPeriod, 0, 2));
+        (AlignedPrinter(maxval))(thousands(static_cast<double>(mainRow.CUM) * m_tickPeriod, 0, 2));
+        valfmt(thousands(static_cast<double>(mainRow.SELF) * m_tickPeriod, 0, 2),
+               thousands(static_cast<double>(mainRow.KIDS) * m_tickPeriod, 0, 2));
       }
       else
       {
@@ -3772,8 +3768,8 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
         std::cout << std::string(maxval, '.') << "  ";
 
         if (m_isPerfTicks && ! m_config->callgrind())
-          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * tickPeriod, 0, 2),
-                 thousands(static_cast<double>(row.CHILDREN_COUNTS) * tickPeriod, 0, 2));
+          valfmt(thousands(static_cast<double>(row.SELF_COUNTS) * m_tickPeriod, 0, 2),
+                 thousands(static_cast<double>(row.CHILDREN_COUNTS) * m_tickPeriod, 0, 2));
         else
           valfmt(thousands(row.SELF_COUNTS), thousands(row.CHILDREN_COUNTS));
 
@@ -3862,7 +3858,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     else
       std::cout << m_key;
 
-    std::cout  << "\", " << totals << ", " << totfreq << ", " << m_config->tickPeriod() << ");\n\n";
+    std::cout  << "\", " << totals << ", " << totfreq << ", " << m_tickPeriod << ");\n\n";
 
     unsigned int insertCount = 0;
     std::set<int> filesDone;
