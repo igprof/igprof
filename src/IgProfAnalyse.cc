@@ -758,12 +758,16 @@ Configuration::Configuration()
    m_verbose(false),
    m_normalValue(true),
    m_diffMode(false),
+   m_mergeLibraries(false),
    minCountValue(-1),
    maxCountValue(-1),
    minCallsValue(-1),
    maxCallsValue(-1),
    minAverageValue(-1),
-   maxAverageValue(-1)
+   maxAverageValue(-1),
+   tree(false),
+   useGdb(false),
+   dumpAllocations(false)
 {}
 
 class StackTraceFilter
@@ -1123,6 +1127,8 @@ IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv
   :m_config(new Configuration()),
    m_argc(argc),
    m_argv(argv),
+   m_isPerfTicks(false),
+   m_keyMax(false),
    m_disableFilters(false),
    m_showPageRanges(false),
    m_showPages(false),
