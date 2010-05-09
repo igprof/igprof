@@ -4300,6 +4300,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
       m_config->setShowCalls(true);
     else if (is("--merge-regexp", "-mr") && left(arg))
     {
+      die("igprof: --merge-regexp / -mr) is currently unsupported.\n");
       std::string re = *(++arg);
       const char *regexpOption = re.c_str();
       std::string origRe = re;
