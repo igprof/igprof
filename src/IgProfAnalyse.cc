@@ -240,7 +240,7 @@ IgTokenizer::getTokenD(char delim)
 void
 IgTokenizer::syntaxError()
 {
-  die("\nSyntax error in file \"%s\" at line %d.\nLast token read \"%s\".\n",
+  die("\n%s:%d: syntax error, last token read was '%s'\n",
       m_filename.c_str(), m_lineCount, m_buffer);
 }
 
