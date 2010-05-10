@@ -1491,9 +1491,9 @@ public:
     {
       m_regexps.resize(m_regexps.size() + 1);
       Regexp &regexp = m_regexps.back();
-      const char *errptr = NULL;
+      const char *errptr = 0;
       // int erroff = 0;
-      // regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, NULL);
+      // regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, 0);
       if (errptr)
         die("Error while compiling regular expression");
       regexp.with = specs[i].with;
@@ -1715,7 +1715,7 @@ public:
       std::string tmpPath;
       for (path = strtok_r(paths, ":", &bkpt);
            path;
-           path = strtok_r(NULL, ":", &bkpt))
+           path = strtok_r(0, ":", &bkpt))
       {
         if (!path[0])
         {
@@ -1876,8 +1876,7 @@ private:
   }
 
   /** If the filename points to a valid file which can be read, @returns
-      its realpath.
-      If not, return NULL.
+      its realpath, otherwise 0.
 
       In case the file is a directory we return the realpath, but set @a
       isDirectory to true.
@@ -1895,7 +1894,7 @@ private:
       // broken link. Hence the loader would have ignored it, hence we do as
       // well.
       if (!rp)
-        return NULL;
+        return 0;
 
       // If the file is a directory, the loader would not have picked it
       // up, hence we ignore it as well.
@@ -1905,14 +1904,14 @@ private:
       if (!S_ISREG(s.st_mode))
       {
         isDirectory = true;
-        return NULL;
+        return 0;
       }
 
       // If the file is not readable the loader would have not
       // picked it up, hence we ignore.
 
       if (access(rp, R_OK) == -1)
-        return NULL;
+        return 0;
 
       return rp;
    }
