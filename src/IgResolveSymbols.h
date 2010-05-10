@@ -15,6 +15,14 @@
 #include <errno.h>
 #include <cstdarg>
 
+#ifndef iggetc
+# if defined getc_unlocked || defined __GLIBC__
+#  define iggetc(x) getc_unlocked(x)
+# else
+#  define iggetc(x) fgetc(x)
+# endif
+#endif
+
 /** Gets a token delimited by @a separator from the @a file and write it,
     0 terminated in the buffer found in @a buffer.
 
@@ -67,7 +75,7 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
       }
     }
 
-    int c = fgetc(in);
+    int c = iggetc(in);
 
     if (c == EOF)
     {
@@ -99,7 +107,7 @@ void
 skipchars(FILE *in, const char *skipped, int *nextChar)
 {
   while(strchr(skipped, *nextChar))
-    *nextChar = fgetc(in);
+    *nextChar = iggetc(in);
 }
 
 class FileInfo
@@ -201,7 +209,7 @@ private:
       bool matched = false;
       size_t bufferSize = 1024;
       char *buffer = (char*) malloc(bufferSize);
-      int nextChar = fgetc(pipe);
+      int nextChar = iggetc(pipe);
 
       while (nextChar != EOF)
       {
@@ -259,7 +267,7 @@ private:
       if (!pipe || ferror(pipe))
         return;
 
-      nextChar = fgetc(pipe);
+      nextChar = iggetc(pipe);
 
       while (nextChar != EOF)
       {

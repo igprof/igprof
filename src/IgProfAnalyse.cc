@@ -22,6 +22,14 @@
 #include <cassert>
 //#include <pcre.h>
 
+#ifndef iggetc
+# if defined getc_unlocked || defined __GLIBC__
+#  define iggetc(x) getc_unlocked(x)
+# else
+#  define iggetc(x) fgetc(x)
+# endif
+#endif
+
 #define IGPROF_MAX_DEPTH 1000
 
 void dummy(void) {}
@@ -57,7 +65,7 @@ public:
     {
       if (m_next!= skipped)
         syntaxError();
-      m_next = fgetc(m_in);
+      m_next = iggetc(m_in);
       return;
     }
 
@@ -123,7 +131,7 @@ IgTokenizer::IgTokenizer(FILE *in, const char *filename)
     m_filename(filename)
 {
   m_buffer = (char *) malloc(m_bufferSize);
-  m_next = fgetc(in);
+  m_next = iggetc(in);
 }
 
 /** Fills m_buffer with the next token delimited by a seguence of @a delim
@@ -149,7 +157,7 @@ IgTokenizer::getTokenS(std::string &result, char delim)
 {
   char buf[2] = {delim, 0};
   getTokenS(result, buf);
-  m_next = fgetc(m_in);
+  m_next = iggetc(m_in);
 }
 
 
@@ -194,7 +202,7 @@ IgTokenizer::getTokenN(char delim, size_t base)
 {
   char buf[2] = {delim, 0};
   int64_t result = getTokenN(buf, base);
-  m_next = fgetc(m_in);
+  m_next = iggetc(m_in);
   return result;
 }
 
