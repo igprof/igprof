@@ -2261,23 +2261,39 @@ private:
   bool        m_isMax;
 };
 
+static void
+opentemp(char *pattern, FILE *&fp)
+{
+  int fd;
+
+  if ((fd = mkstemp(pattern)) < 0)
+    die("%s: cannot create temporary file: %s (error %d)\n",
+	pattern, strerror(errno), errno);
+
+  if (! (fp = fdopen(fd, "w")))
+    die("%s: cannot open descriptor %d for write: %s (error %d)\n",
+	pattern, fd, strerror(errno), errno);
+}
+
+static void
+openpipe(char *&cmd, FILE *&fp, const char *pattern, const char *arg)
+{
+  assert(! cmd);
+  asprintf(&cmd, pattern, arg);
+
+  if (! cmd)
+    die("%s (error %d)\n", strerror(errno), errno);
+
+  if (! (fp = popen(cmd, "r")))
+    die("Error while running '%s'\n", cmd);
+}
+
 void
 symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool demangle)
 {
-  size_t bufferSize = 1024;
-  char *buffer = (char*) malloc(bufferSize);
-
-  char SET_WIDTH[] = "set width 10000\n";
-  char gdbFilename[] = "/tmp/igprof-analyse.gdb.XXXXXXXX";
-
   if (usegdb)
   {
-    int gdbScript = mkstemp(gdbFilename);
-    FILE *out = fdopen(gdbScript, "w");
-    write(gdbScript, SET_WIDTH, strlen(SET_WIDTH));
-
     std::multimap<FileInfo *, SymbolInfo *> fileAndSymbols;
-
     for (size_t ii = 0, ei = infos.size(); ii != ei; ++ii)
     {
       SymbolInfo *sym = infos[ii]->SYMBOL;
@@ -2302,7 +2318,12 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       fileAndSymbols.insert(std::pair<FileInfo *, SymbolInfo *>(sym->FILE, sym));
     }
 
+    FILE *fp = 0;
+    char *cmd = 0;
+    char fname[] = "/tmp/igprof-analyse.gdb.XXXXXXXX";
     FileInfo *prevfile = 0;
+    opentemp(fname, fp);
+    fputs("set width 10000\n", fp);
 
     for (std::multimap<FileInfo *, SymbolInfo *>::iterator i = fileAndSymbols.begin();
          i != fileAndSymbols.end();
@@ -2321,28 +2342,25 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       {
         if (fileInfo != prevfile)
         {
-          fprintf(out, "file %s\n", fileInfo->NAME.c_str());
+          fprintf(fp, "file %s\n", fileInfo->NAME.c_str());
           prevfile = fileInfo;
         }
 
-        fprintf(out, "echo IGPROF_SYMCHECK <%" PRId64 ">\\n\ninfo line *%" PRId64 "\n",
+        fprintf(fp, "echo IGPROF_SYMCHECK <%" PRId64 ">\\n\ninfo line *%" PRId64 "\n",
                 (int64_t) sym, sym->FILEOFF);
       }
     }
-    fflush(out);
-    close(gdbScript);
-    asprintf(&buffer, "gdb --batch --command=%s", gdbFilename);
-    FILE *gdb = popen(buffer, "r");
-    if (!gdb)
-      die("Error while running gdb.");
 
+    fclose(fp);
+
+    openpipe(cmd, fp, "gdb --batch --command=%s", fname);
+    IgTokenizer t(fp, cmd);
     std::string oldname;
     std::string suffix;
-    SymbolInfo *sym = 0;
-    IgTokenizer t(gdb, buffer);
-
     std::string result;
-    while (!feof(gdb))
+    SymbolInfo *sym = 0;
+
+    while (!feof(fp))
     {
       result.clear();
       t.getTokenS(result, "<\n");
@@ -2367,7 +2385,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       {
         t.skipChar('<');
         assert(sym);
-        t.getTokenS(sym->NAME, '+');
+	t.getTokenS(sym->NAME, "+@>");
         t.getToken(">");
         t.skipChar('>');
         t.getToken("\n");
@@ -2378,46 +2396,41 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       else
         t.syntaxError();
     }
-    pclose(gdb);
-    unlink(gdbFilename);
-  }
 
-  char cppfiltFilename[] = "/tmp/igprof-analyse.c++filt.XXXXXXXX";
+    unlink(fname);
+    pclose(fp);
+    free(cmd);
+  }
 
   if (demangle)
   {
-    int f = mkstemp(cppfiltFilename);
-    FILE *out = fdopen(f, "w");
+    FILE *fp = 0;
+    char *cmd = 0;
+    char fname[] = "/tmp/igprof-analyse.c++filt.XXXXXXXX";
 
+    opentemp(fname, fp);
     for (size_t ii = 0, ei = infos.size(); ii != ei; ++ii)
     {
       SymbolInfo *symbol = infos[ii]->SYMBOL;
       assert(symbol);
-      fprintf(out, "%" PRIdPTR ": %s\n", (intptr_t) symbol, symbol->NAME.c_str());
+      fprintf(fp, "%" PRIdPTR ": %s\n", (intptr_t) symbol, symbol->NAME.c_str());
     }
-    fflush(out);
-    close(f);
+    fclose(fp);
 
-    asprintf(&buffer, "c++filt <%s", cppfiltFilename);
-
-    FILE *cppfilt = popen(buffer, "r");
-
-    if (!cppfilt)
-      die("Error while running c++filt.");
-
-    // Read the full output.
-    IgTokenizer t(cppfilt, buffer);
-    while (!feof(cppfilt))
+    openpipe(cmd, fp, "c++filt < %s", fname);
+    IgTokenizer t(fp, cmd);
+    while (!feof(fp))
     {
       SymbolInfo *symbolPtr = (SymbolInfo *)(t.getTokenN(':'));
       t.skipChar(' ');
       t.getTokenS(symbolPtr->NAME, "\n");
       t.skipEol();
     }
-    pclose(cppfilt);
-    unlink(cppfiltFilename);
+
+    unlink(fname);
+    pclose(fp);
+    free(cmd);
   }
-  free(buffer);
 }
 
 /**
