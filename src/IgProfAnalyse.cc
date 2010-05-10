@@ -778,6 +778,8 @@ Configuration::Configuration()
    dumpAllocations(false)
 {}
 
+static Configuration *s_config = 0;
+
 class StackTraceFilter
 {
 public:
@@ -987,10 +989,7 @@ public:
         mergeToNode(parent, node, m_isMax);
       if (strstr(filename.c_str() + chkOffset, "IgProf.")
           || strstr(filename.c_str() + chkOffset, "IgHook."))
-      {
-        std::cerr << "Merging" << std::endl;
         mergeToNode(parent, node, m_isMax);
-      }
     }
 
   virtual std::string name(void) const { return "igprof remover"; }
@@ -1065,7 +1064,7 @@ class IgProfAnalyzerApplication
 public:
   typedef std::list <std::string> ArgsList;
 
-  IgProfAnalyzerApplication(int argc, const char **argv);
+  IgProfAnalyzerApplication(Configuration *config, int argc, const char **argv);
 
   void run(void);
   void parseArgs(const ArgsList &args);
@@ -1111,7 +1110,6 @@ public:
   }
 
 private:
-  void verboseMessage(const char *msg, const char *arg = 0);
   Configuration *               m_config;
   int                           m_argc;
   const char                    **m_argv;
@@ -1131,8 +1129,8 @@ private:
 };
 
 
-IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv)
-  :m_config(new Configuration()),
+IgProfAnalyzerApplication::IgProfAnalyzerApplication(Configuration *config, int argc, const char **argv)
+  :m_config(config),
    m_argc(argc),
    m_argv(argv),
    m_isPerfTicks(false),
@@ -1145,14 +1143,35 @@ IgProfAnalyzerApplication::IgProfAnalyzerApplication(int argc, const char **argv
    m_tickPeriod(0.01)
 {}
 
+static void
+verboseMessage(const char *msg = 0, const char *arg = 0, const char *end = 0)
+{
+  if (s_config->verbose())
+  {
+    if (msg)
+      std::cerr << msg;
+
+    if (arg)
+      std::cerr << " " << arg;
+
+    if (msg && ! end)
+      std::cerr << ": ";
+
+    if (end)
+      std::cerr << end;
+
+    std::cerr.flush();
+  }
+}
+
 static int s_counter = 0;
 
-void
+static void
 printProgress(void)
 {
   s_counter = (s_counter + 1) % 100000;
   if (! s_counter)
-    std::cerr << "o";
+    verboseMessage(0, 0, ".");
 }
 
 /**
@@ -2448,7 +2467,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
   FILE *inFile = openDump(filename.c_str());
   IgTokenizer t(inFile, filename.c_str());
-  verboseMessage("Parsing igprof output file:", filename.c_str());
+  verboseMessage("Parsing igprof output file", filename.c_str());
 
   // Parse the header line, which has form:
   // ^P=\(ID=[0-9]* N=\(.*\) T=[0-9]+.[0-9]*\)
@@ -2727,6 +2746,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     t.skipEol();
   }
 
+  verboseMessage(0, 0, " done\n");
   if (keys.empty())
     die("No counter values in profile data.");
 }
@@ -2753,9 +2773,6 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
   firstItem.pre = first;
   firstItem.post = 0;
   stack.reserve(10000);
-
-  if (total)
-    std::cerr << "\n" << filter->name();
 
   size_t count = 0;
   size_t newProgress = 0;
@@ -2801,26 +2818,10 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
     newProgress = (100 * count) / total;
     if (newProgress > oldProgress)
     {
+      verboseMessage(0, 0, ".");
       oldProgress = newProgress;
-      std::cerr << ".";
     }
   }
-}
-
-void
-IgProfAnalyzerApplication::verboseMessage(const char *msg, const char *arg)
-{
-  if (!m_config->verbose())
-    return;
-  std::cerr << msg;
-
-  if (arg)
-    std::cerr << " " << arg;
-
-  if (msg[0])
-    std::cerr << ".";
-
-  std::cerr << std::endl;
 }
 
 void
@@ -2831,26 +2832,30 @@ IgProfAnalyzerApplication::prepdata(ProfileInfo& prof)
     IgProfFilter *filter = m_filters[fi];
     verboseMessage("Applying filter", filter->name().c_str());
     walk(prof.spontaneous(), m_nodesStorage.size(), filter);
+    verboseMessage(0, 0, " done\n");
   }
 
   if (m_config->mergeLibraries())
   {
     //    walk<NodeInfo>(prof.spontaneous(), new PrintTreeFilter);
 
-    verboseMessage("Merge nodes belonging to the same library.");
+    verboseMessage("Merge nodes belonging to the same library");
     walk(prof.spontaneous(), m_nodesStorage.size(), new UseFileNamesFilter(m_keyMax));
     //    walk<NodeInfo>(prof.spontaneous(), new PrintTreeFilter);
+    verboseMessage(0, 0, " done\n");
   }
 
   if (!m_regexps.empty())
   {
-    verboseMessage("Merge nodes using user-provided regular expression.");
+    verboseMessage("Merge nodes using user-provided regular expression");
     walk(prof.spontaneous(), m_nodesStorage.size(), new RegexpFilter(m_regexps, m_keyMax));
+    verboseMessage(0, 0, " done\n");
   }
 
   verboseMessage("Summing counters");
   walk(prof.spontaneous(), m_nodesStorage.size(), new AddCumulativeInfoFilter(m_keyMax));
   walk(prof.spontaneous(), m_nodesStorage.size(), new CheckTreeConsistencyFilter());
+  verboseMessage(0, 0, " done\n");
 }
 
 class FlatInfoComparator
@@ -3384,8 +3389,10 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
+  verboseMessage(0, 0, " done\n");
+
   // Sorting flat entries
-  verboseMessage("Sorting");
+  verboseMessage("Sorting", 0, ".\n");
   int rank = 1;
   FlatVector sorted;
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
@@ -3408,7 +3415,7 @@ IgProfAnalyzerApplication::tree(ProfileInfo &prof)
 
   if (m_config->doDemangle() || m_config->useGdb)
   {
-    verboseMessage("Resolving symbols");
+    verboseMessage("Resolving symbols", 0, ".\n");
     symremap(prof, sorted, m_config->useGdb, m_config->doDemangle());
   }
 
@@ -3432,16 +3439,17 @@ IgProfAnalyzerApplication::dumpAllocations(ProfileInfo &prof)
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
+  verboseMessage(0, 0, " done\n");
 
   // Sorting flat entries
-  verboseMessage("Sorting");
+  verboseMessage("Sorting", 0, ".\n");
   int rank = 1;
   FlatVector sorted;
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
 
   if (flatMap->empty())
   {
-    std::cerr << "Could not find any information to print." << std::endl;
+    std::cerr << "\nCould not find any information to print." << std::endl;
     exit(1);
   }
 
@@ -3457,7 +3465,7 @@ IgProfAnalyzerApplication::dumpAllocations(ProfileInfo &prof)
 
   if (m_config->doDemangle() || m_config->useGdb)
   {
-    verboseMessage("Resolving symbols");
+    verboseMessage("Resolving symbols", 0, ".\n");
     symremap(prof, sorted, m_config->useGdb, m_config->doDemangle());
   }
 
@@ -3471,6 +3479,7 @@ IgProfAnalyzerApplication::dumpAllocations(ProfileInfo &prof)
   verboseMessage("Building top N");
   TopNBuilderFilter *topNFilter = new TopNBuilderFilter(m_topN);
   walk(prof.spontaneous(), m_nodesStorage.size(), topNFilter);
+  verboseMessage(0, 0, " done\n");
 
   for (size_t i = 0; i != m_topN; ++i)
   {
@@ -3497,8 +3506,10 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
+  verboseMessage(0, 0, " done\n");
+
   // Sorting flat entries
-  verboseMessage("Sorting");
+  verboseMessage("Sorting", 0, ".\n");
   int rank = 1;
   FlatVector sorted;
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
@@ -3521,7 +3532,7 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
 
   if (m_config->doDemangle() || m_config->useGdb)
   {
-    verboseMessage("Resolving symbols");
+    verboseMessage("Resolving symbols", 0, ".\n");
     symremap(prof, sorted, m_config->useGdb, m_config->doDemangle());
   }
 
@@ -3533,6 +3544,8 @@ IgProfAnalyzerApplication::topN(ProfileInfo &prof)
   verboseMessage("Building top N");
   TopNBuilderFilter *topNFilter = new TopNBuilderFilter(m_topN);
   walk(prof.spontaneous(), m_nodesStorage.size(), topNFilter);
+  verboseMessage(0, 0, " done\n");
+
   for (size_t i = 0; i != m_topN; i++)
   {
     std::cout << "## Entry " << i+1 << " (";
@@ -3565,8 +3578,10 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
   verboseMessage("Building call tree map");
   TreeMapBuilderFilter *callTreeBuilder = new TreeMapBuilderFilter(m_keyMax, &prof);
   walk(prof.spontaneous(), m_nodesStorage.size(), callTreeBuilder);
+  verboseMessage(0, 0, " done\n");
+
   // Sorting flat entries
-  verboseMessage("Sorting");
+  verboseMessage("Sorting", 0, ".\n");
   int rank = 1;
   FlatVector sorted;
   FlatInfoMap *flatMap = callTreeBuilder->flatMap();
@@ -3592,7 +3607,7 @@ IgProfAnalyzerApplication::analyse(ProfileInfo &prof, TreeMapBuilderFilter *base
 
   if (m_config->doDemangle() || m_config->useGdb)
   {
-    verboseMessage("Resolving symbols");
+    verboseMessage("Resolving symbols", 0, ".\n");
     symremap(prof, sorted, m_config->useGdb, m_config->doDemangle());
   }
 
@@ -3620,7 +3635,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                                               TreeMapBuilderFilter *baselineBuilder,
                                               FlatVector &sorted)
 {
-  verboseMessage("Generating report");
+  verboseMessage("Generating report", 0, ".\n");
 
   typedef std::vector <MainGProfRow *> CumulativeSortedTable;
   typedef CumulativeSortedTable FinalTable;
@@ -4109,24 +4124,22 @@ IgProfAnalyzerApplication::run(void)
 
   if (!m_config->baseline().empty())
   {
-    std::cerr << "Reading baseline" << std::endl;
+    verboseMessage("Reading baseline", 0, ".\n");
     readDump(prof, m_config->baseline(), new BaseLineFilter);
     prepdata(*prof);
+    verboseMessage("Processing baseline");
     baselineBuilder = new TreeMapBuilderFilter(m_keyMax, prof);
     walk(prof->spontaneous(), m_nodesStorage.size(), baselineBuilder);
-    std::cerr << std::endl;
+    verboseMessage(0, 0, " done\n");
   }
 
-  std::cerr << "Reading profile data" << std::endl;
+  verboseMessage("Reading profile data", 0, ".\n");
   StackTraceFilter *stackTraceFilter = 0;
   if (m_config->hasHitFilter())
     stackTraceFilter = new HitFilter(*m_config);
 
   for (size_t i = 0, e = m_inputFiles.size(); i != e; ++i)
-  {
     readDump(prof, m_inputFiles[i], stackTraceFilter);
-    verboseMessage("");
-  }
 
   if (! m_config->isShowCallsDefined())
   {
@@ -4370,7 +4383,8 @@ main(int argc, const char **argv)
   signal(SIGINT, userAborted);
   try
   {
-    IgProfAnalyzerApplication *app = new IgProfAnalyzerApplication(argc, argv);
+    s_config = new Configuration;
+    IgProfAnalyzerApplication *app = new IgProfAnalyzerApplication(s_config, argc, argv);
     app->run();
   }
   catch(std::exception &e) {
