@@ -122,9 +122,10 @@ die(const char *format, ...)
 /** @return FILE which reads the profile dump called @a filename.
 
     @a filename the filename to be opened.
+    @a isPipe set to @c true if the input is from a pipe.
  */
 FILE *
-openDump(const char *filename, const char *cmd = 0)
+openDump(const char *filename, bool &isPipe)
 {
   // If filename is not a real file, simply exit.
   if (access(filename, R_OK))
@@ -151,9 +152,7 @@ openDump(const char *filename, const char *cmd = 0)
   // just run it.
   // If the file is compressed, uncompress it.
   // Otherwise just read the file.
-  if (cmd)
-    command = std::string(cmd) + filename;
-  else if (header[0] == 0x1f && header[1] == 0x8b)
+  if (header[0] == 0x1f && header[1] == 0x8b)
     command = std::string("gzip -dc ") + filename;
   else if (header[0] == 'B'
            && header[1] == 'Z'
@@ -169,6 +168,7 @@ openDump(const char *filename, const char *cmd = 0)
   if (!in)
     die("Cannot open %s.", filename);
 
+  isPipe = ! command.empty();
   return in;
 }
 

@@ -2465,7 +2465,8 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
   ProfileInfo::Nodes      &nodes = prof->nodes();
 
-  FILE *inFile = openDump(filename.c_str());
+  bool isPipe = false;
+  FILE *inFile = openDump(filename.c_str(), isPipe);
   IgTokenizer t(inFile, filename.c_str());
   verboseMessage("Parsing igprof output file", filename.c_str());
 
@@ -2679,6 +2680,11 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     // We should be looking at end of line now.
     t.skipEol();
   }
+
+  if (isPipe)
+    pclose(inFile);
+  else
+    fclose(inFile);
 
   verboseMessage(0, 0, " done\n");
   if (keys.empty())
