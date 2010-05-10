@@ -2292,6 +2292,8 @@ opentemp(char *pattern, FILE *&fp)
   if (! (fp = fdopen(fd, "w")))
     die("%s: cannot open descriptor %d for write: %s (error %d)\n",
         pattern, fd, strerror(errno), errno);
+
+  setvbuf(fp, 0, _IOFBF, 128*1024);
 }
 
 static void
@@ -2305,6 +2307,8 @@ openpipe(char *&cmd, FILE *&fp, const char *pattern, const char *arg)
 
   if (! (fp = popen(cmd, "r")))
     die("Error while running '%s'\n", cmd);
+
+  setvbuf(fp, 0, _IOFBF, 128*1024);
 }
 
 void

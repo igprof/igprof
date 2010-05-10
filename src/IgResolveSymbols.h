@@ -208,6 +208,8 @@ private:
         fprintf(stderr, "Error while invoking objdump");
         exit(1);
       }
+      setvbuf(pipe, 0, _IOFBF, 128*1024);
+
       Offset vmbase = 0;
       bool matched = false;
       size_t bufferSize = 1024;
@@ -276,6 +278,7 @@ private:
 	return;
       }
 
+      setvbuf(pipe, 0, _IOFBF, 128*1024);
       nextChar = iggetc(pipe);
       while (nextChar != EOF)
       {

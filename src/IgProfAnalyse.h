@@ -169,6 +169,7 @@ openDump(const char *filename, bool &isPipe)
     die("Cannot open %s.", filename);
 
   isPipe = ! command.empty();
+  setvbuf(in, 0, _IOFBF, 128*1024);
   return in;
 }
 
@@ -245,7 +246,6 @@ public:
     {
       printf("%*s", m_size, n.c_str());
       printf("  ");
-      fflush(stdout);
     }
 private:
   int m_size;
