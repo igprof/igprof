@@ -1104,7 +1104,7 @@ public:
 
     m_filters.push_back(new RemoveIgProfFilter(m_keyMax));
 
-    if (!m_filters.empty() && !memcmp(m_key.c_str(), "MEM_", 4))
+    if (!m_filters.empty() && !strncmp(m_key.c_str(), "MEM_", 4))
       m_filters.push_back(new MallocFilter(m_keyMax));
     if (!m_filters.empty() && m_key == "MEM_LIVE")
       m_filters.push_back(new IgProfGccPoolAllocFilter());
@@ -2338,7 +2338,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
 
       prof.symcache().insert(sym);
 
-      if (memcmp(fileInfo->NAME.c_str(), "<dynamically", 12))
+      if (strncmp(fileInfo->NAME.c_str(), "<dynamically", 12))
       {
         if (fileInfo != prevfile)
         {
@@ -4130,7 +4130,7 @@ IgProfAnalyzerApplication::run(void)
 
   if (! m_config->isShowCallsDefined())
   {
-    if (!memcmp(m_key.c_str(), "MEM_", 4))
+    if (!strncmp(m_key.c_str(), "MEM_", 4))
       m_config->setShowCalls(true);
     else
       m_config->setShowCalls(false);
