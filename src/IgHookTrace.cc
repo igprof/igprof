@@ -26,10 +26,10 @@ extern "C" void _sigtramp (void);
 
 bool
 IgHookTrace::symbol (void *address,
-		     const char *&sym,
-		     const char *&lib,
-		     long &offset,
-		     long &liboffset)
+                     const char *&sym,
+                     const char *&lib,
+                     long &offset,
+                     long &liboffset)
 {
     sym = lib = 0;
     offset = 0;
@@ -38,19 +38,19 @@ IgHookTrace::symbol (void *address,
     Dl_info info;
     if (dladdr (address, &info))
     {
-	if (info.dli_fname && info.dli_fname [0])
-	    lib = info.dli_fname;
+        if (info.dli_fname && info.dli_fname [0])
+            lib = info.dli_fname;
 
-	if (info.dli_fbase)
-	    liboffset = (unsigned long) address - (unsigned long) info.dli_fbase;
+        if (info.dli_fbase)
+            liboffset = (unsigned long) address - (unsigned long) info.dli_fbase;
 
-	if (info.dli_saddr)
-	    offset = (unsigned long) address - (unsigned long) info.dli_saddr;
+        if (info.dli_saddr)
+            offset = (unsigned long) address - (unsigned long) info.dli_saddr;
 
-	if (info.dli_sname && info.dli_sname [0])
-	    sym = info.dli_sname;
+        if (info.dli_sname && info.dli_sname [0])
+            sym = info.dli_sname;
 
-	return true;
+        return true;
     }
 
     return false;
@@ -61,10 +61,10 @@ IgHookTrace::tosymbol (void *address)
 {
     Dl_info info;
     return (dladdr (address, &info)
-	    && info.dli_fname
-	    && info.dli_fname [0]
-	    && info.dli_saddr)
-	? info.dli_saddr : address;
+            && info.dli_fname
+            && info.dli_fname [0]
+            && info.dli_saddr)
+        ? info.dli_saddr : address;
 }
 
 void *
@@ -102,94 +102,94 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
     HERE:
     struct frame
     {
-	// Normal frame.
-	frame		*ebp;
-	void		*eip;
-	// Signal frame stuff, put in here by kernel.
-	int		signo;
-	siginfo_t	*info;
-	ucontext_t	*ctx;
+        // Normal frame.
+        frame           *ebp;
+        void            *eip;
+        // Signal frame stuff, put in here by kernel.
+        int             signo;
+        siginfo_t       *info;
+        ucontext_t      *ctx;
     };
     register frame      *ebp __asm__ ("ebp");
     register frame      *esp __asm__ ("esp");
     frame               *fp = ebp;
-    int			depth = 0;
+    int                 depth = 0;
 
     // Add fake entry to be compatible with other methods
     if (depth < nmax)
-	addresses[depth++] = __extension__ &&HERE;
+        addresses[depth++] = __extension__ &&HERE;
 
     // Top-most frame ends with null pointer; check the rest is reasonable
     while (depth < nmax && fp >= esp && fp->eip)
     {
-	// Add this stack frame.  The return address is the
-	// instruction immediately after the "call".  The call
-	// instruction itself is 4 or 6 bytes; we guess 4.
+        // Add this stack frame.  The return address is the
+        // instruction immediately after the "call".  The call
+        // instruction itself is 4 or 6 bytes; we guess 4.
         addresses[depth++] = (char *) fp->eip - 4;
 
-	// Recognise signal frames.  We use two different methods
+        // Recognise signal frames.  We use two different methods
         // depending on the linux kernel version.
-	//
+        //
         // For the "old" kernels / systems we check the instructions
         // at the caller's return address.  We take it to be a signal
         // frame if we find the signal return code sequence there
-	// and the thread register context structure pointer:
-	//
+        // and the thread register context structure pointer:
+        //
         //    mov $__NR_rt_sigreturn, %eax
-	//    int 0x80
-	//
-	// For the "new" kernels / systems the operating system maps
+        //    int 0x80
+        //
+        // For the "new" kernels / systems the operating system maps
         // a "vsyscall" page at a high address, and it may contain
-	// either the above code, or use of the sysenter/sysexit
+        // either the above code, or use of the sysenter/sysexit
         // instructions.  We cannot poke at that page so we take the
         // the high address as an indication this is a signal frame.
-	// (http://www.trilithium.com/johan/2005/08/linux-gate/)
-	// (http://manugarg.googlepages.com/systemcallinlinux2_6.html)
-	//
-	// If we don't recognise the signal frame correctly here, we
-	// lose one stack frame: signal delivery is not a call so
-	// when the signal handler is entered, ebp still points to
-	// what it was just before the signal.
-	unsigned char *insn = (unsigned char *) fp->eip;
+        // (http://www.trilithium.com/johan/2005/08/linux-gate/)
+        // (http://manugarg.googlepages.com/systemcallinlinux2_6.html)
+        //
+        // If we don't recognise the signal frame correctly here, we
+        // lose one stack frame: signal delivery is not a call so
+        // when the signal handler is entered, ebp still points to
+        // what it was just before the signal.
+        unsigned char *insn = (unsigned char *) fp->eip;
         if (insn
-	    && insn[0] == 0xb8 && insn[1] == __NR_rt_sigreturn
+            && insn[0] == 0xb8 && insn[1] == __NR_rt_sigreturn
             && insn[5] == 0xcd && insn[6] == 0x80
             && fp->ctx)
         {
-	    void *retip = (void *) fp->ctx->uc_mcontext.gregs [REG_EIP];
+            void *retip = (void *) fp->ctx->uc_mcontext.gregs [REG_EIP];
             if (depth < nmax)
-		addresses[depth++] = retip;
+                addresses[depth++] = retip;
 
-	    if ((fp = (frame *)fp->ctx->uc_mcontext.gregs[REG_EBP])
-		&& (unsigned long) fp < PROBABLY_VSYSCALL_PAGE
-		&& (unsigned long) retip > PROBABLY_VSYSCALL_PAGE)
-	    {
-		// __kernel_vsyscall stack on system call exit is
-		// [0] %ebp, [1] %edx, [2] %ecx, [3] return address.
-		if (depth < nmax)
-		    addresses[depth++] = ((void **) fp)[3];
-		fp = fp->ebp;
+            if ((fp = (frame *)fp->ctx->uc_mcontext.gregs[REG_EBP])
+                && (unsigned long) fp < PROBABLY_VSYSCALL_PAGE
+                && (unsigned long) retip > PROBABLY_VSYSCALL_PAGE)
+            {
+                // __kernel_vsyscall stack on system call exit is
+                // [0] %ebp, [1] %edx, [2] %ecx, [3] return address.
+                if (depth < nmax)
+                    addresses[depth++] = ((void **) fp)[3];
+                fp = fp->ebp;
 
-		// It seems the frame _above_ __kernel_syscall (the
-		// syscall implementation in libc, such as __mmap())
-		// is essentially frame-pointer-less, so we should
-		// find also the call above, but I don't know how
-		// to determine how many arguments the system call
-		// pushed on stack to call __kernel_syscall short
-		// of interpreting the DWARF unwind information :-(
-		// So we may lose one level of call stack here.
-	    }
+                // It seems the frame _above_ __kernel_syscall (the
+                // syscall implementation in libc, such as __mmap())
+                // is essentially frame-pointer-less, so we should
+                // find also the call above, but I don't know how
+                // to determine how many arguments the system call
+                // pushed on stack to call __kernel_syscall short
+                // of interpreting the DWARF unwind information :-(
+                // So we may lose one level of call stack here.
+            }
 
-	    if ((unsigned long) fp >= PROBABLY_VSYSCALL_PAGE)
-	      fp = 0;
+            if ((unsigned long) fp >= PROBABLY_VSYSCALL_PAGE)
+              fp = 0;
         }
 
-	// Otherwise it's a normal frame, process through frame pointer.
-	// Allow at most 256kB displacement per frame.
+        // Otherwise it's a normal frame, process through frame pointer.
+        // Allow at most 256kB displacement per frame.
         else if (abs((char *) fp - (char *) fp->ebp) < 256*1024)
             fp = fp->ebp;
-	else
-	    break;
+        else
+            break;
     }
 
     return depth;
@@ -198,8 +198,8 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
     unw_context_t    ctx;
     unw_context_t    saved;
     unw_tdep_frame_t *fcache = (unw_tdep_frame_t *) cache;
-    int		     depth = nmax;
-    int		     ret;
+    int              depth = nmax;
+    int              ret;
 
     // If we have a cache, first try fast trace. Fall back on slow trace.
     unw_getcontext(&ctx);
@@ -208,7 +208,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
     unw_init_local(&cur, &ctx);
     if (! cache || (ret = unw_tdep_trace(&cur, addresses, &depth, fcache)) < 0)
     {
-	depth = 0;
+        depth = 0;
         unw_init_local(&cur, &saved);
         while (depth < nmax)
         {
@@ -216,7 +216,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
             unw_get_reg(&cur, UNW_REG_IP, &ip);
             addresses[depth++] = (void *) ip;
             if ((ret = unw_step(&cur)) <= 0)
-	      break;
+              break;
         }
     }
 
@@ -229,13 +229,13 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
       {
         const char *sym = 0, *lib = 0;
         long off = 0, liboff = 0;
-	symbol(addresses[i], sym, lib, off, liboff);
+        symbol(addresses[i], sym, lib, off, liboff);
         write(2, buf, sprintf(buf, " #%-3d 0x%016lx %s %s %lx [%s %s %lx]\n",
-			      i, (unsigned long) addresses[i],
-			      sym ? sym : "(unknown)",
-			      off < 0 ? "-" : "+", labs(off),
-			      lib ? lib : "(unknown)",
-			      liboff < 0 ? "-" : "+", labs(liboff)));
+                              i, (unsigned long) addresses[i],
+                              sym ? sym : "(unknown)",
+                              off < 0 ? "-" : "+", labs(off),
+                              lib ? lib : "(unknown)",
+                              liboff < 0 ? "-" : "+", labs(liboff)));
       }
       write(2, buf, sprintf(buf, " UWEND\n"));
     }
@@ -244,42 +244,42 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
     return depth;
 #elif __APPLE__ && __ppc__
     struct frame { frame *sp; void *cr; char *lr; };
-    char		*sigtramplow = (char *) &_sigtramp;
-    char		*sigtramphi  = (char *) sigtramplow + 256;
-    register frame	*sp __asm__ ("sp");
-    register char	*lr __asm__ ("lr");
-    frame		*fp = sp;
-    char		*entry = lr;
-    int			depth = 0;
+    char                *sigtramplow = (char *) &_sigtramp;
+    char                *sigtramphi  = (char *) sigtramplow + 256;
+    register frame      *sp __asm__ ("sp");
+    register char       *lr __asm__ ("lr");
+    frame               *fp = sp;
+    char                *entry = lr;
+    int                 depth = 0;
 
     // Add fake entry to be compatible with other methods
     if (depth < nmax)
-	addresses[depth++] = (void *) &IgHookTrace::stacktrace;
+        addresses[depth++] = (void *) &IgHookTrace::stacktrace;
 
     while (depth < nmax && entry)
     {
-	// LR points to the instruction after call, so step back.
-	addresses[depth++] = entry - 4;
+        // LR points to the instruction after call, so step back.
+        addresses[depth++] = entry - 4;
 
-	// Check next one is a valid frame.
-	frame *next = fp->sp;
-	if (next <= fp || next <= sp)
-	    break;
+        // Check next one is a valid frame.
+        frame *next = fp->sp;
+        if (next <= fp || next <= sp)
+            break;
 
-	// Get and handle previous frame's call address.  Signal
-	// frames are detected by being in sigtramp() and need
-	// special handling.  The offset for pre-signal SP is
-	// somewhat magic.
-	if (entry >= sigtramplow && entry <= sigtramphi)
-	{
-	    fp = *(frame **) ((char *) next + 156);
-	    entry = *(char **) ((char *) next + 144);
-	}
-	else
-	{
-	    fp = next;
-	    entry = fp->lr;
-	}
+        // Get and handle previous frame's call address.  Signal
+        // frames are detected by being in sigtramp() and need
+        // special handling.  The offset for pre-signal SP is
+        // somewhat magic.
+        if (entry >= sigtramplow && entry <= sigtramphi)
+        {
+            fp = *(frame **) ((char *) next + 156);
+            entry = *(char **) ((char *) next + 144);
+        }
+        else
+        {
+            fp = next;
+            entry = fp->lr;
+        }
     }
 
     return depth;

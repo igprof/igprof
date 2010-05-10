@@ -11,24 +11,24 @@ class IgProfTrace;
 class IgProf
 {
 public:
-  static int		panic(const char *file, int line,
-			      const char *func, const char *expr);
-  static void		debug(const char *format, ...);
-  static const char *	options(void);
+  static int            panic(const char *file, int line,
+                              const char *func, const char *expr);
+  static void           debug(const char *format, ...);
+  static const char *   options(void);
 
-  static bool		initialize(int *moduleid,
-				   void (*threadinit)(void),
-				   bool perthread);
+  static bool           initialize(int *moduleid,
+                                   void (*threadinit)(void),
+                                   bool perthread);
 
-  static void		initThread(void);
-  static void		exitThread(bool final);
-  static bool		isMultiThreaded(void);
+  static void           initThread(void);
+  static void           exitThread(bool final);
+  static bool           isMultiThreaded(void);
 
-  static bool		enabled(bool globally);
-  static bool		enable(bool globally);
-  static bool		disable(bool globally);
-  static IgProfTrace *	buffer(int moduleid);
-  static void *		tracecache(void);
+  static bool           enabled(bool globally);
+  static bool           enable(bool globally);
+  static bool           disable(bool globally);
+  static IgProfTrace *  buffer(int moduleid);
+  static void *         tracecache(void);
 };
 
 #endif // IG_PROF_IG_PROF_H

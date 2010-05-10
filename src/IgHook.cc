@@ -15,19 +15,19 @@
 #endif
 
 #if __i386__
-# define TRAMPOLINE_JUMP	5	// jump to hook/old code
-# define TRAMPOLINE_SAVED	10	// 5+margin for saved prologue
+# define TRAMPOLINE_JUMP        5       // jump to hook/old code
+# define TRAMPOLINE_SAVED       10      // 5+margin for saved prologue
 #elif __x86_64__
-# define TRAMPOLINE_JUMP	32	// jump to hook/old code
-# define TRAMPOLINE_SAVED	10	// 5+margin for saved prologue
+# define TRAMPOLINE_JUMP        32      // jump to hook/old code
+# define TRAMPOLINE_SAVED       10      // 5+margin for saved prologue
 #elif __ppc__
-# define TRAMPOLINE_JUMP	16	// jump to hook/old code
-# define TRAMPOLINE_SAVED	4	// one prologue instruction to save
+# define TRAMPOLINE_JUMP        16      // jump to hook/old code
+# define TRAMPOLINE_SAVED       4       // one prologue instruction to save
 #else
 # error sorry this platform is not supported
 #endif
 
-#define TRAMPOLINE_SIZE	(TRAMPOLINE_JUMP+TRAMPOLINE_SAVED+TRAMPOLINE_JUMP)
+#define TRAMPOLINE_SIZE (TRAMPOLINE_JUMP+TRAMPOLINE_SAVED+TRAMPOLINE_JUMP)
 
 #if !defined MAP_ANONYMOUS && defined MAP_ANON
 # define MAP_ANONYMOUS MAP_ANON
@@ -47,16 +47,16 @@ debug (const char *format, ...)
     static const char *debugging = getenv ("IGHOOK_DEBUGGING");
     if (debugging)
     {
-	timeval tv;
+        timeval tv;
         gettimeofday (&tv, 0);
         fprintf (stderr, "*** IgHook(%lu, %.3f): ",
                  (unsigned long) getpid(),
                  tv.tv_sec + 1e-6*tv.tv_usec);
 
-	va_list args;
-	va_start (args, format);
-	vfprintf (stderr, format, args);
-	va_end (args);
+        va_list args;
+        va_start (args, format);
+        vfprintf (stderr, format, args);
+        va_end (args);
     }
 }
 
@@ -103,60 +103,60 @@ allocate (void *&ptr, void *target UNUSED)
     FILE *maps = fopen("/proc/self/maps", "r");
     if (maps)
     {
-	while (! feof(maps))
-	{
-	  char range [128];
-	  range[0] = 0;
+        while (! feof(maps))
+        {
+          char range [128];
+          range[0] = 0;
 
-	  for (size_t i = 0; i < sizeof(range)-1; ++i)
-	  {
-	    int c = fgetc(maps);
-	    if (c == EOF || c == ' ' || c == '\n')
-	      break;
+          for (size_t i = 0; i < sizeof(range)-1; ++i)
+          {
+            int c = fgetc(maps);
+            if (c == EOF || c == ' ' || c == '\n')
+              break;
 
-	    range[i] = c;
-	    range[i+1] = 0;
-	  }
+            range[i] = c;
+            range[i+1] = 0;
+          }
 
-	  unsigned long low, high;
-	  if (sscanf(range, "%lx-%lx", &low, &high) != 2)
-	    continue;
+          unsigned long low, high;
+          if (sscanf(range, "%lx-%lx", &low, &high) != 2)
+            continue;
 
-	  if ((low & 0xffffffff00000000) == baseaddr
-	      && freepage >= low
-	      && freepage < high)
-	    freepage = high;
-	}
+          if ((low & 0xffffffff00000000) == baseaddr
+              && freepage >= low
+              && freepage < high)
+            freepage = high;
+        }
 
-	fclose(maps);
+        fclose(maps);
     }
 
     if ((freepage & 0xffffffff00000000) != baseaddr)
     {
-	ptr = 0;
-	return IgHook::ErrAllocateTrampoline;
+        ptr = 0;
+        return IgHook::ErrAllocateTrampoline;
     }
 
     void *addr = mmap ((void *) freepage, pagesize,
-		       PROT_READ | PROT_WRITE | PROT_EXEC,
-		       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+                       PROT_READ | PROT_WRITE | PROT_EXEC,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 #else
     // Just ask for a page.  Let system position it, so we don't unmap
     // or remap over address space accidentally.
     void *addr = mmap (0, pagesize, PROT_READ | PROT_WRITE | PROT_EXEC,
-		       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
     if (addr != MAP_FAILED)
     {
-	unsigned int *page = (unsigned int *) addr;
-	*page = pagesize;
-	ptr = ++page;
-	return IgHook::Success;
+        unsigned int *page = (unsigned int *) addr;
+        *page = pagesize;
+        ptr = ++page;
+        return IgHook::Success;
     }
     else
     {
-	ptr = 0;
-	return IgHook::ErrAllocateTrampoline;
+        ptr = 0;
+        return IgHook::ErrAllocateTrampoline;
     }
 }
 
@@ -194,22 +194,22 @@ protect (void *address, bool writable)
     kern_return_t retcode = vm_protect (self, vmaddr, pagesize, false, protection);;
     if (writable && retcode != KERN_SUCCESS)
     {
-	protection = VM_PROT_READ | VM_PROT_COPY;
-	retcode = vm_protect (self, vmaddr, pagesize, FALSE, protection);
+        protection = VM_PROT_READ | VM_PROT_COPY;
+        retcode = vm_protect (self, vmaddr, pagesize, FALSE, protection);
     }
     if (retcode != KERN_SUCCESS)
     {
-	debug ("vm_protect(%p, %d, %d): %d\n",
-	       address, pagesize, protection, retcode);
-	return IgHook::ErrMemoryProtection;
+        debug ("vm_protect(%p, %d, %d): %d\n",
+               address, pagesize, protection, retcode);
+        return IgHook::ErrMemoryProtection;
     }
 #else
     int protection = PROT_READ | PROT_EXEC | (writable ? PROT_WRITE : 0);
     if (mprotect (address, pagesize, protection))
     {
-	debug ("mprotect(%p, %d, %d): %d\n",
-	       address, pagesize, protection, errno);
-	return IgHook::ErrMemoryProtection;
+        debug ("mprotect(%p, %d, %d): %d\n",
+               address, pagesize, protection, errno);
+        return IgHook::ErrMemoryProtection;
     }
 #endif
 
@@ -244,31 +244,31 @@ lookup (const char *fn, const char *v, const char *lib, void *&sym)
 
     if (lib)
     {
-	void *handle = dlopen (lib, RTLD_LAZY | RTLD_GLOBAL);
-	if (! handle)
-	{
-	    debug ("dlopen('%s'): %s\n", lib, dlerror ());
-	    return IgHook::ErrLibraryNotFound;
-	}
+        void *handle = dlopen (lib, RTLD_LAZY | RTLD_GLOBAL);
+        if (! handle)
+        {
+            debug ("dlopen('%s'): %s\n", lib, dlerror ());
+            return IgHook::ErrLibraryNotFound;
+        }
 
-	sym = v ? dlvsym (handle, fn, v) : dlsym (handle, fn);
-	if (! sym)
-	{
-	    debug ("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
-	    return IgHook::ErrSymbolNotFoundInLibrary;
-	}
+        sym = v ? dlvsym (handle, fn, v) : dlsym (handle, fn);
+        if (! sym)
+        {
+            debug ("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
+            return IgHook::ErrSymbolNotFoundInLibrary;
+        }
     }
     else
     {
-	void *program = dlopen (0, RTLD_LAZY | RTLD_GLOBAL);
-	sym = v ? dlvsym (program, fn, v) : dlsym (program, fn);
-	dlclose (program);
-	if (! sym) sym = v ? dlvsym (program, fn, v) : dlsym (RTLD_NEXT, fn);
-	if (! sym)
-	{
-	    debug ("dlsym(self, '%s'): %s\n", fn, dlerror ());
-	    return IgHook::ErrSymbolNotFoundInSelf;
-	}
+        void *program = dlopen (0, RTLD_LAZY | RTLD_GLOBAL);
+        sym = v ? dlvsym (program, fn, v) : dlsym (program, fn);
+        dlclose (program);
+        if (! sym) sym = v ? dlvsym (program, fn, v) : dlsym (RTLD_NEXT, fn);
+        if (! sym)
+        {
+            debug ("dlsym(self, '%s'): %s\n", fn, dlerror ());
+            return IgHook::ErrSymbolNotFoundInSelf;
+        }
     }
 
     return IgHook::Success;
@@ -287,131 +287,131 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned char *insns = (unsigned char *) address;
     if (insns [0] == 0xe9)
     {
-	debug ("%s (%p): hook trampoline already installed, ignoring\n",
-	       func, address);
-	return -1;
+        debug ("%s (%p): hook trampoline already installed, ignoring\n",
+               func, address);
+        return -1;
     }
 
     while (n < 5)
     {
-	if (insns [0] >= 0x50 && insns [0] <= 0x57) /* push %e*x */
-	    ++n, ++insns;
+        if (insns [0] >= 0x50 && insns [0] <= 0x57) /* push %e*x */
+            ++n, ++insns;
 
-	else if (insns [0] == 0x89 && insns [1] == 0xe5) /* mov %esp, %ebp */
-	    n += 2, insns += 2;
+        else if (insns [0] == 0x89 && insns [1] == 0xe5) /* mov %esp, %ebp */
+            n += 2, insns += 2;
 
-	else if (insns [0] == 0x89 && insns [1] == 0xda) /* mov %ebx, %edx */
-	    n += 2, insns += 2;
+        else if (insns [0] == 0x89 && insns [1] == 0xda) /* mov %ebx, %edx */
+            n += 2, insns += 2;
 
-	else if (insns [0] == 0x83 && insns [1] == 0xec) /* sub $0x*, %esp */
-	    n += 3, insns += 3;
+        else if (insns [0] == 0x83 && insns [1] == 0xec) /* sub $0x*, %esp */
+            n += 3, insns += 3;
 
-	else if (insns [0] == 0x81 && insns [1] == 0xec) /* sub $0x*, %esp (32-bit) */
-	    n += 6, insns += 6;
+        else if (insns [0] == 0x81 && insns [1] == 0xec) /* sub $0x*, %esp (32-bit) */
+            n += 6, insns += 6;
 
-	else if (insns [0] == 0x8b && insns [2] == 0x24) /* mov 0x4(%esp,1),%e*x */
-	    n += 4, insns += 4;
+        else if (insns [0] == 0x8b && insns [2] == 0x24) /* mov 0x4(%esp,1),%e*x */
+            n += 4, insns += 4;
 
-	else if (insns [0] == 0x8d && insns [1] == 0x55) /* lea $0x*(%ebp),%edx */
-	    n += 3, insns += 3;
+        else if (insns [0] == 0x8d && insns [1] == 0x55) /* lea $0x*(%ebp),%edx */
+            n += 3, insns += 3;
 
-	else if (insns [0] >= 0xb8 && insns [0] <= 0xbf) /* mov $0xNN,%e*x */
-	    n += 5, insns += 5;
+        else if (insns [0] >= 0xb8 && insns [0] <= 0xbf) /* mov $0xNN,%e*x */
+            n += 5, insns += 5;
 
-	else if (insns [0] == 0xff && insns [1] == 0x25) /* jmp *addr */
-	    n += 6, insns += 6;
+        else if (insns [0] == 0xff && insns [1] == 0x25) /* jmp *addr */
+            n += 6, insns += 6;
 
-	else if (insns [0] == 0x65 && insns [1] == 0x83 && insns [2] == 0x3d)
-	    n += 8, insns += 8;				 /* cmpl $0x*,%gs:0x* */
+        else if (insns [0] == 0x65 && insns [1] == 0x83 && insns [2] == 0x3d)
+            n += 8, insns += 8;                          /* cmpl $0x*,%gs:0x* */
 
-	else
-	{
-	    debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
-		   func, address, insns - (unsigned char *) address, *insns);
-	    return -1;
-	}
+        else
+        {
+            debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
+                   func, address, insns - (unsigned char *) address, *insns);
+            return -1;
+        }
     }
 #elif __x86_64__
     unsigned char *insns = (unsigned char *) address;
     if (insns [0] == 0xe9)
     {
-	debug ("%s (%p): hook trampoline already installed, ignoring\n",
-	       func, address);
-	return -1;
+        debug ("%s (%p): hook trampoline already installed, ignoring\n",
+               func, address);
+        return -1;
     }
 
     while (n < 5)
     {
-        if (insns[0] == 0xf && insns[1] == 0x5)		/* syscall */
-	    n += 2, insns += 2;
+        if (insns[0] == 0xf && insns[1] == 0x5)         /* syscall */
+            n += 2, insns += 2;
 
-	else if (insns[0] == 0x41 && (insns[1] >= 0x54 && insns[1] <= 0x57))
-	    n += 2, insns += 2;				/* push %r* */
+        else if (insns[0] == 0x41 && (insns[1] >= 0x54 && insns[1] <= 0x57))
+            n += 2, insns += 2;                         /* push %r* */
 
         else if (insns[0] == 0x41 && insns[1] == 0x89 && insns[2] == 0xfc)
-	    n += 3, insns += 3;				/* mov %edi,%r12d */
+            n += 3, insns += 3;                         /* mov %edi,%r12d */
 
-        else if (insns[0] == 0x41 && insns[1] == 0xb9)	/* mov $0x*,%r9d */
-	    n += 6, insns += 6;
+        else if (insns[0] == 0x41 && insns[1] == 0xb9)  /* mov $0x*,%r9d */
+            n += 6, insns += 6;
 
         else if (insns[0] == 0x48 && insns[1] == 0x85 && insns[2] == 0xf6)
-	    n += 3, insns += 3;				/* test  %rsi,%rsi */
+            n += 3, insns += 3;                         /* test  %rsi,%rsi */
 
-	else if (insns[0] == 0x48 && insns[1] == 0x63 && insns[2] == 0xf7)
-	    n += 3, insns += 3;				/* movslq %edi,%rsi */
+        else if (insns[0] == 0x48 && insns[1] == 0x63 && insns[2] == 0xf7)
+            n += 3, insns += 3;                         /* movslq %edi,%rsi */
 
-	else if ((insns[0] == 0x48 || insns[0] == 0x4c)	/* mov %r*,$0x*(%rsp) */
-		 && insns[1] == 0x89 && insns[3] == 0x24)
-	    n += 5, insns += 5;
+        else if ((insns[0] == 0x48 || insns[0] == 0x4c) /* mov %r*,$0x*(%rsp) */
+                 && insns[1] == 0x89 && insns[3] == 0x24)
+            n += 5, insns += 5;
 
-        else if (insns[0] == 0x48 && insns[1] == 0x8b	/* mov $0x*(%rip),%r* */
-		 && (insns[2] == 0x3d || insns[2] == 0x05))
-	    *patches++ = n+3, n += 7, insns += 7;
+        else if (insns[0] == 0x48 && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
+                 && (insns[2] == 0x3d || insns[2] == 0x05))
+            *patches++ = n+3, n += 7, insns += 7;
 
-	else if (insns[0] == 0x48 && insns[1] == 0xc7 && insns[2] == 0xc0)
-	    n += 7, insns += 7;				/* mov $0x*,%rax */
+        else if (insns[0] == 0x48 && insns[1] == 0xc7 && insns[2] == 0xc0)
+            n += 7, insns += 7;                         /* mov $0x*,%rax */
 
-	else if (insns[0] == 0x48 && insns[1] == 0x81 && insns[2] == 0xec)
-	    n += 7, insns += 7;				/* sub $0x*,%rsp */
+        else if (insns[0] == 0x48 && insns[1] == 0x81 && insns[2] == 0xec)
+            n += 7, insns += 7;                         /* sub $0x*,%rsp */
 
-	else if (insns[0] == 0x48 && insns[1] == 0x83 && insns[2] == 0xec)
-	    n += 4, insns += 4;				/* sub $0x*,%rsp */
+        else if (insns[0] == 0x48 && insns[1] == 0x83 && insns[2] == 0xec)
+            n += 4, insns += 4;                         /* sub $0x*,%rsp */
 
         else if (insns[0] == 0x48 && insns[1] == 0x8d && insns[2] == 0x05)
-	    *patches++ = n+3, n += 7, insns += 7;	/* lea $0x*(%rip),%rax */
+            *patches++ = n+3, n += 7, insns += 7;       /* lea $0x*(%rip),%rax */
 
         else if (insns[0] == 0x49 && insns[1] == 0x89)
-	    n += 3, insns += 3;				/* mov %r*,%r* */
+            n += 3, insns += 3;                         /* mov %r*,%r* */
 
-        else if (insns[0] == 0x4c && insns[1] == 0x8b	/* mov $0x*(%rip),%r* */
-		 && insns[2] == 0x0d)
-	    *patches++ = n+3, n += 7, insns += 7;
+        else if (insns[0] == 0x4c && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
+                 && insns[2] == 0x0d)
+            *patches++ = n+3, n += 7, insns += 7;
 
         else if (insns[0] == 0x4c && insns[1] == 0x8d && insns[2] == 0x3d)
-	    *patches++ = n+3, n += 7, insns += 7;	/* lea $0x*(%rip),%r15 */
+            *patches++ = n+3, n += 7, insns += 7;       /* lea $0x*(%rip),%r15 */
 
-	else if (insns[0] == 0x55 || insns[0] == 0x53)
-	    n += 1, insns += 1;				/* push %rbp / %rbx */
+        else if (insns[0] == 0x55 || insns[0] == 0x53)
+            n += 1, insns += 1;                         /* push %rbp / %rbx */
 
-	else if (insns[0] == 0x83 && insns[1] == 0xf8)	/* cmp $0x*,%eax */
-	    n += 3, insns += 3;
+        else if (insns[0] == 0x83 && insns[1] == 0xf8)  /* cmp $0x*,%eax */
+            n += 3, insns += 3;
 
         else if (insns[0] == 0x89 && insns[1] == 0xfd)
-	    n += 2, insns += 2;				/* mov %edi,%ebp */
+            n += 2, insns += 2;                         /* mov %edi,%ebp */
 
-	else if (insns[0] == 0x8d && insns[1] == 0x47)
-	    n += 3, insns += 3;				/* lea $0x*(%rdi),%eax */
+        else if (insns[0] == 0x8d && insns[1] == 0x47)
+            n += 3, insns += 3;                         /* lea $0x*(%rdi),%eax */
 
-	else if (insns[0] == 0xb8)			/* mov $0x*,%eax */
-	    n += 5, insns += 5;
+        else if (insns[0] == 0xb8)                      /* mov $0x*,%eax */
+            n += 5, insns += 5;
 
-	else
-	{
-	    debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
-		   func, address, insns - (unsigned char *) address,
-		   insns[0], insns[1], insns[2], insns[3]);
-	    return -1;
-	}
+        else
+        {
+            debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
+                   func, address, insns - (unsigned char *) address,
+                   insns[0], insns[1], insns[2], insns[3]);
+            return -1;
+        }
     }
 #elif __ppc__
     // FIXME: check for various branch-relative etc. instructions
@@ -420,8 +420,8 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned int instr = *insns;
     if ((instr & 0xfc1fffff) == 0x7c0903a6) // check it's not mfctr
     {
-	debug ("%s (%p): mfctr can't be instrumented\n", func, address);
-	return -1;
+        debug ("%s (%p): mfctr can't be instrumented\n", func, address);
+        return -1;
     }
 
     n = 4;
@@ -580,8 +580,8 @@ postreentry (void *&from, void *to)
     uninstrumented original function.  */
 static void
 prepare (void *address,
-	 void *replacement, void **chain,
-	 void *old, int prologue, unsigned *patches UNUSED)
+         void *replacement, void **chain,
+         void *old, int prologue, unsigned *patches UNUSED)
 {
     // First part: unconditional jump to replacement
     prereentry (address, replacement);
@@ -602,7 +602,7 @@ prepare (void *address,
     // Patch up PC-relative addresses
     for ( ; patches && *patches; ++patches)
       *((unsigned *)((unsigned char *)start + *patches))
-	+= (unsigned char *)old - (unsigned char *)start - 7;
+        += (unsigned char *)old - (unsigned char *)start - 7;
 #endif
 }
 
@@ -620,27 +620,27 @@ patch (void *address, void *trampoline, int prologue)
     for ( ; i < prologue; ++i)
     {
 #if __i386__ || __x86_64__
-	insns [i] = 0x90; // nop
+        insns [i] = 0x90; // nop
 #else
-	// can't happen!
-	abort ();
+        // can't happen!
+        abort ();
 #endif
     }
 }
 
 IgHook::Status
 IgHook::hook (const char *function,
-	      const char *version,
-	      const char *library,
-	      void *replacement,
-	      int options /* = 0 */,
-	      void **chain /* = 0 */,
-	      void **original /* = 0 */,
-	      void **trampoline)
+              const char *version,
+              const char *library,
+              void *replacement,
+              int options /* = 0 */,
+              void **chain /* = 0 */,
+              void **original /* = 0 */,
+              void **trampoline)
 {
     // For future compatibility -- call vs. jump, counting etc.
     if (options != 0)
-	return ErrBadOptions;
+        return ErrBadOptions;
 
     // Zero out variables
     if (chain) *chain = 0;
@@ -651,7 +651,7 @@ IgHook::hook (const char *function,
     Status s;
     void *sym = 0;
     if ((s = lookup (function, version, library, sym)) != Success)
-	return s;
+        return s;
 
     if (original) *original = sym;
 
@@ -659,32 +659,32 @@ IgHook::hook (const char *function,
     unsigned patches [TRAMPOLINE_SIZE];
     int prologue = parse (function, sym, patches);
     if (prologue < 0)
-	return ErrPrologueNotRecognised;
+        return ErrPrologueNotRecognised;
     else if (prologue > TRAMPOLINE_SAVED)
-	return ErrPrologueTooLarge;
+        return ErrPrologueTooLarge;
 
     // Prepare trampoline
     void *tramp = 0;
     if ((s = allocate (tramp, sym)) != Success)
-	return s;
+        return s;
 
     if (trampoline)
-	*trampoline = tramp;
+        *trampoline = tramp;
 
     if (version)
         debug ("%s/%s (%p): instrumenting %d bytes into %p\n",
-	       function, version, sym, prologue, tramp);
+               function, version, sym, prologue, tramp);
     else
         debug ("%s (%p): instrumenting %d bytes into %p\n",
-	       function, sym, prologue, tramp);
+               function, sym, prologue, tramp);
 
     prepare (tramp, replacement, chain, sym, prologue, patches);
 
     // Attach trampoline
     if ((s = protect (sym, true)) != Success)
     {
-	release (tramp);
-	return s;
+        release (tramp);
+        return s;
     }
 
     patch (sym, tramp, prologue);

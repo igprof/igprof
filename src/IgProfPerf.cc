@@ -14,20 +14,20 @@ typedef sig_t sighandler_t;
 // -------------------------------------------------------------------
 // Traps for this profiler module
 IGPROF_LIBHOOK(3, int, dopthread_sigmask, _main,
-	       (int how, sigset_t *newmask, sigset_t *oldmask),
-	       (how, newmask, oldmask),
-	       "pthread_sigmask", 0, 0)
+               (int how, sigset_t *newmask, sigset_t *oldmask),
+               (how, newmask, oldmask),
+               "pthread_sigmask", 0, 0)
 IGPROF_LIBHOOK(3, int, dosigaction, _main,
-	       (int signum, const struct sigaction *act, struct sigaction *oact),
-	       (signum, act, oact),
-	       "sigaction", 0, 0)
+               (int signum, const struct sigaction *act, struct sigaction *oact),
+               (signum, act, oact),
+               "sigaction", 0, 0)
 
 // Data for this profiler module
-static IgProfTrace::CounterDef	s_ct_ticks	= { "PERF_TICKS", IgProfTrace::TICK, -1 };
-static bool			s_initialized	= false;
-static int			s_signal	= SIGPROF;
-static int			s_itimer	= ITIMER_PROF;
-static int			s_moduleid	= -1;
+static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
+static bool                     s_initialized   = false;
+static int                      s_signal        = SIGPROF;
+static int                      s_itimer        = ITIMER_PROF;
+static int                      s_moduleid      = -1;
 
 /** Performance profiler signal handler, SIGPROF or SIGALRM depending
     on the current profiler mode.  Record a tick for the current
@@ -100,8 +100,8 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
-  const char	*options = IgProf::options();
-  bool		enable = false;
+  const char    *options = IgProf::options();
+  bool          enable = false;
 
   while (options && *options)
   {
@@ -114,26 +114,26 @@ initialize(void)
       options += 4;
       while (*options)
       {
-	if (! strncmp(options, ":real", 5))
-	{
-	  s_signal = SIGALRM;
-	  s_itimer = ITIMER_REAL;
-	  options += 5;
-	}
-	else if (! strncmp(options, ":user", 5))
-	{
-	  s_signal = SIGVTALRM;
-	  s_itimer = ITIMER_VIRTUAL;
-	  options += 5;
-	}
-	else if (! strncmp(options, ":process", 7))
-	{
-	  s_signal = SIGPROF;
-	  s_itimer = ITIMER_PROF;
-	  options += 7;
-	}
-	else
-	  break;
+        if (! strncmp(options, ":real", 5))
+        {
+          s_signal = SIGALRM;
+          s_itimer = ITIMER_REAL;
+          options += 5;
+        }
+        else if (! strncmp(options, ":user", 5))
+        {
+          s_signal = SIGVTALRM;
+          s_itimer = ITIMER_VIRTUAL;
+          options += 5;
+        }
+        else if (! strncmp(options, ":process", 7))
+        {
+          s_signal = SIGPROF;
+          s_itimer = ITIMER_PROF;
+          options += 7;
+        }
+        else
+          break;
       }
     }
     else
@@ -171,7 +171,7 @@ initialize(void)
 // Trap fiddling with thread signal masks
 static int
 dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
-		  int how, sigset_t *newmask,  sigset_t *oldmask)
+                  int how, sigset_t *newmask,  sigset_t *oldmask)
 {
   struct sigaction cursig;
   struct itimerval curtimer;
@@ -184,12 +184,12 @@ dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
       && (curtimer.it_interval.tv_sec || curtimer.it_interval.tv_usec))
   {
     IgProf::debug("pthread_sigmask(): prevented profiling signal"
-		  " %d from being blocked in thread 0x%lx"
-		  " [handler 0x%lx, interval %.0f us]\n",
-		  s_signal, (unsigned long) pthread_self(),
-		  (unsigned long) cursig.sa_handler,
-		  1e6 * curtimer.it_interval.tv_sec
-		   + curtimer.it_interval.tv_usec);
+                  " %d from being blocked in thread 0x%lx"
+                  " [handler 0x%lx, interval %.0f us]\n",
+                  s_signal, (unsigned long) pthread_self(),
+                  (unsigned long) cursig.sa_handler,
+                  1e6 * curtimer.it_interval.tv_sec
+                   + curtimer.it_interval.tv_usec);
     sigdelset(newmask, s_signal);
   }
 
@@ -199,7 +199,7 @@ dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
 // Trap fiddling with the profiling signal.
 static int
 dosigaction(IgHook::SafeData<igprof_dosigaction_t> &hook,
-	    int signum, const struct sigaction *act, struct sigaction *oact)
+            int signum, const struct sigaction *act, struct sigaction *oact)
 {
   struct sigaction sa;
   if (signum == s_signal
@@ -207,8 +207,8 @@ dosigaction(IgHook::SafeData<igprof_dosigaction_t> &hook,
       && act->sa_handler != (sighandler_t) &profileSignalHandler)
   {
     IgProf::debug("sigaction(): prevented profiling signal"
-		  " %d from being overridden in thread 0x%lx\n",
-		  s_signal, (unsigned long) pthread_self());
+                  " %d from being overridden in thread 0x%lx\n",
+                  s_signal, (unsigned long) pthread_self());
     sigemptyset(&sa.sa_mask);
     sa.sa_handler = (sighandler_t) &profileSignalHandler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;

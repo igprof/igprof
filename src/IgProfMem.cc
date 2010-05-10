@@ -11,42 +11,42 @@
 // -------------------------------------------------------------------
 // Traps for this profiler module
 IGPROF_DUAL_HOOK(1, void *, domalloc, _main, _libc,
-		 (size_t n), (n),
-		 "malloc", 0, "libc.so.6")
+                 (size_t n), (n),
+                 "malloc", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(2, void *, docalloc, _main, _libc,
-		 (size_t n, size_t m), (n, m),
-		 "calloc", 0, "libc.so.6")
+                 (size_t n, size_t m), (n, m),
+                 "calloc", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(2, void *, dorealloc, _main, _libc,
-		 (void *ptr, size_t n), (ptr, n),
-		 "realloc", 0, "libc.so.6")
+                 (void *ptr, size_t n), (ptr, n),
+                 "realloc", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(3, int, dopmemalign, _main, _libc,
-		 (void **ptr, size_t alignment, size_t size),
-		 (ptr, alignment, size),
-		 "posix_memalign", 0, "libc.so.6")
+                 (void **ptr, size_t alignment, size_t size),
+                 (ptr, alignment, size),
+                 "posix_memalign", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(2, void *, domemalign, _main, _libc,
-		 (size_t alignment, size_t size), (alignment, size),
-		 "memalign", 0, "libc.so.6")
+                 (size_t alignment, size_t size), (alignment, size),
+                 "memalign", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(1, void *, dovalloc, _main, _libc,
-		 (size_t size), (size),
-		 "valloc", 0, "libc.so.6")
+                 (size_t size), (size),
+                 "valloc", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(1, void, dofree, _main, _libc,
-		 (void *ptr), (ptr),
-		 "free", 0, "libc.so.6")
+                 (void *ptr), (ptr),
+                 "free", 0, "libc.so.6")
 
 // Data for this profiler module
-static const int		OVERHEAD_NONE   = 0; // Memory use without malloc overheads
-static const int		OVERHEAD_WITH   = 1; // Memory use including malloc overheads
-static const int		OVERHEAD_DELTA  = 2; // Memory use malloc overhead only
+static const int                OVERHEAD_NONE   = 0; // Memory use without malloc overheads
+static const int                OVERHEAD_WITH   = 1; // Memory use including malloc overheads
+static const int                OVERHEAD_DELTA  = 2; // Memory use malloc overhead only
 
-static IgProfTrace::CounterDef	s_ct_total	= { "MEM_TOTAL",    IgProfTrace::TICK, -1 };
-static IgProfTrace::CounterDef	s_ct_largest	= { "MEM_MAX",      IgProfTrace::MAX, -1 };
-static IgProfTrace::CounterDef	s_ct_live	= { "MEM_LIVE",     IgProfTrace::TICK_PEAK, -1 };
-static bool			s_count_total	= 0;
-static bool			s_count_largest	= 0;
-static bool			s_count_live	= 0;
-static int			s_overhead      = OVERHEAD_NONE;
-static bool			s_initialized	= false;
-static int			s_moduleid	= -1;
+static IgProfTrace::CounterDef  s_ct_total      = { "MEM_TOTAL",    IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_largest    = { "MEM_MAX",      IgProfTrace::MAX, -1 };
+static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK_PEAK, -1 };
+static bool                     s_count_total   = 0;
+static bool                     s_count_largest = 0;
+static bool                     s_count_live    = 0;
+static int                      s_overhead      = OVERHEAD_NONE;
+static bool                     s_initialized   = false;
+static int                      s_moduleid      = -1;
 
 /** Record an allocation at @a ptr of @a size bytes.  Increments counters
     in the tree for the allocations as per current configuration and adds
@@ -65,16 +65,16 @@ add(void *ptr, size_t size)
     if (s_overhead == OVERHEAD_DELTA)
     {
       if ((size = actual - size) == 0)
-	return;
+        return;
     }
     else
       size = actual;
   }
 
-  void			*addresses [IgProfTrace::MAX_DEPTH];
-  int			depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
-  IgProfTrace::Record	entries [3];
-  int			nentries = 0;
+  void                  *addresses [IgProfTrace::MAX_DEPTH];
+  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+  IgProfTrace::Record   entries [3];
+  int                   nentries = 0;
 
   if (s_count_total)
   {
@@ -135,9 +135,9 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
-  const char	*options = IgProf::options();
-  bool		enable = false;
-  bool		opts = false;
+  const char    *options = IgProf::options();
+  bool          enable = false;
+  bool          opts = false;
 
   while (options && *options)
   {
@@ -150,49 +150,49 @@ initialize(void)
       options += 3;
       while (*options)
       {
-	if (! strncmp(options, ":total", 6))
-	{
-	  s_count_total = 1;
-	  options += 6;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":largest", 8))
-	{
-	  s_count_largest = 1;
-	  options += 8;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":live", 5))
-	{
-	  s_count_live = 1;
-	  options += 5;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":all", 4))
-	{
-	  s_count_total = 1;
-	  s_count_largest = 1;
-	  s_count_live = 1;
-	  options += 4;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":overhead=none", 14))
-	{
-	  s_overhead = OVERHEAD_NONE;
-	  options += 14;
-	}
-	else if (! strncmp(options, ":overhead=include", 17))
-	{
-	  s_overhead = OVERHEAD_WITH;
-	  options += 17;
-	}
-	else if (! strncmp(options, ":overhead=delta", 15))
-	{
-	  s_overhead = OVERHEAD_DELTA;
-	  options += 15;
-	}
-	else
-	  break;
+        if (! strncmp(options, ":total", 6))
+        {
+          s_count_total = 1;
+          options += 6;
+          opts = true;
+        }
+        else if (! strncmp(options, ":largest", 8))
+        {
+          s_count_largest = 1;
+          options += 8;
+          opts = true;
+        }
+        else if (! strncmp(options, ":live", 5))
+        {
+          s_count_live = 1;
+          options += 5;
+          opts = true;
+        }
+        else if (! strncmp(options, ":all", 4))
+        {
+          s_count_total = 1;
+          s_count_largest = 1;
+          s_count_live = 1;
+          options += 4;
+          opts = true;
+        }
+        else if (! strncmp(options, ":overhead=none", 14))
+        {
+          s_overhead = OVERHEAD_NONE;
+          options += 14;
+        }
+        else if (! strncmp(options, ":overhead=include", 17))
+        {
+          s_overhead = OVERHEAD_WITH;
+          options += 17;
+        }
+        else if (! strncmp(options, ":overhead=delta", 15))
+        {
+          s_overhead = OVERHEAD_DELTA;
+          options += 15;
+        }
+        else
+          break;
       }
     }
     else
@@ -224,9 +224,9 @@ initialize(void)
       IgProf::debug("Memory: enabling live counting\n");
   }
   IgProf::debug("Memory: reporting %sallocation overhead%s\n",
-		(s_overhead == OVERHEAD_NONE ? "memory use without "
-		 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
-	        (s_overhead == OVERHEAD_DELTA ? " only" : ""));
+                (s_overhead == OVERHEAD_NONE ? "memory use without "
+                 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
+                (s_overhead == OVERHEAD_DELTA ? " only" : ""));
 
   IgHook::hook(domalloc_hook_main.raw);
   IgHook::hook(docalloc_hook_main.raw);
@@ -318,7 +318,7 @@ dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 
 static int
 dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
-	    void **ptr, size_t alignment, size_t size)
+            void **ptr, size_t alignment, size_t size)
 {
   bool enabled = IgProf::disable(false);
   int result = (*hook.chain)(ptr, alignment, size);

@@ -92,8 +92,8 @@ IgProfSymCache::roundAddressToSymbol(void *address)
     {
       if (binobj->name == binary)
       {
-	s->binary = *blink;
-	break;
+        s->binary = *blink;
+        break;
       }
       blink = &binobj->next;
     }

@@ -7,7 +7,7 @@
 static IgProfTrace::Counter FREED;
 static const unsigned int RESOURCE_HASH = 1024*1024;
 static const unsigned int MEM_POOL_SIZE = 8*1024*1024;
-static const int	  MERGE_RECS    = 128;
+static const int          MERGE_RECS    = 128;
 
 /** Initialise a trace buffer.  */
 IgProfTrace::IgProfTrace(void)
@@ -88,9 +88,9 @@ IgProfTrace::initCounter(Counter *&link, CounterDef *def, Stack *frame)
 
 inline bool
 IgProfTrace::findResource(Record &rec,
-			  Resource **&rlink,
-			  Resource *&res,
-			  CounterDef *def)
+                          Resource **&rlink,
+                          Resource *&res,
+                          CounterDef *def)
 {
   // Locate the resource in the hash table.
   rlink = &restable_[hash(rec.resource) & (RESOURCE_HASH-1)];
@@ -179,7 +179,7 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
   if (findResource(rec, rlink, res, ctr->def))
   {
     IgProf::debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
-		  ctr->def->name, rec.resource, res->size, (void *)this);
+                  ctr->def->name, rec.resource, res->size, (void *)this);
 #if IGPROF_DEBUG
     int depth = 0;
     for (Stack *s = ctr->frame; s; s = s->parent)
@@ -191,7 +191,7 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
 
       IgHookTrace::symbol(s->address, sym, lib, offset, liboffset);
       IgProf::debug ("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,
-		     sym ? sym : "?", offset, lib ? lib : "?", liboffset);
+                     sym ? sym : "?", offset, lib ? lib : "?", liboffset);
     }
 #endif
 
@@ -246,8 +246,8 @@ IgProfTrace::dopush(void **stack, int depth, Record *recs, int nrecs)
     depth = 0;
 
   // Look up call stack in the cache.
-  StackCache	*cache = callcache_;
-  Stack		*frame = stack_;
+  StackCache    *cache = callcache_;
+  Stack         *frame = stack_;
 
   for (int i = 0, valid = 1; i < depth && i < MAX_DEPTH; ++i)
   {
@@ -277,21 +277,21 @@ IgProfTrace::dopush(void **stack, int depth, Record *recs, int nrecs)
       // Locate the counter.
       ctr = &frame->counters;
       while (*ctr && (*ctr)->def != recs[i].def)
-	ctr = &(*ctr)->next;
+        ctr = &(*ctr)->next;
 
       // If not found, add it.
       c = *ctr;
       if (! c || c->def != recs[i].def)
-	c = initCounter(*ctr, recs[i].def, frame);
+        c = initCounter(*ctr, recs[i].def, frame);
 
       // Tick the counter.
       if (recs[i].def->type == TICK || recs[i].def->type == TICK_PEAK)
-	c->value += recs[i].amount;
+        c->value += recs[i].amount;
       else if (recs[i].def->type == MAX && c->value < recs[i].amount)
-	c->value = recs[i].amount;
+        c->value = recs[i].amount;
 
       if (recs[i].def->type == TICK_PEAK && c->value > c->peak)
-	c->peak = c->value;
+        c->peak = c->value;
 
       c->ticks += recs[i].ticks;
     }
@@ -314,7 +314,7 @@ IgProfTrace::mergeFrom(IgProfTrace &other)
 
   // Scan stack tree and insert each call stack, including resources.
   Record recs[MERGE_RECS];
-  void	 *callstack[MAX_DEPTH+1];
+  void   *callstack[MAX_DEPTH+1];
 
   callstack[MAX_DEPTH] = stack_->address; // null really
   mergeFrom(0, other.stack_, &callstack[MAX_DEPTH], recs);
@@ -334,8 +334,8 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
     {
       if (rec == MERGE_RECS)
       {
-	dopush(callstack, depth, recs, rec);
-	rec = 0;
+        dopush(callstack, depth, recs, rec);
+        rec = 0;
       }
 
       recs[rec].type = COUNT;
@@ -348,18 +348,18 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
     {
       for (Resource *r = c->resources; r; r = r->nextlive)
       {
-	if (rec == MERGE_RECS)
-	{
-	  dopush(callstack, depth, recs, rec);
-	  rec = 0;
-	}
+        if (rec == MERGE_RECS)
+        {
+          dopush(callstack, depth, recs, rec);
+          rec = 0;
+        }
 
-	recs[rec].type = COUNT | ACQUIRE;
-	recs[rec].def = c->def;
-	recs[rec].amount = r->size;
-	recs[rec].ticks = 1;
-	recs[rec].resource = r->resource;
-	++rec;
+        recs[rec].type = COUNT | ACQUIRE;
+        recs[rec].def = c->def;
+        recs[rec].amount = r->size;
+        recs[rec].ticks = 1;
+        recs[rec].resource = r->resource;
+        ++rec;
       }
     }
 
@@ -368,8 +368,8 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
     {
       if (rec == MERGE_RECS)
       {
-	dopush(callstack, depth, recs, rec);
-	rec = 0;
+        dopush(callstack, depth, recs, rec);
+        rec = 0;
       }
 
       recs[rec].type = COUNT | ACQUIRE | RELEASE;
@@ -400,23 +400,23 @@ IgProfTrace::debugDumpStack(Stack *s, int depth)
 {
   INDENT(2*depth);
   fprintf(stderr, "STACK %d frame=%p addr=%p next=%p kids=%p\n",
-	  depth, (void *)s, (void *)s->address,
-	  (void *)s->sibling, (void *)s->children);
+          depth, (void *)s, (void *)s->address,
+          (void *)s->sibling, (void *)s->children);
 
   for (Counter *c = s->counters; c; c = c->next)
   {
     INDENT(2*depth+1);
     __extension__
     fprintf(stderr, "COUNTER ctr=%p %s %ju %ju %ju\n",
-	    (void *)c, c->def->name, c->ticks, c->value, c->peak);
+            (void *)c, c->def->name, c->ticks, c->value, c->peak);
 
     for (Resource *r = c->resources; r; r = r->nextlive)
     {
       INDENT(2*depth+2);
       __extension__
       fprintf(stderr, "RESOURCE res=%p (prev=%p next=%p) %ju %ju\n",
-	      (void *)r, (void *)r->prevlive, (void *)r->nextlive,
-	      (uintmax_t)r->resource, r->size);
+              (void *)r, (void *)r->prevlive, (void *)r->nextlive,
+              (uintmax_t)r->resource, r->size);
     }
   }
 

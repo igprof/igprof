@@ -19,7 +19,7 @@ protected:
   void *allocateSpace(size_t amount)
     {
       if (size_t(freeend_ - freestart_) < amount)
-	allocatePool();
+        allocatePool();
 
       IGPROF_ASSERT(size_t(freeend_ - freestart_) > amount);
       void *p = freestart_;
@@ -59,10 +59,10 @@ protected:
 private:
   void allocatePool(void);
 
-  void			**poolfirst_;		 //< Pointer to first memory pool.
-  void			**poolcur_;		 //< Pointer to current memory pool.
-  char			*freestart_;		 //< Next free address.
-  char			*freeend_;		 //< Last free address.
+  void                  **poolfirst_;            //< Pointer to first memory pool.
+  void                  **poolcur_;              //< Pointer to current memory pool.
+  char                  *freestart_;             //< Next free address.
+  char                  *freeend_;               //< Last free address.
 
   // Unavailable copy constructor, assignment operator
   IgProfBuffer(IgProfBuffer &);

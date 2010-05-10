@@ -30,8 +30,8 @@
 struct IgProfWrappedArg { void *(*start_routine)(void *); void *arg; };
 struct IgProfTraceAlloc { IgProfTrace *buf; bool perthread; };
 struct IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
-			const char *tofile; FILE *output;
-			IgProfSymCache *symcache; int blocksig; };
+                        const char *tofile; FILE *output;
+                        IgProfSymCache *symcache; int blocksig; };
 class IgProfExitDump { public: ~IgProfExitDump(void); };
 typedef std::list<void (*) (void)> IgProfCallList;
 typedef std::list<IgProfTraceAlloc *> IgProfBufList;
@@ -39,57 +39,57 @@ typedef std::list<IgProfTraceAlloc *> IgProfBufList;
 // -------------------------------------------------------------------
 // Traps for this profiling module
 IGPROF_DUAL_HOOK(1, void, doexit, _main, _libc,
-		 (int code), (code),
-		 "exit", 0, "libc.so.6")
+                 (int code), (code),
+                 "exit", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(1, void, doexit, _main2, _libc2,
-		 (int code), (code),
-		 "_exit", 0, "libc.so.6")
+                 (int code), (code),
+                 "_exit", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(2, int,  dokill, _main, _libc,
-		 (pid_t pid, int sig), (pid, sig),
-		 "kill", 0, "libc.so.6")
+                 (pid_t pid, int sig), (pid, sig),
+                 "kill", 0, "libc.so.6")
 
 IGPROF_LIBHOOK(4, int, dopthread_create, _main,
-	       (pthread_t *thread, const pthread_attr_t *attr,
-		void * (*start_routine)(void *), void *arg),
-	       (thread, attr, start_routine, arg),
-	       "pthread_create", 0, 0)
+               (pthread_t *thread, const pthread_attr_t *attr,
+                void * (*start_routine)(void *), void *arg),
+               (thread, attr, start_routine, arg),
+               "pthread_create", 0, 0)
 
 IGPROF_LIBHOOK(4, int, dopthread_create, _pthread20,
-	       (pthread_t *thread, const pthread_attr_t *attr,
-		void * (*start_routine)(void *), void *arg),
-	       (thread, attr, start_routine, arg),
-	       "pthread_create", "GLIBC_2.0", 0)
+               (pthread_t *thread, const pthread_attr_t *attr,
+                void * (*start_routine)(void *), void *arg),
+               (thread, attr, start_routine, arg),
+               "pthread_create", "GLIBC_2.0", 0)
 
 IGPROF_LIBHOOK(4, int, dopthread_create, _pthread21,
-	       (pthread_t *thread, const pthread_attr_t *attr,
-		void * (*start_routine)(void *), void *arg),
-	       (thread, attr, start_routine, arg),
-	       "pthread_create", "GLIBC_2.1", 0)
+               (pthread_t *thread, const pthread_attr_t *attr,
+                void * (*start_routine)(void *), void *arg),
+               (thread, attr, start_routine, arg),
+               "pthread_create", "GLIBC_2.1", 0)
 
 // Data for this profiler module
-static const size_t	N_TRACE_CACHE	= 2000000;
-static const int	N_MODULES	= 8;
-static const int	MAX_FNAME	= 1024;
-static IgProfAtomic	s_enabled	= 0;
-static bool		s_initialized	= false;
-static bool		s_activated	= false;
-static bool		s_pthreads	= false;
-static volatile int	s_quitting	= 0;
-static double		s_clockres	= 0;
-static pthread_mutex_t	s_buflock	= PTHREAD_MUTEX_INITIALIZER;
-static IgProfBufList    *s_buflist	= 0;
-static IgProfTraceAlloc	*s_bufs		= 0;
-static IgProfTrace	*s_masterbuf	= 0;
-static IgProfCallList	*s_threadinits  = 0;
-static const char	*s_options	= 0;
-static char		s_masterbufdata[sizeof(IgProfTrace)];
-static pthread_t	s_mainthread;
-static pthread_t	s_dumpthread;
-static pthread_key_t	s_bufkey;
-static pthread_key_t	s_flagkey;
-static pthread_key_t	s_tracekey;
-static char		s_outname[MAX_FNAME];
-static char		s_dumpflag[MAX_FNAME];
+static const size_t     N_TRACE_CACHE   = 2000000;
+static const int        N_MODULES       = 8;
+static const int        MAX_FNAME       = 1024;
+static IgProfAtomic     s_enabled       = 0;
+static bool             s_initialized   = false;
+static bool             s_activated     = false;
+static bool             s_pthreads      = false;
+static volatile int     s_quitting      = 0;
+static double           s_clockres      = 0;
+static pthread_mutex_t  s_buflock       = PTHREAD_MUTEX_INITIALIZER;
+static IgProfBufList    *s_buflist      = 0;
+static IgProfTraceAlloc *s_bufs         = 0;
+static IgProfTrace      *s_masterbuf    = 0;
+static IgProfCallList   *s_threadinits  = 0;
+static const char       *s_options      = 0;
+static char             s_masterbufdata[sizeof(IgProfTrace)];
+static pthread_t        s_mainthread;
+static pthread_t        s_dumpthread;
+static pthread_key_t    s_bufkey;
+static pthread_key_t    s_flagkey;
+static pthread_key_t    s_tracekey;
+static char             s_outname[MAX_FNAME];
+static char             s_dumpflag[MAX_FNAME];
 
 // Static data that needs to be constructed lazily on demand
 static IgProfCallList &
@@ -127,45 +127,45 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
       fprintf (info.output, "C%d FN%d+%ld", info.depth, sym->id, sym->symoffset);
     else
     {
-      const char	*symname = sym->name;
-      char		symgen[32];
+      const char        *symname = sym->name;
+      char              symgen[32];
 
       sym->id = info.nsyms++;
 
       if (! symname || ! *symname)
       {
-	sprintf(symgen, "@?%p", sym->address);
-	symname = symgen;
+        sprintf(symgen, "@?%p", sym->address);
+        symname = symgen;
       }
 
       if (sym->binary->id >= 0)
-	fprintf(info.output, "C%d FN%d=(F%d+%ld N=(%s))+%ld",
-		info.depth, sym->id, sym->binary->id, sym->binoffset,
-		symname, sym->symoffset);
+        fprintf(info.output, "C%d FN%d=(F%d+%ld N=(%s))+%ld",
+                info.depth, sym->id, sym->binary->id, sym->binoffset,
+                symname, sym->symoffset);
       else
-	fprintf(info.output, "C%d FN%d=(F%d=(%s)+%ld N=(%s))+%ld",
-		info.depth, sym->id, (sym->binary->id = info.nlibs++),
-		sym->binary->name ? sym->binary->name : "",
-		sym->binoffset, symname, sym->symoffset);
+        fprintf(info.output, "C%d FN%d=(F%d=(%s)+%ld N=(%s))+%ld",
+                info.depth, sym->id, (sym->binary->id = info.nlibs++),
+                sym->binary->name ? sym->binary->name : "",
+                sym->binoffset, symname, sym->symoffset);
     }
 
     for (IgProfTrace::Counter *ctr = frame->counters; ctr; ctr = ctr->next)
     {
       if (ctr->ticks || ctr->peak)
       {
-	if (ctr->def->id >= 0)
+        if (ctr->def->id >= 0)
           __extension__
-	  fprintf(info.output, " V%d:(%ju,%ju,%ju)",
-		  ctr->def->id, ctr->ticks, ctr->value, ctr->peak);
-	else
+          fprintf(info.output, " V%d:(%ju,%ju,%ju)",
+                  ctr->def->id, ctr->ticks, ctr->value, ctr->peak);
+        else
           __extension__
-	  fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
-		  (ctr->def->id = info.nctrs++), ctr->def->name,
-		  ctr->ticks, ctr->value, ctr->peak);
+          fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
+                  (ctr->def->id = info.nctrs++), ctr->def->name,
+                  ctr->ticks, ctr->value, ctr->peak);
 
-	for (IgProfTrace::Resource *res = ctr->resources; res; res = res->nextlive)
+        for (IgProfTrace::Resource *res = ctr->resources; res; res = res->nextlive)
           __extension__
-	  fprintf(info.output, ";LK=(%p,%ju)", (void *) res->resource, res->size);
+          fprintf(info.output, ";LK=(%p,%ju)", (void *) res->resource, res->size);
       }
     }
     fputc('\n', info.output);
@@ -221,22 +221,22 @@ dumpAllProfiles(void *arg)
     timeval tv;
     gettimeofday(&tv, 0);
     sprintf(outname, "|gzip -c>igprof.%.100s.%ld.%f.gz",
-	    progname, (long) getpid(), tv.tv_sec + 1e-6*tv.tv_usec);
+            progname, (long) getpid(), tv.tv_sec + 1e-6*tv.tv_usec);
     tofile = outname;
   }
 
   IgProf::debug("dumping state to %s\n", tofile);
   info->output = (tofile[0] == '|'
-		  ? (unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
-		  : fopen (tofile, "w+"));
+                  ? (unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
+                  : fopen (tofile, "w+"));
   if (! info->output)
   {
     IgProf::debug("can't write to output %s: %s (error %d)\n",
-		  tofile, strerror(errno), errno);
+                  tofile, strerror(errno), errno);
     return 0;
   }
   fprintf(info->output, "P=(ID=%lu N=(%s) T=%f)\n",
-	  (unsigned long) getpid(), program_invocation_name, s_clockres);
+          (unsigned long) getpid(), program_invocation_name, s_clockres);
 
   pthread_mutex_lock(&s_buflock);
   IgProfSymCache symcache;
@@ -247,12 +247,12 @@ dumpAllProfiles(void *arg)
     if (IgProfTraceAlloc *bufs = *i)
       for (int ib = 0; ib < N_MODULES; ++ib)
         if (IgProfTrace *buf = bufs[ib].buf)
-	{
-	  buf->lock();
+        {
+          buf->lock();
           dumpOneProfile(*info, buf->stackRoot());
           dumpResetIDs(buf->stackRoot());
-	  buf->unlock();
-	}
+          buf->unlock();
+        }
 
   s_masterbuf->lock();
   dumpOneProfile(*info, s_masterbuf->stackRoot());
@@ -331,29 +331,29 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
     for (const char *opts = options; *opts; )
     {
       while (*opts == ' ' || *opts == ',')
-	++opts;
+        ++opts;
 
       if (! strncmp(opts, "igprof:out='", 12))
       {
-	int i = 0;
-	opts += 12;
-	while (i < MAX_FNAME-1 && *opts && *opts != '\'')
-	  s_outname[i++] = *opts++;
-	s_outname[i] = 0;
+        int i = 0;
+        opts += 12;
+        while (i < MAX_FNAME-1 && *opts && *opts != '\'')
+          s_outname[i++] = *opts++;
+        s_outname[i] = 0;
       }
       else if (! strncmp(opts, "igprof:dump='", 13))
       {
-	int i = 0;
-	opts += 13;
-	while (i < MAX_FNAME-1 && *opts && *opts != '\'')
-	  s_dumpflag[i++] = *opts++;
-	s_dumpflag[i] = 0;
+        int i = 0;
+        opts += 13;
+        while (i < MAX_FNAME-1 && *opts && *opts != '\'')
+          s_dumpflag[i++] = *opts++;
+        s_dumpflag[i] = 0;
       }
       else
-	opts++;
+        opts++;
 
       while (*opts && *opts != ',' && *opts != ' ')
-	opts++;
+        opts++;
     }
 
     s_bufs = new IgProfTraceAlloc[N_MODULES];
@@ -377,8 +377,8 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
     if (target && ! strstr(program_invocation_name, target))
     {
       IgProf::debug("Current process not selected for profiling:"
-		    " process '%s' does not match '%s'\n",
-		    program_invocation_name, target);
+                    " process '%s' does not match '%s'\n",
+                    program_invocation_name, target);
       return s_activated = false;
     }
 
@@ -389,13 +389,13 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
     getitimer(ITIMER_PROF, &precision);
     setitimer(ITIMER_PROF, &nullified, 0);
     s_clockres = (precision.it_interval.tv_sec
-		  + 1e-6 * precision.it_interval.tv_usec);
+                  + 1e-6 * precision.it_interval.tv_usec);
 
     IgProf::debug("Activated in %s, timing resolution %f, %s,"
-		  " main thread id 0x%lx\n",
-		  program_invocation_name, s_clockres,
-		  s_pthreads ? "multi-threaded" : "no threads",
-		  s_mainthread);
+                  " main thread id 0x%lx\n",
+                  program_invocation_name, s_clockres,
+                  s_pthreads ? "multi-threaded" : "no threads",
+                  s_mainthread);
     IgProf::debug("Options: %s\n", options);
 
     IgHook::hook(doexit_hook_main.raw);
@@ -444,8 +444,8 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
   if (modid == N_MODULES)
   {
     IgProf::debug("Too many profilers enabled (%d), please"
-		  " rebuild IgProf with larger N_MODULES\n",
-		  N_MODULES);
+                  " rebuild IgProf with larger N_MODULES\n",
+                  N_MODULES);
     abort ();
   }
 
@@ -628,22 +628,22 @@ IgProf::panic(const char *file, int line, const char *func, const char *expr)
   IgProf::disable(true);
 
   fprintf (stderr, "%s: %s:%d: %s: assertion failure: %s\n",
-	   program_invocation_name, file, line, func, expr);
+           program_invocation_name, file, line, func, expr);
 
   void *trace [128];
   int levels = IgHookTrace::stacktrace(trace, 128, 0);
   for (int i = 2; i < levels; ++i)
   {
-    const char	*sym = 0;
-    const char	*lib = 0;
-    long	offset = 0;
-    long	liboffset = 0;
+    const char  *sym = 0;
+    const char  *lib = 0;
+    long        offset = 0;
+    long        liboffset = 0;
 
     IgHookTrace::symbol(trace[i], sym, lib, offset, liboffset);
     fprintf(stderr, "  %p %s %s %ld [%s %s %ld]\n",
-	    trace[i], sym ? sym : "?",
-	    (offset < 0 ? "-" : "+"), labs(offset), lib ? lib : "?",
-	    (liboffset < 0 ? "-" : "+"), labs(liboffset));
+            trace[i], sym ? sym : "?",
+            (offset < 0 ? "-" : "+"), labs(offset), lib ? lib : "?",
+            (liboffset < 0 ? "-" : "+"), labs(liboffset));
   }
 
   // abort();
@@ -661,8 +661,8 @@ IgProf::debug(const char *format, ...)
     timeval tv;
     gettimeofday(&tv, 0);
     fprintf(stderr, "*** IgProf(%lu, %.3f): ",
-	    (unsigned long) getpid(),
-	    tv.tv_sec + 1e-6*tv.tv_usec);
+            (unsigned long) getpid(),
+            tv.tv_sec + 1e-6*tv.tv_usec);
 
     va_list args;
     va_start(args, format);
@@ -696,9 +696,9 @@ threadWrapper(void *arg)
     // future C++ standard I simply silence the warning.
     __extension__
     IgProf::debug("captured thread id 0x%lx for profiling (%p, %p)\n",
-		  (unsigned long) pthread_self(),
-		  (void *)(start_routine),
-		  start_arg);
+                  (unsigned long) pthread_self(),
+                  (void *)(start_routine),
+                  start_arg);
 
     IgProf::initThread();
   }
@@ -710,9 +710,9 @@ threadWrapper(void *arg)
   // Run per-profiler initialisation.
   if (s_activated)
   {
-    IgProfCallList			&l = threadinits();
-    IgProfCallList::reverse_iterator	i = l.rbegin();
-    IgProfCallList::reverse_iterator	end = l.rend();
+    IgProfCallList                      &l = threadinits();
+    IgProfCallList::reverse_iterator    i = l.rbegin();
+    IgProfCallList::reverse_iterator    end = l.rend();
     for ( ; i != end; ++i)
       (*i)();
   }
@@ -734,9 +734,9 @@ threadWrapper(void *arg)
     // future C++ standard I simply silence the warning.
     __extension__
     IgProf::debug("leaving thread id 0x%lx from profiling (%p, %p)\n",
-		  (unsigned long) pthread_self(),
-		  (void *) start_routine,
-		  start_arg);
+                  (unsigned long) pthread_self(),
+                  (void *) start_routine,
+                  start_arg);
     IgProf::exitThread(false);
   }
   return ret;
@@ -745,10 +745,10 @@ threadWrapper(void *arg)
 /** Trap thread creation to run per-profiler initialisation.  */
 static int
 dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
-		 pthread_t *thread,
-		 const pthread_attr_t *attr,
-		 void * (*start_routine)(void *),
-		 void *arg)
+                 pthread_t *thread,
+                 const pthread_attr_t *attr,
+                 void * (*start_routine)(void *),
+                 void *arg)
 {
   if (start_routine == dumpAllProfiles)
     return hook.chain(thread, attr, start_routine, arg);
@@ -776,7 +776,7 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   if (s_pthreads && thread != s_mainthread)
   {
     IgProf::debug("merging thread id 0x%lx profile on %s(%d)\n",
-		  (unsigned long) thread, hook.function, code);
+                  (unsigned long) thread, hook.function, code);
     IgProf::disable(true);
     IgProf::exitThread(false);
     IgProf::enable(true);
@@ -791,10 +791,10 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
 {
   if ((pid == 0 || pid == getpid())
       && (sig == SIGHUP || sig == SIGINT || sig == SIGQUIT
-	  || sig == SIGILL || sig == SIGABRT || sig == SIGFPE
-	  || sig == SIGKILL || sig == SIGSEGV || sig == SIGPIPE
-	  || sig == SIGALRM || sig == SIGTERM || sig == SIGUSR1
-	  || sig == SIGUSR2 || sig == SIGBUS || sig == SIGIOT))
+          || sig == SIGILL || sig == SIGABRT || sig == SIGFPE
+          || sig == SIGKILL || sig == SIGSEGV || sig == SIGPIPE
+          || sig == SIGALRM || sig == SIGTERM || sig == SIGUSR1
+          || sig == SIGUSR2 || sig == SIGBUS || sig == SIGIOT))
   {
     bool enabled = IgProf::disable(true);
     if (enabled)
@@ -814,7 +814,7 @@ IgProfExitDump::~IgProfExitDump (void)
 {
   if (! s_activated) return;
   IgProf::debug("merging thread id 0x%lx profile on final exit\n",
-		(unsigned long) pthread_self());
+                (unsigned long) pthread_self());
   IgProf::disable(true);
   s_activated = false;
   s_enabled = 0;

@@ -15,25 +15,25 @@
 
 // Traps for this profiler module
 IGTRACE_HOOK(2, int, domunmap, _main,
-	     (void *addr, size_t len),
-	     (addr, len),
-	     "munmap")
+             (void *addr, size_t len),
+             (addr, len),
+             "munmap")
 IGTRACE_HOOK(6, void *, dommap32, _main,
-	     (void *addr, size_t len, int prot, int flags, int fd, __off_t off),
-	     (addr, len, prot, flags, fd, off),
-	     "mmap")
+             (void *addr, size_t len, int prot, int flags, int fd, __off_t off),
+             (addr, len, prot, flags, fd, off),
+             "mmap")
 IGTRACE_HOOK(6, void *, dommap64, _main,
-	     (void *addr, size_t len, int prot, int flags, int fd, __off64_t off),
-	     (addr, len, prot, flags, fd, off),
-	     "mmap64")
+             (void *addr, size_t len, int prot, int flags, int fd, __off64_t off),
+             (addr, len, prot, flags, fd, off),
+             "mmap64")
 
 // Data for this trace module
-static bool		s_initialized = false;
-static bool		s_demangle = false;
-static char		*s_demanglehere = 0;
-static size_t		s_demanglelen = 0;
-static pthread_mutex_t	s_demanglelock = PTHREAD_MUTEX_INITIALIZER;
-static IgTraceAtomic	s_reporting = 0;
+static bool             s_initialized = false;
+static bool             s_demangle = false;
+static char             *s_demanglehere = 0;
+static size_t           s_demanglelen = 0;
+static pthread_mutex_t  s_demanglelock = PTHREAD_MUTEX_INITIALIZER;
+static IgTraceAtomic    s_reporting = 0;
 
 /** Initialise mapping profiling.  Traps various system calls to keep track
     of memory usage, and if requested, leaks.  */
@@ -47,8 +47,8 @@ initialize(void)
   if (! (s_demanglehere = (char *) malloc(s_demanglelen)))
     return false;
 
-  const char	*options = IgTrace::options();
-  bool		enable = false;
+  const char    *options = IgTrace::options();
+  bool          enable = false;
 
   while (options && *options)
   {
@@ -140,7 +140,7 @@ xntoa(char *cur, char *end, unsigned long long num,
   if (! (flags & (ZEROPAD|LEFT)))
     for ( ; --width >= 0; ++cur)
       if (cur < end)
-	*cur = ' ';
+        *cur = ' ';
 
   if (sign)
   {
@@ -154,7 +154,7 @@ xntoa(char *cur, char *end, unsigned long long num,
     char c = (flags & ZEROPAD) ? '0' : ' ';
     for ( ; --width >= 0; ++cur)
       if (cur < end)
-	*cur = c;
+        *cur = c;
   }
 
   for ( ; i <= --precision; ++cur)
@@ -175,9 +175,9 @@ xntoa(char *cur, char *end, unsigned long long num,
 static int
 xsprintf(char *buf, size_t len, const char *format, ...)
 {
-  va_list	args;
-  char		*cur = buf;
-  char		*end = buf + len;
+  va_list       args;
+  char          *cur = buf;
+  char          *end = buf + len;
 
   va_start(args, format);
   for (; *format; ++format)
@@ -185,7 +185,7 @@ xsprintf(char *buf, size_t len, const char *format, ...)
     if (*format != '%')
     {
       if (cur < end)
-	*cur = *format;
+        *cur = *format;
       ++cur;
       continue;
     }
@@ -205,7 +205,7 @@ xsprintf(char *buf, size_t len, const char *format, ...)
       ++format;
       precision = xatoi(&format);
       if (precision < 0)
-	precision = 0;
+        precision = 0;
     }
 
     int qualifier = -1;
@@ -217,73 +217,73 @@ xsprintf(char *buf, size_t len, const char *format, ...)
       // case 'c':
     case 's':
       {
-	const char *s = va_arg(args, const char *);
-	if ((unsigned long) s < 4096)
-	  s = "(nil)";
+        const char *s = va_arg(args, const char *);
+        if ((unsigned long) s < 4096)
+          s = "(nil)";
 
-	int len = strnlen(s, precision);
-	if (! (flags & LEFT))
-	  for ( ; len < width; ++cur, --width)
-	    if (cur < end)
-	      *cur = ' ';
+        int len = strnlen(s, precision);
+        if (! (flags & LEFT))
+          for ( ; len < width; ++cur, --width)
+            if (cur < end)
+              *cur = ' ';
 
-	for (int i = 0; i < len; ++cur, ++s, ++i)
-	  if (cur < end)
-	    *cur = *s;
+        for (int i = 0; i < len; ++cur, ++s, ++i)
+          if (cur < end)
+            *cur = *s;
 
-	for ( ; len < width; ++cur, --width)
-	  if (cur < end)
-	    *cur = ' ';
+        for ( ; len < width; ++cur, --width)
+          if (cur < end)
+            *cur = ' ';
 
-	continue;
+        continue;
       }
 
     case 'p':
       if (width == -1)
       {
-	width = 2*sizeof(void *) + 2;
-	flags |= ZEROPAD;
+        width = 2*sizeof(void *) + 2;
+        flags |= ZEROPAD;
       }
 
       width -= 2;
       if (cur < end)
-	*cur = '0';
+        *cur = '0';
       ++cur;
       if (cur < end)
-	*cur = 'x';
+        *cur = 'x';
       ++cur;
 
       cur = xntoa(cur, end, (unsigned long) va_arg(args, void *),
-		  16, width, precision, flags);
+                  16, width, precision, flags);
       continue;
 
     case 'd':
       cur = xntoa(cur, end,
-		  qualifier == 'L' ? va_arg(args, signed long long)
-		  : qualifier == 'l' ? va_arg(args, signed long)
-		  : va_arg(args, signed int),
-		  10, width, precision, flags | SIGN);
+                  qualifier == 'L' ? va_arg(args, signed long long)
+                  : qualifier == 'l' ? va_arg(args, signed long)
+                  : va_arg(args, signed int),
+                  10, width, precision, flags | SIGN);
       continue;
 
     case 'u':
       cur = xntoa(cur, end,
-		  qualifier == 'L' ? va_arg(args, unsigned long long)
-		  : qualifier == 'l' ? va_arg(args, unsigned long)
-		  : va_arg(args, unsigned int),
-		  10, width, precision, flags);
+                  qualifier == 'L' ? va_arg(args, unsigned long long)
+                  : qualifier == 'l' ? va_arg(args, unsigned long)
+                  : va_arg(args, unsigned int),
+                  10, width, precision, flags);
       continue;
 
     case 'x':
       cur = xntoa(cur, end,
-		  qualifier == 'L' ? va_arg(args, unsigned long long)
-		  : qualifier == 'l' ? va_arg(args, unsigned long)
-		  : va_arg(args, unsigned int),
-		  16, width, precision, flags);
+                  qualifier == 'L' ? va_arg(args, unsigned long long)
+                  : qualifier == 'l' ? va_arg(args, unsigned long)
+                  : va_arg(args, unsigned int),
+                  16, width, precision, flags);
       continue;
 
     case '%':
       if (cur < end)
-	*cur = '%';
+        *cur = '%';
       ++cur;
       continue;
 
@@ -318,49 +318,49 @@ munmapreport(void *addr, size_t len)
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("munmap", stack, depth))
   {
-    char	buf [2048];
-    const char	*sym = 0;
-    const char	*lib = 0;
-    long	symoff = 0;
-    long	liboff = 0;
+    char        buf [2048];
+    const char  *sym = 0;
+    const char  *lib = 0;
+    long        symoff = 0;
+    long        liboff = 0;
 
     write(2, buf, xsprintf(buf, sizeof(buf),
-			   "*** MUNMAP by %.500s [thread %lu pid %ld]:"
-			   " address=%p len=%lu\n",
-			   IgTrace::program(),
-			   (unsigned long) pthread_self(), (long) getpid(),
-			   addr, (unsigned long) len,
-			   addr, (char *) addr + len));
+                           "*** MUNMAP by %.500s [thread %lu pid %ld]:"
+                           " address=%p len=%lu\n",
+                           IgTrace::program(),
+                           (unsigned long) pthread_self(), (long) getpid(),
+                           addr, (unsigned long) len,
+                           addr, (char *) addr + len));
 
     pthread_mutex_lock(&s_demanglelock);
     for (int i = 2; i < depth; ++i)
     {
       void *symaddr = stack[i];
       if (IgHookTrace::symbol(symaddr, sym, lib, symoff, liboff))
-	symaddr = (void *) ((intptr_t) symaddr - symoff);
+        symaddr = (void *) ((intptr_t) symaddr - symoff);
 
       char hexsym [32];
       if (! sym || ! *sym)
       {
-	sprintf(hexsym, "@?%p", symaddr);
-	sym = hexsym;
+        sprintf(hexsym, "@?%p", symaddr);
+        sym = hexsym;
       }
       else if (s_demangle && sym[0] == '_' && sym[1] == 'Z')
       {
-	int status = 0;
-	char *demangled = abi::__cxa_demangle(sym, s_demanglehere, &s_demanglelen, &status);
-	if (status == 0 && demangled && *demangled)
-	  sym = demangled;
-	if (demangled && demangled != s_demanglehere)
-	  // oops, this shouldn't happen, we might hose ourselves.
-	  s_demanglehere = demangled;
+        int status = 0;
+        char *demangled = abi::__cxa_demangle(sym, s_demanglehere, &s_demanglelen, &status);
+        if (status == 0 && demangled && *demangled)
+          sym = demangled;
+        if (demangled && demangled != s_demanglehere)
+          // oops, this shouldn't happen, we might hose ourselves.
+          s_demanglehere = demangled;
       }
       if (! lib)
-	lib = "<unknown library>";
+        lib = "<unknown library>";
 
       write(2, buf, xsprintf(buf, sizeof(buf),
-			     "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
-			     i-1, stack [i], sym, symoff, lib, liboff));
+                             "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
+                             i-1, stack [i], sym, symoff, lib, liboff));
     }
     pthread_mutex_unlock(&s_demanglelock);
   }
@@ -375,52 +375,52 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("mmap", stack, depth))
   {
-    char	buf [2048];
-    const char	*sym = 0;
-    const char	*lib = 0;
-    long	symoff = 0;
-    long	liboff = 0;
+    char        buf [2048];
+    const char  *sym = 0;
+    const char  *lib = 0;
+    long        symoff = 0;
+    long        liboff = 0;
 
     write(2, buf, xsprintf(buf, sizeof(buf),
-			   "*** MMAP%s by %.500s [thread %lu pid %ld]:"
-			   " addr=%p len=%lu"
-			   " prot=0x%x flags=0x%x fd=%d offset=%Ld => %p\n",
-			   sz, IgTrace::program(),
-			   (unsigned long) pthread_self(), (long) getpid(),
-			   addr, (unsigned long) len,
-			   // addr, (addr ? (char *) addr + len : addr),
-			   prot, flags, fd, (long long) off,
-			   ret));
+                           "*** MMAP%s by %.500s [thread %lu pid %ld]:"
+                           " addr=%p len=%lu"
+                           " prot=0x%x flags=0x%x fd=%d offset=%Ld => %p\n",
+                           sz, IgTrace::program(),
+                           (unsigned long) pthread_self(), (long) getpid(),
+                           addr, (unsigned long) len,
+                           // addr, (addr ? (char *) addr + len : addr),
+                           prot, flags, fd, (long long) off,
+                           ret));
 
     pthread_mutex_lock(&s_demanglelock);
     for (int i = 3; i < depth; ++i)
     {
       void *symaddr = stack[i];
       if (IgHookTrace::symbol(symaddr, sym, lib, symoff, liboff))
-	symaddr = (void *) ((intptr_t) symaddr - symoff);
+        symaddr = (void *) ((intptr_t) symaddr - symoff);
 
       char hexsym [32];
       if (! sym || ! *sym)
       {
-	sprintf(hexsym, "@?%p", symaddr);
-	sym = hexsym;
+        sprintf(hexsym, "@?%p", symaddr);
+        sym = hexsym;
       }
       else if (s_demangle && sym[0] == '_' && sym[1] == 'Z')
       {
-	int status = 0;
-	char *demangled = abi::__cxa_demangle(sym, s_demanglehere, &s_demanglelen, &status);
-	if (status == 0 && demangled && *demangled)
-	  sym = demangled;
-	if (demangled && demangled != s_demanglehere)
-	  // oops, this shouldn't happen, we might hose ourselves.
-	  s_demanglehere = demangled;
+        int status = 0;
+        char *demangled = abi::__cxa_demangle(sym, s_demanglehere, &s_demanglelen, &status);
+        if (status == 0 && demangled && *demangled)
+          sym = demangled;
+        if (demangled && demangled != s_demanglehere)
+          // oops, this shouldn't happen, we might hose ourselves.
+          s_demanglehere = demangled;
       }
       if (! lib)
-	lib = "<unknown library>";
+        lib = "<unknown library>";
 
       write(2, buf, xsprintf(buf, sizeof(buf),
-			     "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
-			     i-2, stack [i], sym, symoff, lib, liboff));
+                             "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
+                             i-2, stack [i], sym, symoff, lib, liboff));
     }
     pthread_mutex_unlock(&s_demanglelock);
   }
@@ -428,7 +428,7 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
 
 static int
 domunmap(IgHook::SafeData<igtrace_domunmap_t> &hook,
-	 void *addr, size_t len)
+         void *addr, size_t len)
 {
   if (s_initialized)
   {
@@ -444,7 +444,7 @@ domunmap(IgHook::SafeData<igtrace_domunmap_t> &hook,
 
 static void *
 dommap32(IgHook::SafeData<igtrace_dommap32_t> &hook,
-	 void *addr, size_t len, int prot, int flags, int fd, __off_t off)
+         void *addr, size_t len, int prot, int flags, int fd, __off_t off)
 {
   void *ret = (*hook.chain)(addr, len, prot, flags, fd, off);
   if (s_initialized)
@@ -461,7 +461,7 @@ dommap32(IgHook::SafeData<igtrace_dommap32_t> &hook,
 
 static void *
 dommap64(IgHook::SafeData<igtrace_dommap64_t> &hook,
-	 void *addr, size_t len, int prot, int flags, int fd, __off64_t off)
+         void *addr, size_t len, int prot, int flags, int fd, __off64_t off)
 {
   void *ret = (*hook.chain)(addr, len, prot, flags, fd, off);
   if (s_initialized)

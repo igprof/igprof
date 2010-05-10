@@ -15,8 +15,8 @@ public:
 
 // Traps for this profiler module
 IGTRACE_DUAL_HOOK (1, void *, domalloc, _main, _libc,
-		   (size_t n), (n),
-  		   "malloc", 0, "libc.so.6")
+                   (size_t n), (n),
+                   "malloc", 0, "libc.so.6")
 
 // Data for this trace module
 static bool s_initialized = false;
@@ -28,31 +28,31 @@ IgTraceMem::initialize (void)
     if (s_initialized) return;
     s_initialized = true;
 
-    const char	*options = IgTrace::options ();
-    bool	enable = false;
+    const char  *options = IgTrace::options ();
+    bool        enable = false;
 
     while (options && *options)
     {
-	while (*options == ' ' || *options == ',')
-	    ++options;
+        while (*options == ' ' || *options == ',')
+            ++options;
 
         if (! strncmp (options, "mem", 3))
-	{
-	    options += 3;
-	    enable = true;
-	}
-	else
-	    options++;
+        {
+            options += 3;
+            enable = true;
+        }
+        else
+            options++;
 
-	while (*options && *options != ',' && *options != ' ')
-	    options++;
+        while (*options && *options != ',' && *options != ' ')
+            options++;
     }
 
     if (! enable)
-	return;
+        return;
 
     if (! IgTrace::initialize ())
-	return;
+        return;
 
     IgTrace::disable ();
     IgHook::hook (domalloc_hook_main.raw);
@@ -80,11 +80,11 @@ domalloc (IgHook::SafeData<igtrace_domalloc_t> &hook, size_t size)
         // If the filters pass, walk the stack to print out information.
         if (IgTrace::filter (0, stack, depth))
         {
-	    char buf [1024];
-	    write (2, buf, sprintf (buf,
-				    "*** MALLOC %ld bytes => %p, by %.500s [thread %lu pid %ld]\n",
-				    (unsigned long) size, result, IgTrace::program(),
-				    (unsigned long) pthread_self (), (long) getpid ()));
+            char buf [1024];
+            write (2, buf, sprintf (buf,
+                                    "*** MALLOC %ld bytes => %p, by %.500s [thread %lu pid %ld]\n",
+                                    (unsigned long) size, result, IgTrace::program(),
+                                    (unsigned long) pthread_self (), (long) getpid ()));
         }
     }
 

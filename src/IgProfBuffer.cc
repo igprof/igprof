@@ -47,13 +47,13 @@ void *
 IgProfBuffer::allocateRaw(size_t size)
 {
   void *data = mmap (0, size, PROT_READ | PROT_WRITE,
-		     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (data != MAP_FAILED)
     return data;
   else
   {
     IgProf::debug ("Failed to allocate memory for profile buffer: %s (%d)\n",
-		   strerror (errno), errno);
+                   strerror (errno), errno);
     abort ();
   }
 }

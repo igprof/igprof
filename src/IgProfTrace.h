@@ -79,48 +79,48 @@ public:
   /// Structure for call stack cache at the end.
   struct StackCache
   {
-    void	*address;	//< Instruction pointer value.
-    Stack	*frame;		//< Address of corresponding stack node.
+    void        *address;       //< Instruction pointer value.
+    Stack       *frame;         //< Address of corresponding stack node.
   };
 
   /// Stack trace node.
   struct Stack
   {
-    void	*address;	//< Instruction pointer value.
+    void        *address;       //< Instruction pointer value.
 #if IGPROF_DEBUG
-    Stack	*parent;	//< The calling stack frame, or null for the root.
+    Stack       *parent;        //< The calling stack frame, or null for the root.
 #endif
-    Stack	*sibling;	//< The next child frame of the same parent.
-    Stack	*children;	//< The first child of this call frame.
-    Counter	*counters;	//< The first counter for this call frame, or null.
+    Stack       *sibling;       //< The next child frame of the same parent.
+    Stack       *children;      //< The first child of this call frame.
+    Counter     *counters;      //< The first counter for this call frame, or null.
   };
 
   /// Counter type.
   enum CounterType
   {
-    TICK,			//< Ticked cumulative counter.
-    TICK_PEAK,			//< Ticked and keep also the peak value.
-    MAX				//< Maximum-value counter.
+    TICK,                       //< Ticked cumulative counter.
+    TICK_PEAK,                  //< Ticked and keep also the peak value.
+    MAX                         //< Maximum-value counter.
   };
 
   /// Counter definition.
   struct CounterDef
   {
-    const char	*name;		//< The name of the counter, for output.
-    CounterType	type;		//< The behaviour type of the counter.
-    int		id;		//< Reference ID for output.
+    const char  *name;          //< The name of the counter, for output.
+    CounterType type;           //< The behaviour type of the counter.
+    int         id;             //< Reference ID for output.
   };
 
   /// Counter value.
   struct Counter
   {
-    Value	ticks;		//< The number of times the counter was increased.
-    Value	value;		//< The accumulated counter value.
-    Value	peak;		//< The maximum value of the counter at any time.
-    CounterDef	*def;		//< The definition of this counter.
-    Stack	*frame;		//< The stack node owning the counter.
-    Counter	*next;		//< The next counter in the stack frame's chain.
-    Resource	*resources;	//< The live resources linked to this counter.
+    Value       ticks;          //< The number of times the counter was increased.
+    Value       value;          //< The accumulated counter value.
+    Value       peak;           //< The maximum value of the counter at any time.
+    CounterDef  *def;           //< The definition of this counter.
+    Stack       *frame;         //< The stack node owning the counter.
+    Counter     *next;          //< The next counter in the stack frame's chain.
+    Resource    *resources;     //< The live resources linked to this counter.
   };
 
   /* Each resource is in two singly linked lists: the hash bin chain
@@ -145,64 +145,64 @@ public:
   /// Data for a resource.
   struct Resource
   {
-    Address	resource;	//< Resource identity.
-    Value	size;		//< Size of the resource.
-    Resource	*nexthash;	//< Next resource in same hash bin.
-    Resource	*prevlive;	//< Previous live resource in the same counter.
-    Resource	*nextlive;	//< Next live resource in the same counter.
-    Counter	*counter;	//< Counter tracking this resource.
-    CounterDef	*def;		//< Cached counter definition reference.
+    Address     resource;       //< Resource identity.
+    Value       size;           //< Size of the resource.
+    Resource    *nexthash;      //< Next resource in same hash bin.
+    Resource    *prevlive;      //< Previous live resource in the same counter.
+    Resource    *nextlive;      //< Next live resource in the same counter.
+    Counter     *counter;       //< Counter tracking this resource.
+    CounterDef  *def;           //< Cached counter definition reference.
   };
 
   /// Bitmask of properties the record covers.
   typedef unsigned int RecordType;
-  static const RecordType COUNT		= 1;
-  static const RecordType ACQUIRE	= 2;
-  static const RecordType RELEASE	= 4;
+  static const RecordType COUNT         = 1;
+  static const RecordType ACQUIRE       = 2;
+  static const RecordType RELEASE       = 4;
 
   /// Structure used by callers to record values.
   struct Record
   {
-    RecordType	type;		//< Type of the record.
-    CounterDef	*def;		//< Counter to modify.
-    Value	amount;		//< The total amount to add.
-    Value	ticks;		//< The number of increments.
-    Address	resource;	//< Resource identity for #ACQUIRE and #RELEASE.
+    RecordType  type;           //< Type of the record.
+    CounterDef  *def;           //< Counter to modify.
+    Value       amount;         //< The total amount to add.
+    Value       ticks;          //< The number of increments.
+    Address     resource;       //< Resource identity for #ACQUIRE and #RELEASE.
   };
 
   IgProfTrace(void);
   ~IgProfTrace(void);
 
-  void			push(void **stack, int depth, Record *recs, int nrecs);
-  void			mergeFrom(IgProfTrace &other);
-  Stack *		stackRoot(void) const;
+  void                  push(void **stack, int depth, Record *recs, int nrecs);
+  void                  mergeFrom(IgProfTrace &other);
+  Stack *               stackRoot(void) const;
 
-  void			lock(void);
-  void			unlock(void);
+  void                  lock(void);
+  void                  unlock(void);
 
 private:
-  Stack *		childStackNode(Stack *parent, void *address);
-  Counter *		initCounter(Counter *&link, CounterDef *def, Stack *frame);
-  bool			findResource(Record &rec,
-				     Resource **&rlink,
-				     Resource *&res,
-				     CounterDef *def);
-  void			releaseResource(Resource **rlink, Resource *res);
-  void			releaseResource(Record &rec);
-  void			acquireResource(Record &rec, Counter *ctr);
-  void			dopush(void **stack, int depth, Record *recs, int nrecs);
-  void			mergeFrom(int depth, Stack *frame, void **callstack, Record *recs);
+  Stack *               childStackNode(Stack *parent, void *address);
+  Counter *             initCounter(Counter *&link, CounterDef *def, Stack *frame);
+  bool                  findResource(Record &rec,
+                                     Resource **&rlink,
+                                     Resource *&res,
+                                     CounterDef *def);
+  void                  releaseResource(Resource **rlink, Resource *res);
+  void                  releaseResource(Record &rec);
+  void                  acquireResource(Record &rec, Counter *ctr);
+  void                  dopush(void **stack, int depth, Record *recs, int nrecs);
+  void                  mergeFrom(int depth, Stack *frame, void **callstack, Record *recs);
 
-  void			debugDump(void);
-  static void		debugDumpStack(Stack *s, int depth);
+  void                  debugDump(void);
+  static void           debugDumpStack(Stack *s, int depth);
 
-  pthread_mutex_t	mutex_;		//< Concurrency protection.
-  void			**poolfirst_;	//< Pointer to first memory pool.
-  void			**poolcur_;	//< Pointer to current memory pool.
-  Resource		**restable_;	//< Start of the resources hash.
-  StackCache		*callcache_;	//< Start of address cache.
-  Resource		*resfree_;	//< Resource free list.
-  Stack			*stack_;	//< Stack root.
+  pthread_mutex_t       mutex_;         //< Concurrency protection.
+  void                  **poolfirst_;   //< Pointer to first memory pool.
+  void                  **poolcur_;     //< Pointer to current memory pool.
+  Resource              **restable_;    //< Start of the resources hash.
+  StackCache            *callcache_;    //< Start of address cache.
+  Resource              *resfree_;      //< Resource free list.
+  Stack                 *stack_;        //< Stack root.
 
   // Unavailable copy constructor, assignment operator
   IgProfTrace(IgProfTrace &);

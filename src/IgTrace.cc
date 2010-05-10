@@ -18,18 +18,18 @@
 /// Structure for tracking filters.
 struct IgTraceFilter
 {
-    IgTraceFilter	*nextFilter;
-    char		*extraInfo;
-    char		*functionName;
-    char		*libraryName;
+    IgTraceFilter       *nextFilter;
+    char                *extraInfo;
+    char                *functionName;
+    char                *libraryName;
 };
 
 // Data for this profiler module
-static IgTraceAtomic	s_enabled	= 0;
-static bool		s_initialized	= false;
-static bool		s_activated	= false;
-static volatile int	s_quitting	= 0;
-static IgTraceFilter	*s_filters	= 0;
+static IgTraceAtomic    s_enabled       = 0;
+static bool             s_initialized   = false;
+static bool             s_activated     = false;
+static volatile int     s_quitting      = 0;
+static IgTraceFilter    *s_filters      = 0;
 
 /** Initialise the tracing core itself.  Prepares the the program
     for tracing.  Automatically triggered to run on library load.
@@ -42,81 +42,81 @@ IgTrace::initialize (void)
 {
     if (! s_initialized)
     {
-	s_initialized = true;
+        s_initialized = true;
 
-	const char *options = IgTrace::options ();
-	if (! options || ! *options)
-	{
-	    IgTrace::debug ("$IGTRACE not set, not tracing this process\n");
-	    return s_activated = false;
-	}
+        const char *options = IgTrace::options ();
+        if (! options || ! *options)
+        {
+            IgTrace::debug ("$IGTRACE not set, not tracing this process\n");
+            return s_activated = false;
+        }
         while (options && *options)
         {
-	    while (*options == ' ' || *options == ',')
-	        ++options;
+            while (*options == ' ' || *options == ',')
+                ++options;
 
-	    if (! strncmp (options, "igtrace:reject='", 16))
-	    {
-	        options += 16;
+            if (! strncmp (options, "igtrace:reject='", 16))
+            {
+                options += 16;
 
-	        const char *info = options;
-	        int infolen = 0;
-	        while (*options && *options != '\'' && *options != ':')
-		    ++options, ++infolen;
-	        if (*options == ':')
-		    ++options;
+                const char *info = options;
+                int infolen = 0;
+                while (*options && *options != '\'' && *options != ':')
+                    ++options, ++infolen;
+                if (*options == ':')
+                    ++options;
 
-	        const char *func = options;
-	        int funclen = 0;
-	        while (*options && *options != '\'' && *options != ':')
-		    ++options, ++funclen;
-	        if (*options == ':')
-		    ++options;
+                const char *func = options;
+                int funclen = 0;
+                while (*options && *options != '\'' && *options != ':')
+                    ++options, ++funclen;
+                if (*options == ':')
+                    ++options;
 
-	        const char *lib = options;
-	        int liblen = 0;
-	        while (*options && *options != '\'' && *options != ':')
-		    ++options, ++liblen;
+                const char *lib = options;
+                int liblen = 0;
+                while (*options && *options != '\'' && *options != ':')
+                    ++options, ++liblen;
 
-	        IgTraceFilter *f = new IgTraceFilter;
-	        f->nextFilter = 0;
-	        f->extraInfo     = (infolen ? strndup (info, infolen) : 0);
-	        f->functionName  = (funclen ? strndup (func, funclen) : 0);
-	        f->libraryName   = (liblen  ? strndup (lib,  liblen)  : 0);
+                IgTraceFilter *f = new IgTraceFilter;
+                f->nextFilter = 0;
+                f->extraInfo     = (infolen ? strndup (info, infolen) : 0);
+                f->functionName  = (funclen ? strndup (func, funclen) : 0);
+                f->libraryName   = (liblen  ? strndup (lib,  liblen)  : 0);
 
-	        IgTraceFilter **chain = &s_filters;
-	        while (*chain)
-		    chain = &(*chain)->nextFilter;
+                IgTraceFilter **chain = &s_filters;
+                while (*chain)
+                    chain = &(*chain)->nextFilter;
 
-	        *chain = f;
+                *chain = f;
 
-	        while (*options && *options != '\'')
-		    ++options;
-	    }
-	    else
-	        options++;
+                while (*options && *options != '\'')
+                    ++options;
+            }
+            else
+                options++;
 
-	    while (*options && *options != ',' && *options != ' ')
-	        options++;
+            while (*options && *options != ',' && *options != ' ')
+                options++;
         }
 
-	const char *target = getenv ("IGTRACE_TARGET");
-	if (target && ! strstr (program_invocation_name, target))
-	{
-	    IgTrace::debug ("Current process not selected for tracing:"
-		       	    " process '%s' does not match '%s'\n",
-		       	    program_invocation_name, target);
-	    return s_activated = false;
-    	}
+        const char *target = getenv ("IGTRACE_TARGET");
+        if (target && ! strstr (program_invocation_name, target))
+        {
+            IgTrace::debug ("Current process not selected for tracing:"
+                            " process '%s' does not match '%s'\n",
+                            program_invocation_name, target);
+            return s_activated = false;
+        }
 
-	IgTrace::debug ("Activated in %s\n", program_invocation_name);
-	IgTrace::debug ("Options: %s\n", IgTrace::options ());
-	s_activated = true;
-	s_enabled = 1;
+        IgTrace::debug ("Activated in %s\n", program_invocation_name);
+        IgTrace::debug ("Options: %s\n", IgTrace::options ());
+        s_activated = true;
+        s_enabled = 1;
     }
 
     if (! s_activated)
-	return false;
+        return false;
 
     return true;
 }
@@ -179,15 +179,15 @@ IgTrace::panic (const char *file, int line, const char *func, const char *expr)
     int levels = IgHookTrace::stacktrace (trace, 128, 0);
     for (int i = 2; i < levels; ++i)
     {
-	const char	*sym = 0;
-	const char	*lib = 0;
-	long		offset = 0;
-	long		liboffset = 0;
-	IgHookTrace::symbol (trace [i], sym, lib, offset, liboffset);
-	fprintf (stderr, "  %p %s %s %ld [%s %s %ld]\n",
-		 trace [i], sym, (offset < 0 ? "-" : "+"),
-		 labs(offset), lib, (liboffset < 0 ? "-" : "+"),
-		 labs(liboffset));
+        const char      *sym = 0;
+        const char      *lib = 0;
+        long            offset = 0;
+        long            liboffset = 0;
+        IgHookTrace::symbol (trace [i], sym, lib, offset, liboffset);
+        fprintf (stderr, "  %p %s %s %ld [%s %s %ld]\n",
+                 trace [i], sym, (offset < 0 ? "-" : "+"),
+                 labs(offset), lib, (liboffset < 0 ? "-" : "+"),
+                 labs(liboffset));
     }
 
     // abort ();
@@ -203,16 +203,16 @@ IgTrace::debug (const char *format, ...)
     static const char *debugging = getenv ("IGTRACE_DEBUGGING");
     if (debugging)
     {
-	timeval tv;
-	gettimeofday (&tv, 0);
-	fprintf (stderr, "*** IgTrace(%lu, %.3f): ",
-		 (unsigned long) getpid(),
-		 tv.tv_sec + 1e-6*tv.tv_usec);
+        timeval tv;
+        gettimeofday (&tv, 0);
+        fprintf (stderr, "*** IgTrace(%lu, %.3f): ",
+                 (unsigned long) getpid(),
+                 tv.tv_sec + 1e-6*tv.tv_usec);
 
-	va_list args;
-	va_start (args, format);
-	vfprintf (stderr, format, args);
-	va_end (args);
+        va_list args;
+        va_start (args, format);
+        vfprintf (stderr, format, args);
+        va_end (args);
     }
 }
 
@@ -231,30 +231,30 @@ IgTrace::filter (const char *info, void *stack [], int depth)
     IgTraceFilter *f = s_filters;
     while (f && pass)
     {
-	if (info && f->extraInfo && strstr (info, f->extraInfo))
-	    pass = false;
+        if (info && f->extraInfo && strstr (info, f->extraInfo))
+            pass = false;
 
-	for (int i = 0; i < depth && pass; ++i)
-	{
-	    bool	passthis = true;
-	    const char	*sym = 0;
-	    const char	*lib = 0;
-	    long	junk = 0;
+        for (int i = 0; i < depth && pass; ++i)
+        {
+            bool        passthis = true;
+            const char  *sym = 0;
+            const char  *lib = 0;
+            long        junk = 0;
 
             if (! IgHookTrace::symbol (stack[i], sym, lib, junk, junk))
-		continue;
+                continue;
 
-	    if (passthis && sym && f->functionName && strstr (sym, f->functionName))
-		passthis = false;
+            if (passthis && sym && f->functionName && strstr (sym, f->functionName))
+                passthis = false;
 
-	    if (passthis && lib && f->libraryName && strstr (lib, f->libraryName))
-		passthis = false;
+            if (passthis && lib && f->libraryName && strstr (lib, f->libraryName))
+                passthis = false;
 
-	    if (! passthis)
-		pass = false;
-	}
+            if (! passthis)
+                pass = false;
+        }
 
-	f = f->nextFilter;
+        f = f->nextFilter;
     }
 
     return pass;

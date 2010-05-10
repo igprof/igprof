@@ -1709,13 +1709,13 @@ public:
     {
       char *paths = 0;
       if (const char *p = getenv("PATH"))
-	paths = strdup(p);
+        paths = strdup(p);
       if (! paths)
-	return;
+        return;
 
       size_t npaths = 1;
       for (char *p = strchr(paths, ':'); p; p = strchr(p+1, ':'))
-	++npaths;
+        ++npaths;
 
       char *bkpt, *path;
       std::string tmpPath;
@@ -1726,14 +1726,14 @@ public:
       {
         if (! path[0])
           m_paths.push_back("./");
-	else
-	{
+        else
+        {
           tmpPath = path;
           if (tmpPath[tmpPath.size() - 1] != '/')
             tmpPath += "/";
 
           m_paths.push_back(tmpPath);
-	}
+        }
       }
       free(paths);
     }
@@ -1763,21 +1763,21 @@ public:
       if (origname.empty())
       {
         abspath = "<dynamically generated>";
-	found = true;
+        found = true;
       }
 
       // Make origname full, absolute, symlink-resolved path name.  If it is
       // a bare name with no path components, search in $PATH, otherwise just
       // resolve it to full path.  Ignore non-files while searching.
       if (! found && origname.find('/') == std::string::npos)
-	for (size_t i = 0, e = m_paths.size(); i != e && ! found; ++i)
-	{
-	  abspath = m_paths[i];
-	  abspath += origname;
-	  found = (access(abspath.c_str(), R_OK) == 0
-	           && stat(abspath.c_str(), &st) == 0
-	           && S_ISREG(st.st_mode));
-	}
+        for (size_t i = 0, e = m_paths.size(); i != e && ! found; ++i)
+        {
+          abspath = m_paths[i];
+          abspath += origname;
+          found = (access(abspath.c_str(), R_OK) == 0
+                   && stat(abspath.c_str(), &st) == 0
+                   && S_ISREG(st.st_mode));
+        }
 
       if (! found)
         abspath = origname;
@@ -1785,9 +1785,9 @@ public:
       if (char *p = realpath(abspath.c_str(), 0))
       {
 	if (access(p, R_OK) == 0 && stat(p, &st) == 0 && S_ISREG(st.st_mode))
-	  useGdb = m_useGdb;
+          useGdb = m_useGdb;
 
-	abspath = p;
+        abspath = p;
         free(p);
       }
 
@@ -2268,11 +2268,11 @@ opentemp(char *pattern, FILE *&fp)
 
   if ((fd = mkstemp(pattern)) < 0)
     die("%s: cannot create temporary file: %s (error %d)\n",
-	pattern, strerror(errno), errno);
+        pattern, strerror(errno), errno);
 
   if (! (fp = fdopen(fd, "w")))
     die("%s: cannot open descriptor %d for write: %s (error %d)\n",
-	pattern, fd, strerror(errno), errno);
+        pattern, fd, strerror(errno), errno);
 }
 
 static void

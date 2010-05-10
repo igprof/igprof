@@ -12,34 +12,34 @@
 // -------------------------------------------------------------------
 // Traps for this profiling module
 IGPROF_DUAL_HOOK(3, int, doopen, _main, _libc,
-		 (const char *fn, int flags, int mode), (fn, flags, mode),
-		 "open", 0, "libc.so.6")
+                 (const char *fn, int flags, int mode), (fn, flags, mode),
+                 "open", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(3, int, doopen64, _main, _libc,
-		 (const char *fn, int flags, int mode), (fn, flags, mode),
-		 "__open64", 0, "libc.so.6")
+                 (const char *fn, int flags, int mode), (fn, flags, mode),
+                 "__open64", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(1, int, doclose, _main, _libc,
-		 (int fd), (fd),
-		 "close", 0, "libc.so.6")
+                 (int fd), (fd),
+                 "close", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(1, int, dodup, _main, _libc,
-		 (int fd), (fd),
-		 "dup", 0, "libc.so.6")
+                 (int fd), (fd),
+                 "dup", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(2, int, dodup2, _main, _libc,
-		 (int fd, int newfd), (fd, newfd),
-		 "dup2", 0, "libc.so.6")
+                 (int fd, int newfd), (fd, newfd),
+                 "dup2", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(3, int, dosocket, _main, _libc,
-		 (int domain, int type, int proto), (domain, type, proto),
-		 "socket", 0, "libc.so.6")
+                 (int domain, int type, int proto), (domain, type, proto),
+                 "socket", 0, "libc.so.6")
 IGPROF_DUAL_HOOK(3, int, doaccept, _main, _libc,
-		 (int fd, sockaddr *addr, socklen_t *len), (fd, addr, len),
-		 "accept", 0, "libc.so.6")
+                 (int fd, sockaddr *addr, socklen_t *len), (fd, addr, len),
+                 "accept", 0, "libc.so.6")
 
 // Data for this profiling module
-static IgProfTrace::CounterDef	s_ct_used	= { "FD_USED", IgProfTrace::TICK, -1 };
-static IgProfTrace::CounterDef	s_ct_live	= { "FD_LIVE", IgProfTrace::TICK_PEAK, -1 };
-static bool			s_count_used	= 0;
-static bool			s_count_live	= 0;
-static bool			s_initialized	= false;
-static int			s_moduleid	= -1;
+static IgProfTrace::CounterDef  s_ct_used       = { "FD_USED", IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_live       = { "FD_LIVE", IgProfTrace::TICK_PEAK, -1 };
+static bool                     s_count_used    = 0;
+static bool                     s_count_live    = 0;
+static bool                     s_initialized   = false;
+static int                      s_moduleid      = -1;
 
 /** Record file descriptor.  Increments counters in the tree. */
 static void __attribute__((noinline))
@@ -50,10 +50,10 @@ add (int fd)
   if (! buf)
     return;
 
-  void			*addresses[IgProfTrace::MAX_DEPTH];
-  int			depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
-  IgProfTrace::Record	entries [2];
-  int			nentries = 0;
+  void                  *addresses[IgProfTrace::MAX_DEPTH];
+  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+  IgProfTrace::Record   entries [2];
+  int                   nentries = 0;
 
   if (s_count_used)
   {
@@ -105,9 +105,9 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
-  const char	*options = IgProf::options();
-  bool		enable = false;
-  bool		opts = false;
+  const char    *options = IgProf::options();
+  bool          enable = false;
+  bool          opts = false;
 
   while (options && *options)
   {
@@ -120,27 +120,27 @@ initialize(void)
       options += 2;
       while (*options)
       {
-	if (! strncmp(options, ":used", 5))
-	{
-	  s_count_used = 1;
-	  options += 5;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":live", 5))
-	{
-	  s_count_live = 1;
-	  options += 5;
-	  opts = true;
-	}
-	else if (! strncmp(options, ":all", 4))
-	{
-	  s_count_used = 1;
-	  s_count_live = 1;
-	  options += 4;
-	  opts = true;
-	}
-	else
-	  break;
+        if (! strncmp(options, ":used", 5))
+        {
+          s_count_used = 1;
+          options += 5;
+          opts = true;
+        }
+        else if (! strncmp(options, ":live", 5))
+        {
+          s_count_live = 1;
+          options += 5;
+          opts = true;
+        }
+        else if (! strncmp(options, ":all", 4))
+        {
+          s_count_used = 1;
+          s_count_live = 1;
+          options += 4;
+          opts = true;
+        }
+        else
+          break;
       }
     }
     else
@@ -290,7 +290,7 @@ dosocket(IgHook::SafeData<igprof_dosocket_t> &hook, int domain, int type, int pr
 
 static int
 doaccept(IgHook::SafeData<igprof_doaccept_t> &hook,
-	 int fd, struct sockaddr *addr, socklen_t *len)
+         int fd, struct sockaddr *addr, socklen_t *len)
 {
   bool enabled = IgProf::disable(false);
   int result = (*hook.chain)(fd, addr, len);
