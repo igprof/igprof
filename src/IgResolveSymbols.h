@@ -52,7 +52,9 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
   // if the passed first character is EOF or a separator,
   // return an empty otherwise use it as first character
   // of the buffer.
-  if (*firstChar == EOF || (int) separators[0] == *firstChar || strchr(separators + 1, *firstChar))
+  if (*firstChar == EOF
+      || (int) separators[0] == *firstChar
+      || strchr(separators + 1, *firstChar))
   {
     (*buffer)[0] = 0;
     return 0;
@@ -61,7 +63,6 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
     (*buffer)[0] = *firstChar;
 
   size_t i = 1;
-
   while (true)
   {
     if (i >= *maxSize)
@@ -102,11 +103,12 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
     (*buffer)[i++] = c;
   }
 }
+
 /**Skip all the characters contained in @a skipped*/
 void
 skipchars(FILE *in, const char *skipped, int *nextChar)
 {
-  while(strchr(skipped, *nextChar))
+  while (strchr(skipped, *nextChar))
     *nextChar = iggetc(in);
 }
 
@@ -198,8 +200,9 @@ private:
 #ifndef __APPLE__
       char *commandLine = 0;
       asprintf(&commandLine, "objdump -p %s", NAME.c_str());
-
       FILE *pipe = popen(commandLine, "r");
+      free(commandLine);
+
       if (!pipe || ferror(pipe))
       {
         fprintf(stderr, "Error while invoking objdump");
@@ -252,7 +255,7 @@ private:
         break;
       }
 
-      fclose(pipe);
+      pclose(pipe);
 
       if (!matched)
       {
@@ -261,21 +264,26 @@ private:
         exit(1);
       }
 
-      free(commandLine);
       asprintf(&commandLine, "nm -t d -n %s", NAME.c_str());
       pipe = popen(commandLine, "r");
-      if (!pipe || ferror(pipe))
+      free(commandLine);
+      if (!pipe)
         return;
 
-      nextChar = iggetc(pipe);
+      if (ferror(pipe))
+      {
+	pclose(pipe);
+	return;
+      }
 
+      nextChar = iggetc(pipe);
       while (nextChar != EOF)
       {
         skipchars(pipe, "\n\t ", &nextChar);
         // If line does not match "^(\\d+)[ ]\\S[ ](\S+)$", exit.
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         char *endptr = 0;
-        Offset address = strtol(buffer, &endptr, 10);
+        Offset address = strtoll(buffer, &endptr, 10);
         if (buffer == endptr)
           continue;
         skipchars(pipe, "\t\n ", &nextChar);
@@ -301,7 +309,7 @@ private:
         else
           m_symbolCache.push_back(CacheItem(address-vmbase, buffer));
       }
-      free(commandLine);
+      pclose(pipe);
 #endif /* __APPLE__ */
     }
   bool        m_useGdb;

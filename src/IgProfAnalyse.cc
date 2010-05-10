@@ -63,7 +63,7 @@ public:
   /** Checks that the next char is @a skipped */
   void            skipChar(int skipped)
     {
-      if (m_next!= skipped)
+      if (m_next != skipped)
         syntaxError();
       m_next = iggetc(m_in);
       return;
@@ -2495,17 +2495,14 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
   // String to hold the name of the function.
   std::string fn;
+  std::string ctrname;
 
-  while (!feof(inFile))
+  // One node per line.
+  while (! feof(inFile))
   {
-    // One node per line.
-    // int fileid;
-    unsigned int fileoff = 0xdeadbeef;
-    // int ctrval;
-    // int ctrfreq;
-
     printProgress();
-    // Matches the same as matching "^C(\\d+)\\s*" and resize nodestack to $1.
+
+    // Determine node stack level matching "^C\d+ ".
     t.skipChar('C');
 
     int64_t newPosition = t.getTokenN(' ', 10) - 1;
@@ -2526,84 +2523,59 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     // Find out the information about the current stack line.
     SymbolInfo *sym = 0;
 
-    // Match either a function reference header:
-    //
-    //    FN[0-9]+\+
-    //
-    // or a function definition header
-    //
-    //    FN[0-9]+=
-    //
+    // Match either a function reference "FN[0-9]" followed by = or +.
     t.skipString("FN", 2);
     int64_t symid = t.getTokenN("+=", 10);
 
-    // In case the symbol was already seen, get the file offset and
-    // retrieve the symbol info.
-    if (t.nextChar() == '+')
+    // If this is previously unseen symbol, parse full definition.
+    // Otherwise look up the previously recorded symbol object.
+    if (t.nextChar() == '=')
     {
-      t.skipChar('+');
-      fileoff = t.getTokenN(" \n");
-      sym = symbolsFactory.getSymbol(symid);
-
-      if (!sym)
-        die("Error at line %d: symbol with id %d was referred before being"
-            " defined in input file.\n", 0, symid);
-    }
-    else if (t.nextChar() == '=')
-    {
-      // Check if this is either a file reference:
-      //
-      //    =\(F(\d+)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)
-      //
-      // or a file definition:
-      //
-      //    =\(F(\d+)=\((.*?)\)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)
-      //
+      // Match file reference "=\(F(\d+)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)"
+      // or definition "=\(F(\d+)=\((.*?)\)\+(-?\d+) N=\((.*?)\)\)\+\d+\s*\)"
       // and create a symbol info accordingly.
-
       t.skipString("=(F");
-
       FileInfo *fileinfo = 0;
       std::string symname;
-
       size_t fileId = t.getTokenN("+=", 10);
 
-      // In case we are looking at a file definition, get the filename
-      // else, make sure that the separator is a "+".
+      // If we are looking at a new file definition, get file name.
+      // Otherwise retrieve the previously recorded file object.
       if (t.nextChar() == '=')
       {
         t.skipString("=(", 2);
         t.getTokenS(fn, ')');
         fileinfo = symbolsFactory.createFileInfo(fn, fileId);
       }
-      else if (t.nextChar() == '+')
-        fileinfo = symbolsFactory.getFile(fileId);
       else
-        t.syntaxError();
+        fileinfo = symbolsFactory.getFile(fileId);
 
+      // Get the file offset.
       t.skipChar('+');
+      int64_t fileoff = t.getTokenN(' ', 10);
 
-      // In any case, get the file offset.
-      fileoff = t.getTokenN(' ', 10);
-      // Done that, read the symbol name and offset.
+      // Read the symbol name and offset.
       t.skipString("N=(", 3);
       t.getTokenS(symname, ')');
       if (symname == "@?(nil")
       {
         symname = "@?(nil)";
-        t.skipString("))+", 3);
+        t.skipChar(')');
       }
-      else
-        t.skipString(")+", 2);
-      // Ignore the symbol offset as it is not used.
-      t.getTokenN(" \n", 10);
-      sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);
-    }
-    else
-      t.syntaxError();
 
-    NodeInfo* parent = nodestack.empty() ? prof->spontaneous() : nodestack.back();
-    NodeInfo* child = parent ? parent->getChildrenBySymbol(sym) : 0;
+      sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);
+      t.skipChar(')');
+    }
+    else if (! (sym = symbolsFactory.getSymbol(symid)))
+      die("symbol %" PRId64 " referenced before definition\n", symid);
+
+    // Skip unused symbol offset.
+    t.skipChar('+');
+    t.getTokenN(" \n");
+
+    // Process this stack node.
+    NodeInfo *parent = nodestack.empty() ? prof->spontaneous() : nodestack.back();
+    NodeInfo *child = parent ? parent->getChildrenBySymbol(sym) : 0;
 
     if (!child)
     {
@@ -2618,131 +2590,93 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     }
 
     nodestack.push_back(child);
-    ranges.clear();
 
-    // In case we reached an end of line, iterate.
-    if (t.nextChar() == '\n')
+    // Parse counters, possibly with leaks attached.
+    while (t.nextChar() != '\n')
     {
-      t.skipEol();
-      continue;
-    }
-
-    // Parse counters
-    while (true)
-    {
-      t.getToken("=:;\n");
-
-      if (t.nextChar() == '\n' || t.nextChar() == ';')
-        break;
-
-      if (t.buffer()[0] != ' ' || t.buffer()[1] != 'V')
-        t.syntaxError();
-
-      char *endptr = 0;
-      uint64_t fileId = strtoull(t.buffer() + 2, &endptr, 10);
-      if (!endptr || endptr == t.buffer() + 2)
-        t.syntaxError();
+      t.skipString(" V", 2);
+      size_t ctrId = t.getTokenN(":=", 10);
 
       // Check if we are defining a new counter and possibly register it,
       // if it is of the kind we are interested in.
       if (t.nextChar() == '=')
       {
-        t.skipString("=(", 2);
         // Get the counter name.
-        std::string ctrname;
-        t.getTokenS(ctrname, ")");
-        t.skipString("):(");
+        t.skipString("=(", 2);
+        t.getTokenS(ctrname, ')');
+
         // The first counter we meet, we make it the key, unless
         // the key was already set on command line.
         if (m_key.empty())
           setKey(ctrname);
 
-        // Store information about fileId being
-        // a key or not.
-        if (keys.size() <= fileId)
-          keys.resize(fileId + 1, false);
-        keys[fileId] = ctrname == m_key;
+        // Store information about ctrId being a key or not.
+        if (keys.size() <= ctrId)
+          keys.resize(ctrId + 1, false);
+        keys[ctrId] = (ctrname == m_key);
       }
-      else if (t.nextChar() == ':')
-        t.skipString(":(", 2);
-      else
-        t.syntaxError();
 
       // Get the counter counts.
+      t.skipString(":(", 2);
       int64_t ctrfreq = t.getTokenN(',');
       int64_t ctrvalNormal = t.getTokenN(',');
       int64_t ctrvalPeak = t.getTokenN(')');
 
-      // If the fileId is not among those associated
-      // to the key counter, we skip the counter.
-      if (keys[fileId] == false)
-        continue;
-
-      int64_t ctrval = m_config->normalValue() ? ctrvalNormal : ctrvalPeak;
-
-      if (filter)
-        filter->filter(sym, ctrval, ctrfreq);
-
-      child->COUNTER.cnt += ctrval;
-      child->COUNTER.freq += ctrfreq;
-    }
-
-    // Check wether we reached the end of line or we need to start parsing
-    // leaks.
-    if (t.nextChar() == '\n')
-    {
-      t.skipEol();
-      continue;
-    }
-    else if (t.nextChar() == ';')
-      t.skipChar(';');
-    else
-      t.syntaxError();
-
-    // Parse leaks. They have the form
-    // "LK=\\(0x[\\da-z]+,\\d+\\)[;]*"
-    while (true)
-    {
-      t.skipString("LK=(", 4);
-
-      // Get the leak address and size.
-      int64_t leakAddress = t.getTokenN(',', 16);
-      int64_t leakSize = t.getTokenN(')', 10);
-
-      // In the case we specify one of the --show-pages --show-page-ranges
-      // or --show-locality-metrics options, we keep track
-      // of the page ranges that are referenced by all the allocations
-      // (LK counters in the report).
-      //
-      // We first fill a vector with all the ranges, then we sort it later on
-      // collapsing all the adjacent ranges.
-      if (m_showPages  || m_config->dumpAllocations || m_showPageRanges)
+      // Record if we are interested in something related to this counter.
+      if (keys[ctrId])
       {
-        assert(leakSize > 0);
-        ranges.push_back(RangeInfo(leakAddress, (leakAddress + leakSize + 1)));
-        RangeInfo &range = ranges.back();
-        if (m_showPages || m_showPageRanges)
-        {
-          range.startAddr = range.startAddr >> 12;
-          range.endAddr = range.endAddr >> 12;
-        }
-        assert(range.size() > 0);
+        int64_t ctrval = m_config->normalValue() ? ctrvalNormal : ctrvalPeak;
+
+        if (filter)
+          filter->filter(sym, ctrval, ctrfreq);
+
+        child->COUNTER.cnt += ctrval;
+        child->COUNTER.freq += ctrfreq;
       }
-      if (t.nextChar() == '\n')
-        break;
-      else if (t.nextChar() == ';')
-        t.skipChar(';');
-      else
-        t.syntaxError();
+
+      // Parse leaks of the form ;LK=\(0x[\da-f]+,\d+)* if any.
+      // Theoretically the format allows leaks per counter, but
+      // we only support leaks for one counter at a time.
+      ranges.clear();
+      while (t.nextChar() == ';')
+      {
+        t.skipString(";LK=(0x", 7);
+
+        // Get the leak address and size.
+        int64_t leakAddress = t.getTokenN(',', 16);
+        int64_t leakSize = t.getTokenN(')', 10);
+
+        // In the case we specify one of the --show-pages --show-page-ranges
+        // or --show-locality-metrics options, we keep track
+        // of the page ranges that are referenced by all the allocations
+        // (LK counters in the report).
+        //
+        // We first fill a vector with all the ranges, then we sort it later on
+        // collapsing all the adjacent ranges.
+        if (m_showPages  || m_config->dumpAllocations || m_showPageRanges)
+        {
+          assert(leakSize > 0);
+          ranges.push_back(RangeInfo(leakAddress, (leakAddress + leakSize + 1)));
+          RangeInfo &range = ranges.back();
+          if (m_showPages || m_showPageRanges)
+          {
+            range.startAddr = range.startAddr >> 12;
+            range.endAddr = range.endAddr >> 12;
+          }
+          assert(range.size() > 0);
+        }
+      }
+
+      // Sort the leak ranges and collapse them.
+      if (! ranges.empty() && keys[ctrId])
+      {
+        std::sort(ranges.begin(), ranges.end());
+        mergeSortedRanges(ranges);
+        mergeRanges(child->RANGES, ranges);
+      }
     }
 
-    // Sort the ranges and collapse them, if any.
-    if (ranges.size())
-    {
-      std::sort(ranges.begin(), ranges.end());
-      mergeSortedRanges(ranges);
-      mergeRanges(child->RANGES, ranges);
-    }
+    // We should be looking at end of line now.
     t.skipEol();
   }
 
