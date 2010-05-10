@@ -220,7 +220,7 @@ xsprintf(char *buf, size_t len, const char *format, ...)
 	const char *s = va_arg(args, const char *);
 	if ((unsigned long) s < 4096)
 	  s = "(nil)";
-	    
+
 	int len = strnlen(s, precision);
 	if (! (flags & LEFT))
 	  for ( ; len < width; ++cur, --width)
@@ -252,7 +252,7 @@ xsprintf(char *buf, size_t len, const char *format, ...)
       if (cur < end)
 	*cur = 'x';
       ++cur;
-	    
+
       cur = xntoa(cur, end, (unsigned long) va_arg(args, void *),
 		  16, width, precision, flags);
       continue;

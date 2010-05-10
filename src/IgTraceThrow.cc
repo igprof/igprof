@@ -117,13 +117,13 @@ dothrow (IgHook::SafeData<igtrace_dothrow_t> &hook,
 				tname, exception));
 
         // Removing the __extension__ gives a warning which
-        // is acknowledged as a language problem in the C++ Standard Core 
+        // is acknowledged as a language problem in the C++ Standard Core
         // Language Defect Report
         //
         // http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#195
         //
         // since the suggested decision seems to be that the syntax should
-        // actually be "Conditionally-Supported Behavior" in some 
+        // actually be "Conditionally-Supported Behavior" in some
         // future C++ standard I simply silence the warning.
         IgHookTrace::symbol (__extension__ (void *) dest, sym, lib, symoff, liboff);
 	if (sym && *sym && s_demangle)

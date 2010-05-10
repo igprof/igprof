@@ -23,7 +23,7 @@ IgProfTrace::IgProfTrace(void)
   // allocate it separately.  Note the memory obtained here starts out
   // as zeroed out.
   restable_ = (Resource **) allocateRaw(RESOURCE_HASH*sizeof(Resource *));
-  
+
   // Allocate the call cache next.
   callcache_ = (StackCache *) allocateSpace(MAX_DEPTH*sizeof(StackCache));
 

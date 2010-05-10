@@ -540,7 +540,7 @@ prereentry (void *&from, void *to)
     unsigned int *insns = (unsigned int *) from;
     *insns++ = 0x3c000000 | (((unsigned int) to & 0xffff0000) >> 16); // lis r0,addrhi
     *insns++ = 0x60000000 | (((unsigned int) to & 0x0000ffff) >> 0);  // ori r0,r0,addrlo
-    *insns++ = 0x7c0903a6; // mtctr r0	
+    *insns++ = 0x7c0903a6; // mtctr r0
     from = insns;
     return (insns - start) * 4;
 #else

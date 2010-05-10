@@ -17,25 +17,25 @@
 
 /** Gets a token delimited by @a separator from the @a file and write it,
     0 terminated in the buffer found in @a buffer.
-    
+
     Notice that if the token is larger than @a maxSize, the buffer is
     reallocated and @a maxSize is updated to the new size.
 
-    The trailing separator after a token is not put in the token and is left 
+    The trailing separator after a token is not put in the token and is left
     in the buffer. If @a nextChar is not 0, the delimiter is put there.
-    
+
     @a in the file to be read.
-    
+
     @a buffer a pointer to the buffer where to put the tokens. The buffer will
      be redimensioned accordingly, if the token is larger of the buffer.
-     
-    @a maxSize, a pointer to the size of the buffer. Notice that in case the 
-     buffer is reallocated to have more space, maxSize is updated with the new 
+
+    @a maxSize, a pointer to the size of the buffer. Notice that in case the
+     buffer is reallocated to have more space, maxSize is updated with the new
      size.
-     
-    @a firstChar 
- 
-    @return the size of the token. 
+
+    @a firstChar
+
+    @return the size of the token.
   */
 size_t
 fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
@@ -43,9 +43,9 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
 {
   // if the passed first character is EOF or a separator,
   // return an empty otherwise use it as first character
-  // of the buffer. 
+  // of the buffer.
   if (*firstChar == EOF || (int) separators[0] == *firstChar || strchr(separators + 1, *firstChar))
-  { 
+  {
     (*buffer)[0] = 0;
     return 0;
   }
@@ -66,9 +66,9 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
         exit(1);
       }
     }
-    
+
     int c = fgetc(in);
-    
+
     if (c == EOF)
     {
       if (ferror(in))
@@ -83,7 +83,7 @@ fgettoken(FILE *in, char **buffer, size_t *maxSize, const char *separators,
       }
       assert(false);
     }
-    
+
     if (separators[0] == c || strchr(separators + 1, c))
     {
       (*buffer)[i] = 0;
@@ -115,21 +115,21 @@ private:
   };
 
   typedef std::vector<CacheItem> SymbolCache;
-  
+
   struct CacheItemComparator {
-    bool operator()(const CacheItem& a, 
+    bool operator()(const CacheItem& a,
                     const Offset &b) const
       { return a.OFFSET < b; }
-      
-    bool operator()(const Offset &a, 
+
+    bool operator()(const Offset &a,
                     const CacheItem &b) const
-      { return a < b.OFFSET; }    
+      { return a < b.OFFSET; }
   };
 public:
   std::string NAME;
-  FileInfo(void) 
+  FileInfo(void)
     : NAME("<dynamically generated>"),
-      m_useGdb(false) 
+      m_useGdb(false)
     {}
   FileInfo(const std::string &name, bool useGdb)
     : NAME(name),
@@ -152,13 +152,13 @@ public:
                                             offset, CacheItemComparator());
       if (i->OFFSET == offset)
         return i->NAME.c_str();
-    
+
       if (i == m_symbolCache.begin())
         return m_symbolCache.begin()->NAME.c_str();
 
       --i;
 
-      return i->NAME.c_str(); 
+      return i->NAME.c_str();
     }
 
   Offset next(Offset offset)
@@ -168,7 +168,7 @@ public:
                                             offset, CacheItemComparator());
       if (i == m_symbolCache.end())
         return 0;
-      return i->OFFSET;      
+      return i->OFFSET;
     }
 
   /** Return true if gdb can be used to better determine symbols inside
@@ -190,7 +190,7 @@ private:
 #ifndef __APPLE__
       char *commandLine = 0;
       asprintf(&commandLine, "objdump -p %s", NAME.c_str());
-    
+
       FILE *pipe = popen(commandLine, "r");
       if (!pipe || ferror(pipe))
       {
@@ -202,17 +202,17 @@ private:
       size_t bufferSize = 1024;
       char *buffer = (char*) malloc(bufferSize);
       int nextChar = fgetc(pipe);
-      
+
       while (nextChar != EOF)
       {
         // Checks the following regexp
-        //    
+        //
         //    LOAD\\s+off\\s+(0x[0-9A-Fa-f]+)\\s+vaddr\\s+(0x[0-9A-Fa-f]+)
-        // 
+        //
         // and sets vmbase to be $2 - $1 of the first matched entry.
         skipchars(pipe, "\n\t ", &nextChar);
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
-        if (strncmp("LOAD", buffer, 4)) 
+        if (strncmp("LOAD", buffer, 4))
           continue;
         skipchars(pipe, "\n\t ", &nextChar);
 
@@ -224,10 +224,10 @@ private:
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         char *endptr = 0;
         Offset initialBase = strtol(buffer, &endptr, 16);
-        if (buffer == endptr) 
+        if (buffer == endptr)
           continue;
         skipchars(pipe, "\n\t ", &nextChar);
-        
+
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         if (strncmp("vaddr", buffer, 5))
           continue;
@@ -243,7 +243,7 @@ private:
         matched = true;
         break;
       }
-    
+
       fclose(pipe);
 
       if (!matched)
@@ -268,8 +268,8 @@ private:
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
         char *endptr = 0;
         Offset address = strtol(buffer, &endptr, 10);
-        if (buffer == endptr) 
-          continue; 
+        if (buffer == endptr)
+          continue;
         skipchars(pipe, "\t\n ", &nextChar);
 
         fgettoken(pipe, &buffer, &bufferSize, "\n\t ", &nextChar);
@@ -285,7 +285,7 @@ private:
 
         // Create a new symbol with the given fileoffset.
         // The symbol is automatically saved in the FileInfo cache by offset.
-        // If a symbol with the same offset is already there, the new one 
+        // If a symbol with the same offset is already there, the new one
         // replaces the old one.
         Offset offset = address - vmbase;
         if (m_symbolCache.size() && (m_symbolCache.back().OFFSET == offset))

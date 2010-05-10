@@ -23,7 +23,7 @@
 #define IGTRACE_DUAL_HOOK(n, ret, dofun, id1, id2, args, argnames, fun, v, lib)	\
     IGTRACE_LIBHOOK(n, ret, dofun, id1, args, argnames, fun, 0, 0)		\
     IGTRACE_LIBHOOK(n, ret, dofun, id2, args, argnames, fun, v, lib)
-    
+
 #define IGTRACE_HOOK(n, ret, dofun, id, args, argnames, fun)			\
     IGTRACE_LIBHOOK(n, ret, dofun, id, args, argnames, fun, 0, 0)
 

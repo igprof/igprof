@@ -28,7 +28,7 @@ void dummy(void) {}
 
 
 /** Helper class which is responsible for parsing an IgProf dump.
-    
+
     This is done with a separate class to avoid polluting the internal state
     of the IgProfAnalyzerApplication with the state of the parser.
   */
@@ -51,7 +51,7 @@ public:
     {
       return m_lineCount;
     }
-  
+
   /** Checks that the next char is @a skipped */
   void            skipChar(int skipped)
     {
@@ -61,7 +61,7 @@ public:
       return;
     }
 
-  /** Checks that @a str is the next string in the file. */  
+  /** Checks that @a str is the next string in the file. */
   void            skipString(const char *str, size_t size = 0)
     {
       if (!size)
@@ -74,14 +74,14 @@ public:
       return;
     }
 
-  /** Increments the number of lines and skips the \n. 
+  /** Increments the number of lines and skips the \n.
     */
   void skipEol(void)
     {
       skipChar('\n');
       m_lineCount++;
     }
-  /** @return a pointer to the buffer holding the current token (including 
+  /** @return a pointer to the buffer holding the current token (including
       the separators).
     */
   const char     *buffer(void)
@@ -90,7 +90,7 @@ public:
     }
 
   void            syntaxError();
-private:  
+private:
   FILE                *m_in;
   // Internal state of the tokenizer.
   /** The size of the buffer where read token are put.
@@ -100,7 +100,7 @@ private:
   size_t              m_bufferSize;
   /** The where read token are put.
       Notice that it will grow as larger token not fitting the initial size
-      are found. 
+      are found.
     */
   char                *m_buffer;
   /// The next char after the current token.
@@ -114,7 +114,7 @@ private:
     @a in the file to be read and tokenized.
 
     @a filename string to be printed as filename on error.
-    
+
   */
 IgTokenizer::IgTokenizer(FILE *in, const char *filename)
   : m_in(in),
@@ -127,7 +127,7 @@ IgTokenizer::IgTokenizer(FILE *in, const char *filename)
 }
 
 /** Fills m_buffer with the next token delimited by a seguence of @a delim
-    
+
     It also fills the @a result string with the contents of the token buffer.
   */
 void
@@ -138,9 +138,9 @@ IgTokenizer::getTokenS(std::string &result, const char *delim)
 }
 
 /** Fills m_buffer with the next token delimited by a seguence of @a delim
-    
+
     It also fills the @a result string with the contents of the token buffer.
-    
+
     Notice that given the fact that there is no ambiguity on the delimiter,
     we simply skip it.
   */
@@ -153,9 +153,9 @@ IgTokenizer::getTokenS(std::string &result, char delim)
 }
 
 
-/** Fills m_buffer with the next token delimited by a sequence of 
+/** Fills m_buffer with the next token delimited by a sequence of
     @a delim (including the delimiters).
-    
+
   */
 void
 IgTokenizer::getToken(const char *delim)
@@ -163,12 +163,12 @@ IgTokenizer::getToken(const char *delim)
   fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
 }
 
-/** Fills m_buffer with the next token delimited by a sequence of 
+/** Fills m_buffer with the next token delimited by a sequence of
     @a delim (including the delimiters). Then returns the long long found
     at @a offset in the buffer.
-    
+
     @a base the base to be used for the translation.
-  */ 
+  */
 int64_t
 IgTokenizer::getTokenN(const char *delim, size_t base)
 {
@@ -180,10 +180,10 @@ IgTokenizer::getTokenN(const char *delim, size_t base)
   return result;
 }
 
-/** Fills m_buffer with the next token delimited by a sequence of 
+/** Fills m_buffer with the next token delimited by a sequence of
     @a delim (including the delimiters). Then returns the long long found
     at @a offset in the buffer.
-    
+
     @a base the base to be used for the translation.
 
     Notice that since there is no ambiguity on the delimiter, we simply
@@ -198,13 +198,13 @@ IgTokenizer::getTokenN(char delim, size_t base)
   return result;
 }
 
-/** 
-    Fills m_buffer with the next token delimited by a sequence of 
+/**
+    Fills m_buffer with the next token delimited by a sequence of
     @a delim (including the delimiters). Then returns the long long found
     at @a offset in the buffer.
-    
+
     @a base the base to be used for the translation.
-  */ 
+  */
 double
 IgTokenizer::getTokenD(const char *delim)
 {
@@ -225,7 +225,7 @@ IgTokenizer::getTokenD(char delim)
   return result;
 }
 
-/** 
+/**
     Pretty prints a "syntax error" message, including line number and last
     token read.
   */
@@ -279,7 +279,7 @@ public:
   FileInfo    *FILE;
   int64_t     FILEOFF;
   SymbolInfo(const char *name, FileInfo *file, int fileoff)
-    : NAME(name), FILE(file), FILEOFF(fileoff), RANK(-1) 
+    : NAME(name), FILE(file), FILEOFF(fileoff), RANK(-1)
     {}
 
   int rank(void) { return RANK; }
@@ -953,7 +953,7 @@ public:
   : m_isMax(isMax)
   {}
 
-  /** Check if the symbol comes from the injected 
+  /** Check if the symbol comes from the injected
       igprof / ighook libraries and and merge it in that case.
     */
   virtual void post(NodeInfo *parent,
@@ -973,7 +973,7 @@ public:
       size_t size = node->originalSymbol()->FILE->NAME.size();
       size_t chkOffset = size > 20 ? size - 20 : 0;
       // Handle the different library name(s) when compiled inside CMSSW.
-      // We cannot ignore the old library names yet, because there 
+      // We cannot ignore the old library names yet, because there
       // are plenty of reports that still use them.
       if (strstr(filename.c_str() + chkOffset, "libigprof."))
         mergeToNode(parent, node, m_isMax);
@@ -1151,7 +1151,7 @@ printProgress(void)
   This helper function beautifies a symbol name in the following fashion:
 
   * If the symbol name is in the form '@?.*' we rewrite it using the
-    file name it belongs to (or <dynamically-generate_>) and the offset 
+    file name it belongs to (or <dynamically-generate_>) and the offset
     in the file.
   * Moreover if the useGdb option is specified and the file is a regular one
     it uses a combination of gdb, nm and objdump (as documented in
@@ -1162,7 +1162,7 @@ symlookup(FileInfo *file, int fileoff, std::string& symname, bool useGdb)
 {
   assert(file);
   std::string result = symname;
-  if ((symname.size() > 1 && symname[0] == '@' && symname[1] == '?') 
+  if ((symname.size() > 1 && symname[0] == '@' && symname[1] == '?')
       && file->NAME.size() && (fileoff > 0))
   {
     char buffer[1024];
@@ -1174,20 +1174,20 @@ symlookup(FileInfo *file, int fileoff, std::string& symname, bool useGdb)
     else
     {
       sprintf(buffer, "+%d}",fileoff);
-      // Finds the filename by looking up for the last / in the path 
+      // Finds the filename by looking up for the last / in the path
       // and picking up only the remaining.
       // Notice that this works also in the case / is not found
-      // because in that case npos is returned and npos + 1 == 0. 
+      // because in that case npos is returned and npos + 1 == 0.
       // The standard infact defines npos to be the largest possible unsigned integer.
       result = "@{" + file->NAME.substr(file->NAME.find_last_of('/') + 1) + buffer;
     }
   }
 
-  struct stat st; 
+  struct stat st;
   if (useGdb && ::stat(file->NAME.c_str(), &st) == 0 && S_ISREG(st.st_mode))
   {
     const char *name = file->symbolByOffset(fileoff);
-    if (name) 
+    if (name)
       result = name;
   }
   symname.swap(result);
@@ -1483,7 +1483,7 @@ public:
     {
       m_regexps.resize(m_regexps.size() + 1);
       Regexp &regexp = m_regexps.back();
-      const char *errptr = NULL; 
+      const char *errptr = NULL;
       // int erroff = 0;
       // regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, NULL);
       if (errptr)
@@ -1499,14 +1499,14 @@ protected:
   /** Applies the text substitution to the symbol
       belonging to @a node or the filename where the @a node
       is found.
-      
+
       FIXME: recode to use PCRE directly!
    */
   void convertSymbol(NodeInfo */*node*/)
     {
 /*      int reOffsets[1024];
       int reSizes[1024];
-      
+
       if (m_symbols.find(node->symbol()->NAME) != m_symbols.end())
         return;
 
@@ -1691,7 +1691,7 @@ class SymbolInfoFactory
 public:
   typedef std::map<std::string, SymbolInfo *> SymbolsByName;
 
-  /** 
+  /**
       Initialises the SymbolInfoFactory. In particular,
       it reads the $PATH variable and saves the splitted
       filenames in one single place.
@@ -1742,7 +1742,7 @@ public:
         die("Error in igprof input file.");
 
       // First of all, we make sure that the origname was not already put in
-      // the map by someone else. This should actually be the most common 
+      // the map by someone else. This should actually be the most common
       // case (i.e. actual paths to non symlinks which exist).
       FilesByName::iterator fileIter = m_namedFiles.find(origname);
       if (fileIter != m_namedFiles.end())
@@ -1757,10 +1757,10 @@ public:
       if (origname.empty())
         return insertFileInfo(fileid, "<dynamically generated>", false);
       // First of all we get an absolute path if origname is
-      // not already. 
+      // not already.
 
       // If it is an absolute filename already, we do nothing.
-      // If it is not we iterate over the paths, looking for 
+      // If it is not we iterate over the paths, looking for
       // a file that can be opened for reading and that is
       // not a directory.
       if (origname.c_str()[0] == '/')
@@ -1784,7 +1784,7 @@ public:
           // by a slash.
           abspath = m_paths[i];
           abspath += origname;
-          
+
           char *rp = checkValidFile(abspath.c_str(), isDirectory);
           if (!rp || isDirectory)
           {
@@ -1796,10 +1796,10 @@ public:
           break;
         }
       }
-      
+
       if (!found)
         abspath = origname;
-      
+
       fileIter = m_namedFiles.find(abspath);
       if (fileIter != m_namedFiles.end())
         return fileIter->second;
@@ -1811,7 +1811,7 @@ public:
         return insertFileInfo(fileid, abspath, m_useGdb);
     }
 
-  /** 
+  /**
       Creates a SymbolInfo object using the information read from @a parser.
     */
   SymbolInfo *createSymbolInfo(std::string &symname, size_t fileoff, FileInfo *file, unsigned int symid)
@@ -1849,27 +1849,27 @@ public:
 
 private:
 
-  /** Helper to insert a given fileinfo entry into the map. 
+  /** Helper to insert a given fileinfo entry into the map.
     */
   FileInfo  *insertFileInfo(size_t fileid, const std::string &name, bool useGdb)
   {
     FileInfo *file = new FileInfo(name, useGdb);
-    m_namedFiles.insert(FilesByName::value_type(name, file)); 
+    m_namedFiles.insert(FilesByName::value_type(name, file));
     int oldsize = m_files.size();
     int missingSize = fileid + 1 - oldsize;
     if (missingSize > 0)
-    {   
-      m_files.resize(fileid + 1); 
+    {
+      m_files.resize(fileid + 1);
       for (int i = oldsize; i < oldsize + missingSize; i++)
-        assert(m_files[i] == 0); 
-    } 
+        assert(m_files[i] == 0);
+    }
     m_files[fileid] = file;
     return file;
   }
 
   /** If the filename points to a valid file which can be read, @returns
       its realpath.
-      If not, return NULL. 
+      If not, return NULL.
 
       In case the file is a directory we return the realpath, but set @a
       isDirectory to true.
@@ -1877,18 +1877,18 @@ private:
       @a filename the path of the file to be checked.
 
       @a isDirectory set to true if the filename is associated to a directory.
-    */ 
+    */
   char *checkValidFile(const char *filename, bool &isDirectory)
     {
       isDirectory = false;
       char *rp = realpath(filename, 0);
-    
+
       // If the realpath does not exists, this is either a broken path or a
       // broken link. Hence the loader would have ignored it, hence we do as
       // well.
       if (!rp)
         return NULL;
-  
+
       // If the file is a directory, the loader would not have picked it
       // up, hence we ignore it as well.
       struct stat s;
@@ -1902,11 +1902,11 @@ private:
 
       // If the file is not readable the loader would have not
       // picked it up, hence we ignore.
-     
+
       if (access(rp, R_OK) == -1)
         return NULL;
 
-      return rp; 
+      return rp;
    }
 
   typedef std::vector<FileInfo *> Files;
@@ -1928,7 +1928,7 @@ struct SuffixOps
     {
       size_t tickPos = fullSymbol.rfind("'");
       if (tickPos == std::string::npos)
-      { 
+      {
         oldSymbol = fullSymbol;
         suffix = "";
         return;
@@ -2316,7 +2316,7 @@ private:
   bool        m_isMax;
 };
 
-void 
+void
 symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool demangle)
 {
   size_t bufferSize = 1024;
@@ -2339,7 +2339,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
 
       if (!sym || !sym->FILE)
         continue;
-      
+
       // Only symbols that are marked to be lookup-able by gdb will be looked
       // up. This excludes, for example dynamically generated symbols or
       // symbols from files that are not in path anymore.
@@ -2348,7 +2348,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
 
       if (!sym->FILEOFF || sym->FILE->NAME.empty())
         continue;
-        
+
       // We lookup with gdb only those symbols that cannot be
       // resolved correctly via nm.
       if (sym->FILE->symbolByOffset(sym->FILEOFF))
@@ -2369,7 +2369,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       assert(sym);
       assert(fileInfo);
       assert(!fileInfo->NAME.empty());
-      
+
       prof.symcache().insert(sym);
 
       if (memcmp(fileInfo->NAME.c_str(), "<dynamically", 12))
@@ -2390,12 +2390,12 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
     FILE *gdb = popen(buffer, "r");
     if (!gdb)
       die("Error while running gdb.");
-    
+
     std::string oldname;
     std::string suffix;
     SymbolInfo *sym = 0;
     IgTokenizer t(gdb, buffer);
-    
+
     std::string result;
     while (!feof(gdb))
     {
@@ -2452,14 +2452,14 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
     }
     fflush(out);
     close(f);
-    
+
     asprintf(&buffer, "c++filt <%s", cppfiltFilename);
 
     FILE *cppfilt = popen(buffer, "r");
 
     if (!cppfilt)
       die("Error while running c++filt.");
-    
+
     // Read the full output.
     IgTokenizer t(cppfilt, buffer);
     while (!feof(cppfilt))
@@ -2480,7 +2480,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
   */
 void
 IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
-                                    const std::string &filename, 
+                                    const std::string &filename,
                                     StackTraceFilter *filter)
 {
   std::vector<NodeInfo *> nodestack;
@@ -2530,7 +2530,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     printProgress();
     // Matches the same as matching "^C(\\d+)\\s*" and resize nodestack to $1.
     t.skipChar('C');
-    
+
     int64_t newPosition = t.getTokenN(' ', 10) - 1;
 
     if (newPosition < 0)
@@ -2539,7 +2539,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     int64_t stackSize = nodestack.size();
     if (newPosition > stackSize)
       die("Internal error on line %d", t.lineNum());
-    
+
     int64_t difference = newPosition - stackSize;
     if (difference > 0)
       nodestack.resize(newPosition);
@@ -2554,12 +2554,12 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     //    FN[0-9]+\+
     //
     // or a function definition header
-    // 
+    //
     //    FN[0-9]+=
     //
     t.skipString("FN", 2);
     int64_t symid = t.getTokenN("+=", 10);
-    
+
     // In case the symbol was already seen, get the file offset and
     // retrieve the symbol info.
     if (t.nextChar() == '+')
@@ -2585,10 +2585,10 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       // and create a symbol info accordingly.
 
       t.skipString("=(F");
-      
+
       FileInfo *fileinfo = 0;
       std::string symname;
-      
+
       size_t fileId = t.getTokenN("+=", 10);
 
       // In case we are looking at a file definition, get the filename
@@ -2620,7 +2620,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
         t.skipString(")+", 2);
       // Ignore the symbol offset as it is not used.
       t.getTokenN(" \n", 10);
-      sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);      
+      sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);
     }
     else
       t.syntaxError();
@@ -2649,15 +2649,15 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       t.skipEol();
       continue;
     }
-    
+
     // Parse counters
     while (true)
     {
       t.getToken("=:;\n");
-      
+
       if (t.nextChar() == '\n' || t.nextChar() == ';')
         break;
-      
+
       if (t.buffer()[0] != ' ' || t.buffer()[1] != 'V')
         t.syntaxError();
 
@@ -2665,7 +2665,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       uint64_t fileId = strtoull(t.buffer() + 2, &endptr, 10);
       if (!endptr || endptr == t.buffer() + 2)
         t.syntaxError();
-      
+
       // Check if we are defining a new counter and possibly register it,
       // if it is of the kind we are interested in.
       if (t.nextChar() == '=')
@@ -2690,7 +2690,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
         t.skipString(":(", 2);
       else
         t.syntaxError();
-      
+
       // Get the counter counts.
       int64_t ctrfreq = t.getTokenN(',');
       int64_t ctrvalNormal = t.getTokenN(',');
@@ -2700,9 +2700,9 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       // to the key counter, we skip the counter.
       if (keys[fileId] == false)
         continue;
-      
+
       int64_t ctrval = m_config->normalValue() ? ctrvalNormal : ctrvalPeak;
-      
+
       if (filter)
         filter->filter(sym, ctrval, ctrfreq);
 
@@ -2710,7 +2710,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       child->COUNTER.freq += ctrfreq;
     }
 
-    // Check wether we reached the end of line or we need to start parsing 
+    // Check wether we reached the end of line or we need to start parsing
     // leaks.
     if (t.nextChar() == '\n')
     {
@@ -2721,17 +2721,17 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       t.skipChar(';');
     else
       t.syntaxError();
-    
+
     // Parse leaks. They have the form
     // "LK=\\(0x[\\da-z]+,\\d+\\)[;]*"
     while (true)
     {
       t.skipString("LK=(", 4);
-      
+
       // Get the leak address and size.
       int64_t leakAddress = t.getTokenN(',', 16);
       int64_t leakSize = t.getTokenN(')', 10);
-      
+
       // In the case we specify one of the --show-pages --show-page-ranges
       // or --show-locality-metrics options, we keep track
       // of the page ranges that are referenced by all the allocations
@@ -2758,7 +2758,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       else
         t.syntaxError();
     }
-    
+
     // Sort the ranges and collapse them, if any.
     if (ranges.size())
     {
@@ -2768,7 +2768,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     }
     t.skipEol();
   }
-  
+
   if (keys.empty())
     die("No counter values in profile data.");
 }

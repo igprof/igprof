@@ -30,7 +30,7 @@ public:
   /** Adds the counts and freqs of @a other to this Counter.
 
       @a other source counter.
- 
+
       @a isMax whether or not it needs to sum the counts
        or take the maximum between the two.
     */
@@ -47,11 +47,11 @@ public:
       this->cnt += other.cnt;
   }
 
-  /** Adds the cumulative counts and freqs of @a other 
+  /** Adds the cumulative counts and freqs of @a other
       to this Counter.
 
       @a other source counter.
- 
+
       @a isMax whether or not it needs to sum the counts
        or take the maximum between the two.
     */
@@ -74,7 +74,7 @@ public:
   int64_t freq;
   /** The accumulated counts. */
   int64_t ccnt;
-  /** The accumulated number of times the counter got triggered (e.g. the 
+  /** The accumulated number of times the counter got triggered (e.g. the
       number of allocations of a node and all its children.)
     */
   int64_t cfreq;
@@ -86,11 +86,11 @@ public:
   NameChecker(const std::string& arg) : m_arg(arg) {};
   bool operator()(const char *fullname) { return m_arg == fullname; }
   bool operator()(const char *fullname, const char *abbr)
-    { 
-      return (m_arg == fullname) || (m_arg == abbr); 
+    {
+      return (m_arg == fullname) || (m_arg == abbr);
     }
 private:
-  const std::string m_arg; 
+  const std::string m_arg;
 };
 
 class ArgsLeftCounter
@@ -120,7 +120,7 @@ die(const char *format, ...)
 }
 
 /** @return FILE which reads the profile dump called @a filename.
- 
+
     @a filename the filename to be opened.
  */
 FILE *
@@ -146,7 +146,7 @@ openDump(const char *filename, const char *cmd = 0)
   fread(header, 4, 1, f);
   fclose(f);
   std::string command;
-  
+
   // If a command to be run on the file if specified,
   // just run it.
   // If the file is compressed, uncompress it.
@@ -156,10 +156,10 @@ openDump(const char *filename, const char *cmd = 0)
   else if (header[0] == 0x1f && header[1] == 0x8b)
     command = std::string("gzip -dc ") + filename;
   else if (header[0] == 'B'
-           && header[1] == 'Z' 
+           && header[1] == 'Z'
            && header[2] == 'h')
     command = std::string("bzip2 -dc ") + filename;
-  
+
   FILE *in;
   if (command.empty())
     in = fopen(filename, "r");
@@ -172,7 +172,7 @@ openDump(const char *filename, const char *cmd = 0)
   return in;
 }
 
-std::string 
+std::string
 thousands(int64_t value, int leftPadding=0)
 {
   // Converts an integer value to a string
@@ -180,16 +180,16 @@ thousands(int64_t value, int leftPadding=0)
   assert(leftPadding >= 0);
   int64_t n = 1; int digitCount = 0;
   std::string result = "";
-  bool sign = value >= 0; 
+  bool sign = value >= 0;
 
   if (value < 0)
     value = -value;
   if (!value)
     result = "0";
-    
+
   char d[2];
   d[1] = 0;
-   
+
   while ((value / n))
   {
     int digit = (value / n) % 10;
@@ -201,7 +201,7 @@ thousands(int64_t value, int leftPadding=0)
     n *= 10;
     digitCount = (digitCount + 1) % 3;
   }
-  
+
   if (leftPadding)
   {
     assert(leftPadding-digitCount > 0);
@@ -240,7 +240,7 @@ public:
   AlignedPrinter(int size)
     :m_size(size)
     {}
-    
+
   void operator()(const std::string &n)
     {
       printf("%*s", m_size, n.c_str());
@@ -255,9 +255,9 @@ class FractionPrinter
 {
 public:
   FractionPrinter(int size)
-    :m_size(size) 
+    :m_size(size)
     {}
-  
+
   void operator()(const std::string &n, const std::string &d)
     {
       printf("%*s", m_size, n.c_str());
@@ -265,7 +265,7 @@ public:
       sprintf(denBuffer, " / %%-%ds", m_size);
       printf(denBuffer, d.c_str());
     }
-  
+
 private:
   int m_size;
 };
@@ -276,7 +276,7 @@ public:
   PrintIf(int size)
     :m_size(size)
     {}
-  
+
   void operator()(bool condition, const std::string &value)
     {
       if (condition)
@@ -290,28 +290,28 @@ class SymbolFilter
 {
 public:
   SymbolFilter &operator=(const char *symbolName)
-    { 
-      return this->addFilteredSymbol(symbolName); 
+    {
+      return this->addFilteredSymbol(symbolName);
     }
-  
+
   SymbolFilter &operator,(const char *symbolName)
-    { 
-      return this->addFilteredSymbol(symbolName); 
+    {
+      return this->addFilteredSymbol(symbolName);
     }
 
   SymbolFilter &addFilteredSymbol(const char *symbolName)
     {
-      m_symbols.push_back(symbolName); return *this; 
+      m_symbols.push_back(symbolName); return *this;
     }
-  
+
   bool contains(const std::string &name)
     {
       bool result = std::find(m_symbols.begin(), m_symbols.end(), name) != m_symbols.end();
-      return result; 
+      return result;
     }
-  
+
 private:
-  typedef std::list<std::string> SymbolNames; 
+  typedef std::list<std::string> SymbolNames;
   SymbolNames m_symbols;
 };
 

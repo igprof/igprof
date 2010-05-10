@@ -162,7 +162,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
 	  fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
 		  (ctr->def->id = info.nctrs++), ctr->def->name,
 		  ctr->ticks, ctr->value, ctr->peak);
-	
+
 	for (IgProfTrace::Resource *res = ctr->resources; res; res = res->nextlive)
           __extension__
 	  fprintf(info.output, ";LK=(%p,%ju)", (void *) res->resource, res->size);
@@ -686,13 +686,13 @@ threadWrapper(void *arg)
   if (s_activated)
   {
     // Removing the __extension__ gives a warning which
-    // is acknowledged as a language problem in the C++ Standard Core 
+    // is acknowledged as a language problem in the C++ Standard Core
     // Language Defect Report
     //
     // http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#195
     //
     // since the suggested decision seems to be that the syntax should
-    // actually be "Conditionally-Supported Behavior" in some 
+    // actually be "Conditionally-Supported Behavior" in some
     // future C++ standard I simply silence the warning.
     __extension__
     IgProf::debug("captured thread id 0x%lx for profiling (%p, %p)\n",

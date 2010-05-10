@@ -71,7 +71,7 @@ domalloc (IgHook::SafeData<igtrace_domalloc_t> &hook, size_t size)
 {
     bool enabled = IgTrace::disable ();
     void *result = (*hook.chain) (size);
- 
+
     if (enabled)
     {
         void *stack [800];
@@ -87,7 +87,7 @@ domalloc (IgHook::SafeData<igtrace_domalloc_t> &hook, size_t size)
 				    (unsigned long) pthread_self (), (long) getpid ()));
         }
     }
- 
+
     IgTrace::enable ();
     return result;
 }

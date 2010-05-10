@@ -4,13 +4,13 @@
 #define IGPROF_MERGE2(a,b)		a##b
 #define IGPROF_MERGE3(a,b,c)		a##b##c
 
-#define IGPROF_ARGS0()		
+#define IGPROF_ARGS0()
 #define IGPROF_ARGS1(a)		a
 #define IGPROF_ARGS2(a,b)		a,b
 #define IGPROF_ARGS3(a,b,c)	a,b,c
 #define IGPROF_ARGS4(a,b,c,d)	a,b,c,d
 
-#define IGPROF_ARGSREST0()	
+#define IGPROF_ARGSREST0()
 #define IGPROF_ARGSREST1(a)	,a
 #define IGPROF_ARGSREST2(a,b)	,a,b
 #define IGPROF_ARGSREST3(a,b,c)	,a,b,c
@@ -19,7 +19,7 @@
 #define IGPROF_DUAL_HOOK(n, ret, dofun, id1, id2, args, argnames, fun, v, lib)	\
     IGPROF_LIBHOOK(n, ret, dofun, id1, args, argnames, fun, 0, 0)		\
     IGPROF_LIBHOOK(n, ret, dofun, id2, args, argnames, fun, v, lib)
-    
+
 #define IGPROF_HOOK(n, ret, dofun, id, args, argnames, fun)			\
     IGPROF_LIBHOOK(n, ret, dofun, id, args, argnames, fun, 0, 0)
 

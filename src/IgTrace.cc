@@ -87,7 +87,7 @@ IgTrace::initialize (void)
 	        IgTraceFilter **chain = &s_filters;
 	        while (*chain)
 		    chain = &(*chain)->nextFilter;
-    
+
 	        *chain = f;
 
 	        while (*options && *options != '\'')
@@ -135,7 +135,7 @@ IgTrace::enabled (void)
 /** Enable the profiling system.  This is safe to call from anywhere,
     but note that profiling system will only be enabled, not unlocked.
     Use #IgTraceLock instead if you need to manage exclusive access.
-    
+
     Returns @c true if the profiler is enabled after the call. */
 bool
 IgTrace::enable (void)
@@ -147,7 +147,7 @@ IgTrace::enable (void)
 /** Disable the profiling system.  This is safe to call from anywhere,
     but note that profiling system will only be disabled, not locked.
     Use #IgTraceLock instead if you need to manage exclusive access.
-    
+
     Returns @c true if the profiler was enabled before the call.  */
 bool
 IgTrace::disable (void)
@@ -240,7 +240,7 @@ IgTrace::filter (const char *info, void *stack [], int depth)
 	    const char	*sym = 0;
 	    const char	*lib = 0;
 	    long	junk = 0;
-	    
+
             if (! IgHookTrace::symbol (stack[i], sym, lib, junk, junk))
 		continue;
 

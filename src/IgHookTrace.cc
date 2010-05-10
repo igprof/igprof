@@ -155,7 +155,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
 	    && insn[0] == 0xb8 && insn[1] == __NR_rt_sigreturn
             && insn[5] == 0xcd && insn[6] == 0x80
             && fp->ctx)
-        {   
+        {
 	    void *retip = (void *) fp->ctx->uc_mcontext.gregs [REG_EIP];
             if (depth < nmax)
 		addresses[depth++] = retip;
