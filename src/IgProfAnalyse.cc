@@ -37,8 +37,8 @@ class IgTokenizer
 public:
   IgTokenizer(FILE *in, const char *filename);
   void            getToken(const char *delim);
-  int64_t         getTokenLL(const char *delim, size_t base = 10);
-  int64_t         getTokenLL(char delim, size_t base = 10);
+  int64_t         getTokenN(const char *delim, size_t base = 10);
+  int64_t         getTokenN(char delim, size_t base = 10);
   void            getTokenS(std::string &result, char delim);
   void            getTokenS(std::string &result, const char *delim);
   double          getTokenD(const char *delim);
@@ -170,7 +170,7 @@ IgTokenizer::getToken(const char *delim)
     @a base the base to be used for the translation.
   */ 
 int64_t
-IgTokenizer::getTokenLL(const char *delim, size_t base)
+IgTokenizer::getTokenN(const char *delim, size_t base)
 {
   char *endptr = 0;
   size_t size = fgettoken(m_in, &m_buffer, &m_bufferSize, delim, &m_next);
@@ -190,10 +190,10 @@ IgTokenizer::getTokenLL(const char *delim, size_t base)
     skip it.
   */
 int64_t
-IgTokenizer::getTokenLL(char delim, size_t base)
+IgTokenizer::getTokenN(char delim, size_t base)
 {
   char buf[2] = {delim, 0};
-  int64_t result = getTokenLL(buf, base);
+  int64_t result = getTokenN(buf, base);
   m_next = fgetc(m_in);
   return result;
 }
@@ -299,7 +299,7 @@ struct RangeInfo
   uint64_t endAddr;         // The address of the last page in the range
 
   RangeInfo(uint64_t iStartAddr, uint64_t iEndAddr)
-  : startAddr(iStartAddr), endAddr(iEndAddr)
+    : startAddr(iStartAddr), endAddr(iEndAddr)
   {
     assert(iStartAddr < iEndAddr);
   }
@@ -735,15 +735,15 @@ private:
   std::string m_baseline;
   bool m_diffMode;
 public:
-  int64_t minCountValue;
-  int64_t maxCountValue;
-  int64_t minCallsValue;
-  int64_t maxCallsValue;
-  int64_t minAverageValue;
-  int64_t maxAverageValue;
-  bool    tree;
-  bool    useGdb;
-  bool    dumpAllocations;
+  int64_t  minCountValue;
+  int64_t  maxCountValue;
+  int64_t  minCallsValue;
+  int64_t  maxCallsValue;
+  int64_t  minAverageValue;
+  int64_t  maxAverageValue;
+  bool     tree;
+  bool     useGdb;
+  bool     dumpAllocations;
   std::vector<RegexpSpec>   regexps;
 };
 
@@ -1588,14 +1588,14 @@ private:
 class CallInfo
 {
 public:
-  int64_t    VALUES[3];
-  SymbolInfo *SYMBOL;
-  Ranges     RANGES;
+  int64_t     VALUES[3];
+  SymbolInfo  *SYMBOL;
+  Ranges      RANGES;
 
   CallInfo(SymbolInfo *symbol)
-    :SYMBOL(symbol)
+    : SYMBOL(symbol)
     {
-      memset(VALUES, 0, 3*sizeof(int64_t));
+      memset(VALUES, 0, sizeof(VALUES));
     }
 };
 
@@ -1673,15 +1673,16 @@ public:
     SYMBOL->setRank(rank);
   }
 
-  int64_t SELF_KEY[3];
-  int64_t CUM_KEY[3];
-  Ranges  SELF_RANGES;
-  Ranges  CUM_RANGES;
+  int64_t  SELF_KEY[3];
+  int64_t  CUM_KEY[3];
+  Ranges   SELF_RANGES;
+  Ranges   CUM_RANGES;
 protected:
   FlatInfo(SymbolInfo *symbol)
-    : SYMBOL(symbol), DEPTH(-1) {
-    memset(SELF_KEY, 0, 3*sizeof(int64_t));
-    memset(CUM_KEY, 0, 3*sizeof(int64_t));
+    : SYMBOL(symbol), DEPTH(-1)
+  {
+    memset(SELF_KEY, 0, sizeof(SELF_KEY));
+    memset(CUM_KEY, 0, sizeof(CUM_KEY));
   }
 };
 
@@ -2409,7 +2410,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
       else if (!strncmp(result.c_str(), "IGPROF_SYMCHECK", 15))
       {
         t.skipChar('<');
-        int64_t symid = t.getTokenLL('>');
+        int64_t symid = t.getTokenN('>');
         t.skipEol();
         ProfileInfo::SymCache::iterator symitr = prof.symcache().find((SymbolInfo *)(symid));
         assert(symitr !=prof.symcache().end());
@@ -2463,7 +2464,7 @@ symremap(ProfileInfo &prof, std::vector<FlatInfo *> infos, bool usegdb, bool dem
     IgTokenizer t(cppfilt, buffer);
     while (!feof(cppfilt))
     {
-      SymbolInfo *symbolPtr = (SymbolInfo *)(t.getTokenLL(':'));
+      SymbolInfo *symbolPtr = (SymbolInfo *)(t.getTokenN(':'));
       t.skipChar(' ');
       t.getTokenS(symbolPtr->NAME, "\n");
       t.skipEol();
@@ -2530,7 +2531,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     // Matches the same as matching "^C(\\d+)\\s*" and resize nodestack to $1.
     t.skipChar('C');
     
-    int64_t newPosition = t.getTokenLL(' ', 10) - 1;
+    int64_t newPosition = t.getTokenN(' ', 10) - 1;
 
     if (newPosition < 0)
       t.syntaxError();
@@ -2539,7 +2540,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     if (newPosition > stackSize)
       die("Internal error on line %d", t.lineNum());
     
-    int difference = newPosition - stackSize;
+    int64_t difference = newPosition - stackSize;
     if (difference > 0)
       nodestack.resize(newPosition);
     else
@@ -2557,14 +2558,14 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     //    FN[0-9]+=
     //
     t.skipString("FN", 2);
-    int64_t symid = t.getTokenLL("+=", 10);
+    int64_t symid = t.getTokenN("+=", 10);
     
     // In case the symbol was already seen, get the file offset and
     // retrieve the symbol info.
     if (t.nextChar() == '+')
     {
       t.skipChar('+');
-      fileoff = t.getTokenLL(" \n");
+      fileoff = t.getTokenN(" \n");
       sym = symbolsFactory.getSymbol(symid);
 
       if (!sym)
@@ -2588,7 +2589,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       FileInfo *fileinfo = 0;
       std::string symname;
       
-      size_t fileId = t.getTokenLL("+=", 10);
+      size_t fileId = t.getTokenN("+=", 10);
 
       // In case we are looking at a file definition, get the filename
       // else, make sure that the separator is a "+".
@@ -2606,7 +2607,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       t.skipChar('+');
 
       // In any case, get the file offset.
-      fileoff = t.getTokenLL(' ', 10);
+      fileoff = t.getTokenN(' ', 10);
       // Done that, read the symbol name and offset.
       t.skipString("N=(", 3);
       t.getTokenS(symname, ')');
@@ -2618,7 +2619,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       else
         t.skipString(")+", 2);
       // Ignore the symbol offset as it is not used.
-      t.getTokenLL(" \n", 10);
+      t.getTokenN(" \n", 10);
       sym = symbolsFactory.createSymbolInfo(symname, fileoff, fileinfo, symid);      
     }
     else
@@ -2660,9 +2661,9 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       if (t.buffer()[0] != ' ' || t.buffer()[1] != 'V')
         t.syntaxError();
 
-      char *endptr;
-      int64_t fileId = strtoll(t.buffer() + 2, &endptr, 10);
-      if (endptr == t.buffer() + 2)
+      char *endptr = 0;
+      uint64_t fileId = strtoull(t.buffer() + 2, &endptr, 10);
+      if (!endptr || endptr == t.buffer() + 2)
         t.syntaxError();
       
       // Check if we are defining a new counter and possibly register it,
@@ -2691,9 +2692,9 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
         t.syntaxError();
       
       // Get the counter counts.
-      int64_t ctrfreq = t.getTokenLL(',');
-      int64_t ctrvalNormal = t.getTokenLL(',');
-      int64_t ctrvalPeak = t.getTokenLL(')');
+      int64_t ctrfreq = t.getTokenN(',');
+      int64_t ctrvalNormal = t.getTokenN(',');
+      int64_t ctrvalPeak = t.getTokenN(')');
 
       // If the fileId is not among those associated
       // to the key counter, we skip the counter.
@@ -2728,8 +2729,8 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       t.skipString("LK=(", 4);
       
       // Get the leak address and size.
-      int64_t leakAddress = t.getTokenLL(',', 16);
-      int64_t leakSize = t.getTokenLL(')', 10);
+      int64_t leakAddress = t.getTokenN(',', 16);
+      int64_t leakSize = t.getTokenN(')', 10);
       
       // In the case we specify one of the --show-pages --show-page-ranges
       // or --show-locality-metrics options, we keep track

@@ -229,8 +229,7 @@ thousands(double value, int leftPadding, int decimalPositions)
 std::string
 toString(int64_t value)
 {
-  // FIXME: not thread safe... Do we actually care? Probably not.
-  static char buffer [1024];
+  char buffer [1024];
   sprintf(buffer,"%" PRIi64, value);
   return buffer;
 }
