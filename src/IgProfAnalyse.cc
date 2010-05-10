@@ -1707,34 +1707,40 @@ public:
   SymbolInfoFactory(ProfileInfo *prof, bool useGdb)
     : m_prof(prof), m_useGdb(useGdb)
     {
-      char *paths = strdup(getenv("PATH"));
-      if (!paths)
-        return;
+      char *paths = 0;
+      if (const char *p = getenv("PATH"))
+	paths = strdup(p);
+      if (! paths)
+	return;
+
+      size_t npaths = 1;
+      for (char *p = strchr(paths, ':'); p; p = strchr(p+1, ':'))
+	++npaths;
 
       char *bkpt, *path;
       std::string tmpPath;
+      m_paths.reserve(npaths);
       for (path = strtok_r(paths, ":", &bkpt);
            path;
            path = strtok_r(0, ":", &bkpt))
       {
-        if (!path[0])
-        {
+        if (! path[0])
           m_paths.push_back("./");
-          break;
-        }
+	else
+	{
+          tmpPath = path;
+          if (tmpPath[tmpPath.size() - 1] != '/')
+            tmpPath += "/";
 
-        tmpPath = path;
-        if (tmpPath[tmpPath.size() - 1] != '/')
-          tmpPath += "/";
-
-        m_paths.push_back(tmpPath);
+          m_paths.push_back(tmpPath);
+	}
       }
       free(paths);
     }
 
   SymbolInfo *getSymbol(unsigned int id)
     {
-      assert( id <= m_symbols.size());
+      assert(id <= m_symbols.size());
       return m_symbols[id];
     }
 
@@ -1746,77 +1752,50 @@ public:
 
   FileInfo *createFileInfo(const std::string &origname, unsigned int fileid)
     {
-      if ((m_files.size() >= fileid + 1)  && m_files[fileid] == 0)
+      if ((m_files.size() >= fileid + 1) && m_files[fileid] == 0)
         die("Error in igprof input file.");
 
-      // First of all, we make sure that the origname was not already put in
-      // the map by someone else. This should actually be the most common
-      // case (i.e. actual paths to non symlinks which exist).
-      FilesByName::iterator fileIter = m_namedFiles.find(origname);
-      if (fileIter != m_namedFiles.end())
-        return fileIter->second;
-
+      struct stat st;
+      bool found = false;
+      bool useGdb = false;
       std::string abspath;
 
-      bool isDirectory = false;
-      bool found = false;
-
-      // FIXME: die if exists $filebyid{$1};
       if (origname.empty())
-        return insertFileInfo(fileid, "<dynamically generated>", false);
-      // First of all we get an absolute path if origname is
-      // not already.
-
-      // If it is an absolute filename already, we do nothing.
-      // If it is not we iterate over the paths, looking for
-      // a file that can be opened for reading and that is
-      // not a directory.
-      if (origname.c_str()[0] == '/')
       {
-        char *rp = checkValidFile(origname.c_str(), isDirectory);
-        if (rp && !isDirectory)
-        {
-          found = true;
-          abspath.assign(rp);
-          free(rp);
-        }
-      }
-      else
-      {
-        // We try to look up in the paths for a valid file
-        // if we don't find it, we simply use the original
-        // name, origname.
-        for (size_t i = 0, e = m_paths.size(); i != e; ++i)
-        {
-          // Notice that m_paths elements are already terminated
-          // by a slash.
-          abspath = m_paths[i];
-          abspath += origname;
-
-          char *rp = checkValidFile(abspath.c_str(), isDirectory);
-          if (!rp || isDirectory)
-          {
-            abspath.clear();
-            continue;
-          }
-          found = true;
-          abspath.assign(rp);
-          break;
-        }
+        abspath = "<dynamically generated>";
+	found = true;
       }
 
-      if (!found)
+      // Make origname full, absolute, symlink-resolved path name.  If it is
+      // a bare name with no path components, search in $PATH, otherwise just
+      // resolve it to full path.  Ignore non-files while searching.
+      if (! found && origname.find('/') == std::string::npos)
+	for (size_t i = 0, e = m_paths.size(); i != e && ! found; ++i)
+	{
+	  abspath = m_paths[i];
+	  abspath += origname;
+	  found = (access(abspath.c_str(), R_OK) == 0
+	           && stat(abspath.c_str(), &st) == 0
+	           && S_ISREG(st.st_mode));
+	}
+
+      if (! found)
         abspath = origname;
 
-      fileIter = m_namedFiles.find(abspath);
+      if (char *p = realpath(abspath.c_str(), 0))
+      {
+	if (access(p, R_OK) == 0 && stat(p, &st) == 0 && S_ISREG(st.st_mode))
+	  useGdb = m_useGdb;
+
+	abspath = p;
+        free(p);
+      }
+
+      FilesByName::iterator fileIter = m_namedFiles.find(abspath);
       if (fileIter != m_namedFiles.end())
         return fileIter->second;
-      else if (isDirectory == true)
-        return insertFileInfo(fileid, "<dynamically generated>", false);
-      else if (!found && !origname.empty())
-        return insertFileInfo(fileid, origname, false);
       else
-        return insertFileInfo(fileid, abspath, m_useGdb);
+        return insertFileInfo(fileid, abspath, useGdb);
     }
 
   /**
@@ -1874,47 +1853,6 @@ private:
     m_files[fileid] = file;
     return file;
   }
-
-  /** If the filename points to a valid file which can be read, @returns
-      its realpath, otherwise 0.
-
-      In case the file is a directory we return the realpath, but set @a
-      isDirectory to true.
-
-      @a filename the path of the file to be checked.
-
-      @a isDirectory set to true if the filename is associated to a directory.
-    */
-  char *checkValidFile(const char *filename, bool &isDirectory)
-    {
-      isDirectory = false;
-      char *rp = realpath(filename, 0);
-
-      // If the realpath does not exists, this is either a broken path or a
-      // broken link. Hence the loader would have ignored it, hence we do as
-      // well.
-      if (!rp)
-        return 0;
-
-      // If the file is a directory, the loader would not have picked it
-      // up, hence we ignore it as well.
-      struct stat s;
-      stat(rp, &s);
-
-      if (!S_ISREG(s.st_mode))
-      {
-        isDirectory = true;
-        return 0;
-      }
-
-      // If the file is not readable the loader would have not
-      // picked it up, hence we ignore.
-
-      if (access(rp, R_OK) == -1)
-        return 0;
-
-      return rp;
-   }
 
   typedef std::vector<FileInfo *> Files;
   typedef std::map<std::string, FileInfo *> FilesByName;
