@@ -523,7 +523,9 @@ IgProf::exitThread(bool final)
   else
     pthread_setspecific(s_bufkey, 0);
 
-  IgHookTrace::delcache(pthread_getspecific(s_tracekey));
+  if (s_pthreads)
+    IgHookTrace::delcache(pthread_getspecific(s_tracekey));
+
   delete [] bufs;
 }
 
