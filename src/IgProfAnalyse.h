@@ -12,7 +12,6 @@
 #include <sys/stat.h>
 #include <map>
 #include <stdint.h>
-#define __STDC_FORMAT_MACROS 1
 #include <inttypes.h>
 #include <cstdio>
 #include <cassert>
