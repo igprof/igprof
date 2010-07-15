@@ -195,16 +195,19 @@ static void *
 dumpAllProfiles(void *arg)
 {
   IgProfDumpInfo *info = (IgProfDumpInfo *) arg;
+  itimerval stopped = { { 0, 0 }, { 0, 0 } };
+  itimerval prof, virt, real;
+  sigset_t  sigmask;
+
   if (info->blocksig)
   {
-    itimerval stopped = { { 0, 0 }, { 0, 0 } };
-    setitimer(ITIMER_PROF, &stopped, 0);
-    setitimer(ITIMER_VIRTUAL, &stopped, 0);
-    setitimer(ITIMER_REAL, &stopped, 0);
+    setitimer(ITIMER_PROF, &stopped, &prof);
+    setitimer(ITIMER_VIRTUAL, &stopped, &virt);
+    setitimer(ITIMER_REAL, &stopped, &real);
 
     sigset_t everything;
     sigfillset(&everything);
-    pthread_sigmask(SIG_BLOCK, &everything, 0);
+    pthread_sigmask(SIG_BLOCK, &everything, &sigmask);
   }
 
   char outname[MAX_FNAME];
@@ -230,37 +233,48 @@ dumpAllProfiles(void *arg)
                   ? (unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
                   : fopen (tofile, "w+"));
   if (! info->output)
-  {
     IgProf::debug("can't write to output %s: %s (error %d)\n",
                   tofile, strerror(errno), errno);
-    return 0;
+  else
+  {
+    fprintf(info->output, "P=(ID=%lu N=(%s) T=%f)\n",
+            (unsigned long) getpid(), program_invocation_name, s_clockres);
+
+    pthread_mutex_lock(&s_buflock);
+    IgProfSymCache symcache;
+    info->symcache = &symcache;
+    IgProfBufList &bl = buflist();
+    for (IgProfBufList::iterator i = bl.begin(), e = bl.end(); i != e; ++i)
+      if (IgProfTraceAlloc *bufs = *i)
+        for (int ib = 0; ib < N_MODULES; ++ib)
+          if (IgProfTrace *buf = bufs[ib].buf)
+          {
+            buf->lock();
+            dumpOneProfile(*info, buf->stackRoot());
+            dumpResetIDs(buf->stackRoot());
+            buf->unlock();
+          }
+
+    s_masterbuf->lock();
+    dumpOneProfile(*info, s_masterbuf->stackRoot());
+    dumpResetIDs(s_masterbuf->stackRoot());
+    s_masterbuf->unlock();
+
+    if (tofile[0] == '|')
+      pclose(info->output);
+    else
+      fclose(info->output);
+    pthread_mutex_unlock(&s_buflock);
   }
-  fprintf(info->output, "P=(ID=%lu N=(%s) T=%f)\n",
-          (unsigned long) getpid(), program_invocation_name, s_clockres);
 
-  pthread_mutex_lock(&s_buflock);
-  IgProfSymCache symcache;
-  info->symcache = &symcache;
+  if (info->blocksig)
+  {
+    setitimer(ITIMER_PROF, &prof, 0);
+    setitimer(ITIMER_VIRTUAL, &virt, 0);
+    setitimer(ITIMER_REAL, &real, 0);
+    pthread_sigmask(SIG_SETMASK, &sigmask, 0);
+  }
 
-  IgProfBufList &bl = buflist();
-  for (IgProfBufList::iterator i = bl.begin(), e = bl.end(); i != e; ++i)
-    if (IgProfTraceAlloc *bufs = *i)
-      for (int ib = 0; ib < N_MODULES; ++ib)
-        if (IgProfTrace *buf = bufs[ib].buf)
-        {
-          buf->lock();
-          dumpOneProfile(*info, buf->stackRoot());
-          dumpResetIDs(buf->stackRoot());
-          buf->unlock();
-        }
-
-  s_masterbuf->lock();
-  dumpOneProfile(*info, s_masterbuf->stackRoot());
-  dumpResetIDs(s_masterbuf->stackRoot());
-  s_masterbuf->unlock();
-
-  fclose(info->output);
-  pthread_mutex_unlock(&s_buflock);
   return 0;
 }
 
