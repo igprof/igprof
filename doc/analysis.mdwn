@@ -93,10 +93,10 @@ the profile statistics produced from memory profiling:
   `MEM_LIVE_PEAK`, but the latter will give a useful worst-case upper bound.
 * `MEM_MAX` records the largest single allocation by any function.
 
-  To produce the ASCII text report for MEM_TOTAL from a memory profiling
+To produce the ASCII text report for MEM_TOTAL from a memory profiling
 statistics file, you do:
 
-    igprof-analyse -d -h -v -g -r MEM_TOTAL igprof.mp.gz >& igreport_total.res
+    igprof-analyse -d -h -v -g -r MEM_TOTAL igprof.mp.gz > igreport_total.res
 
 The `-d`, `-v` and `g` options are the same as described above for the
 performance profiling. The `-r` option selects the statistic to report. The 
@@ -115,7 +115,7 @@ It is also possible to combine the statistics from multiple runs into
 a single report, simply by specifying more than one statistics file
 on the command line:
 
-    igprof-analyse -d -v -g igrun1.pp.gz igrun2.pp.gz igrun3.pp.gz >& igrunall_perf.res
+    igprof-analyse -d -v -g igrun1.pp.gz igrun2.pp.gz igrun3.pp.gz > igrunall_perf.res
 
 This is possible for both the performance and memory reports and for both
 types of outputs (ASCII text and sqlite/web).
