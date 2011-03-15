@@ -5,16 +5,22 @@
 #define IGPROF_MERGE3(a,b,c)            a##b##c
 
 #define IGPROF_ARGS0()
-#define IGPROF_ARGS1(a)         a
+#define IGPROF_ARGS1(a)                 a
 #define IGPROF_ARGS2(a,b)               a,b
-#define IGPROF_ARGS3(a,b,c)     a,b,c
-#define IGPROF_ARGS4(a,b,c,d)   a,b,c,d
+#define IGPROF_ARGS3(a,b,c)             a,b,c
+#define IGPROF_ARGS4(a,b,c,d)           a,b,c,d
+#define IGPROF_ARGS5(a,b,c,d,e)         a,b,c,d,e
+#define IGPROF_ARGS6(a,b,c,d,e,f)       a,b,c,d,e,f
+#define IGPROF_ARGS7(a,b,c,d,e,f,g)     a,b,c,d,e,f,g
 
 #define IGPROF_ARGSREST0()
-#define IGPROF_ARGSREST1(a)     ,a
-#define IGPROF_ARGSREST2(a,b)   ,a,b
-#define IGPROF_ARGSREST3(a,b,c) ,a,b,c
+#define IGPROF_ARGSREST1(a)             ,a
+#define IGPROF_ARGSREST2(a,b)           ,a,b
+#define IGPROF_ARGSREST3(a,b,c)         ,a,b,c
 #define IGPROF_ARGSREST4(a,b,c,d)       ,a,b,c,d
+#define IGPROF_ARGSREST5(a,b,c,d,e)     ,a,b,c,d,e
+#define IGPROF_ARGSREST6(a,b,c,d,e,f)   ,a,b,c,d,e,f
+#define IGPROF_ARGSREST7(a,b,c,d,e,f,g) ,a,b,c,d,e,f,g
 
 #define IGPROF_DUAL_HOOK(n, ret, dofun, id1, id2, args, argnames, fun, v, lib)  \
     IGPROF_LIBHOOK(n, ret, dofun, id1, args, argnames, fun, 0, 0)               \

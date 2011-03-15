@@ -324,6 +324,9 @@ parse (const char *func, void *address, unsigned *patches)
         else if (insns [0] == 0x65 && insns [1] == 0x83 && insns [2] == 0x3d)
             n += 8, insns += 8;                          /* cmpl $0x*,%gs:0x* */
 
+	else if (insns [0] == 0xe8) /* call +offset (32-bit) */
+	    *patches++ = n+1, n += 5, insns += 5;
+
         else
         {
             debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
@@ -335,9 +338,16 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned char *insns = (unsigned char *) address;
     if (insns [0] == 0xe9)
     {
-        debug ("%s (%p): hook trampoline already installed, ignoring\n",
-               func, address);
-        return -1;
+	unsigned long target = (unsigned long) insns + *(int *)(insns+1) + 5;
+	if ((target & 0xfff) == 0x004)
+	{
+            debug ("%s (%p): hook trampoline already installed, ignoring\n",
+                   func, address);
+            return -1;
+	}
+	else
+            debug ("%s (%p): jump instruction found, but not a hook target\n",
+                   func, address);
     }
 
     while (n < 5)
@@ -366,7 +376,7 @@ parse (const char *func, void *address, unsigned *patches)
 
         else if (insns[0] == 0x48 && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
                  && (insns[2] == 0x3d || insns[2] == 0x05))
-            *patches++ = n+3, n += 7, insns += 7;
+            *patches++ = 0x700 + n+3, n += 7, insns += 7;
 
         else if (insns[0] == 0x48 && insns[1] == 0xc7 && insns[2] == 0xc0)
             n += 7, insns += 7;                         /* mov $0x*,%rax */
@@ -378,17 +388,20 @@ parse (const char *func, void *address, unsigned *patches)
             n += 4, insns += 4;                         /* sub $0x*,%rsp */
 
         else if (insns[0] == 0x48 && insns[1] == 0x8d && insns[2] == 0x05)
-            *patches++ = n+3, n += 7, insns += 7;       /* lea $0x*(%rip),%rax */
+            *patches++ = 0x700 + n+3, n += 7, insns += 7; /* lea $0x*(%rip),%rax */
+
+        else if (insns[0] == 0x48 && insns[1] == 0x89 && insns[2] == 0xe5)
+            n += 3, insns += 3;                         /* mov %rsp,%rbp */
 
         else if (insns[0] == 0x49 && insns[1] == 0x89)
             n += 3, insns += 3;                         /* mov %r*,%r* */
 
         else if (insns[0] == 0x4c && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
                  && insns[2] == 0x0d)
-            *patches++ = n+3, n += 7, insns += 7;
+            *patches++ = 0x700 + n+3, n += 7, insns += 7;
 
         else if (insns[0] == 0x4c && insns[1] == 0x8d && insns[2] == 0x3d)
-            *patches++ = n+3, n += 7, insns += 7;       /* lea $0x*(%rip),%r15 */
+            *patches++ = 0x700 + n+3, n += 7, insns += 7; /* lea $0x*(%rip),%r15 */
 
         else if (insns[0] == 0x55 || insns[0] == 0x53)
             n += 1, insns += 1;                         /* push %rbp / %rbx */
@@ -404,6 +417,9 @@ parse (const char *func, void *address, unsigned *patches)
 
         else if (insns[0] == 0xb8)                      /* mov $0x*,%eax */
             n += 5, insns += 5;
+
+        else if (insns[0] == 0xe9)                      /* jmpq (32-bit offset) */
+            *patches++ = 0x500 + n+1, n += 5, insns += 5;
 
         else
         {
@@ -594,15 +610,67 @@ prepare (void *address,
     void *start = address;
 #endif
     memcpy (address, old, prologue);
+
+#if __i386__
+    // Patch i386 relative 'call' instructions found in prologue.
+    // In practice there can be at most one patch since it's five
+    // byte <0xe8, nn, nn, nn, nn> instruction. So if there is one
+    // it must be the last instruction. Convert it to a push + jump
+    // <0xff 0x35 nn nn nn nn> <0xe9 nn nn nn nn> to simulate call
+    // coming from the original site - this is important in case
+    // it's PIC __i686.get_pc_thunk.* call. Note both call and
+    // jump instructions are relative to the address immediately
+    // after the intruction. Obviously if we apply a patch, the
+    // postreentry() created below will not be used.
+    if (patches && *patches)
+    {
+      assert((unsigned) prologue == *patches + 4);
+
+      // Compute addresses: original destination, where to patch.
+      unsigned char *insns = (unsigned char *) address + *patches - 1;
+      unsigned long retaddr = (unsigned long) old + *patches + 4;
+      unsigned long offset = * (unsigned *) ((unsigned char *) old + *patches);
+      unsigned long dest = retaddr + offset;
+
+      // push <old-return-address>
+      *insns++ = 0x68;
+      *insns++ = retaddr & 0xff;
+      *insns++ = (retaddr >> 8) & 0xff;
+      *insns++ = (retaddr >> 16) & 0xff;
+      *insns++ = (retaddr >> 24) & 0xff;
+
+      // jmpq <delta-to-original-destination>
+      unsigned long diff = dest - ((unsigned long) insns + 5);
+      *insns++ = 0xe9;
+      *insns++ = diff & 0xff;
+      *insns++ = (diff >> 8) & 0xff;
+      *insns++ = (diff >> 16) & 0xff;
+      *insns++ = (diff >> 24) & 0xff;
+    }
+    else
+    {
+      skip (address, prologue);
+      skip (old, prologue);
+      postreentry (address, old);
+    }
+#else
     skip (address, prologue);
     skip (old, prologue);
     postreentry (address, old);
+#endif
 
 #if __x86_64__
-    // Patch up PC-relative addresses
+    // Patch up PC-relative addresses. The patch values are of formed
+    // Y << 8 + X, where X is offset into the instruction series
+    // and Y is the delta to subtract: the instruction series length.
     for ( ; patches && *patches; ++patches)
-      *((unsigned *)((unsigned char *)start + *patches))
-        += (unsigned char *)old - (unsigned char *)start - 7;
+    {
+      unsigned patch = *patches;
+      unsigned offset = patch & 0xff;
+      unsigned delta = patch >> 8;
+      *((unsigned *)((unsigned char *)start + offset))
+        += (unsigned char *)old - (unsigned char *)start - delta;
+    }
 #endif
 }
 
