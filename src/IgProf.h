@@ -18,7 +18,8 @@ public:
 
   static bool           initialize(int *moduleid,
                                    void (*threadinit)(void),
-                                   bool perthread);
+                                   bool perthread,
+				   double clockres = 0.);
 
   static void           initThread(void);
   static void           exitThread(bool final);

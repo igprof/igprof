@@ -329,7 +329,7 @@ igprof_dump_now(const char *tofile)
 
     Returns @c true if profiling is activated in this process.  */
 bool
-IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
+IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, double clockres)
 {
   if (! s_initialized)
   {
@@ -396,18 +396,8 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
       return s_activated = false;
     }
 
-    itimerval precision;
-    itimerval interval = { { 0, 5000 }, { 100, 0 } };
-    itimerval nullified = { { 0, 0 }, { 0, 0 } };
-    setitimer(ITIMER_PROF, &interval, 0);
-    getitimer(ITIMER_PROF, &precision);
-    setitimer(ITIMER_PROF, &nullified, 0);
-    s_clockres = (precision.it_interval.tv_sec
-                  + 1e-6 * precision.it_interval.tv_usec);
-
-    IgProf::debug("Activated in %s, timing resolution %f, %s,"
-                  " main thread id 0x%lx\n",
-                  program_invocation_name, s_clockres,
+    IgProf::debug("Activated in %s, %s, main thread id 0x%lx\n",
+                  program_invocation_name,
                   s_pthreads ? "multi-threaded" : "no threads",
                   s_mainthread);
     IgProf::debug("Options: %s\n", options);
@@ -442,6 +432,12 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread)
     return true;
 
   IgProf::disable(true);
+
+  if (clockres > 0)
+  {
+    IgProf::debug("Timing resolution set to %f\n", clockres);
+    s_clockres = clockres;
+  }
 
   if (! s_masterbuf)
     s_masterbuf = new (s_masterbufdata) IgProfTrace;

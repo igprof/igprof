@@ -152,7 +152,17 @@ initialize(void)
   if (! enable)
     return;
 
-  if (! IgProf::initialize(&s_moduleid, &threadInit, true))
+  double clockres = 0;
+  itimerval precision;
+  itimerval interval = { { 0, 5000 }, { 100, 0 } };
+  itimerval nullified = { { 0, 0 }, { 0, 0 } };
+  setitimer(s_itimer, &interval, 0);
+  getitimer(s_itimer, &precision);
+  setitimer(s_itimer, &nullified, 0);
+  clockres = precision.it_interval.tv_sec
+             + 1e-6 * precision.it_interval.tv_usec;
+
+  if (! IgProf::initialize(&s_moduleid, &threadInit, true, clockres))
     return;
 
   IgProf::disable(true);
