@@ -766,6 +766,14 @@ dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
                  void * (*start_routine)(void *),
                  void *arg)
 {
+  size_t stack = 0;
+  if (attr && pthread_attr_getstacksize(attr, &stack) == 0 && stack < 64*1024)
+  {
+    IgProf::debug("pthread_create requests too small stack %lu -> use 64kB\n",
+		  (unsigned long) stack);
+    pthread_attr_setstacksize((pthread_attr_t *) attr, 64*1024);
+  }
+
   if (start_routine == dumpAllProfiles)
     return hook.chain(thread, attr, start_routine, arg);
   else
