@@ -113,6 +113,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
     register frame      *ebp __asm__ ("ebp");
     register frame      *esp __asm__ ("esp");
     frame               *fp = ebp;
+    frame               *first = fp;
     int                 depth = 0;
 
     // Add fake entry to be compatible with other methods
@@ -162,7 +163,8 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
 
             if ((fp = (frame *)fp->ctx->uc_mcontext.gregs[REG_EBP])
                 && (unsigned long) fp < PROBABLY_VSYSCALL_PAGE
-                && (unsigned long) retip > PROBABLY_VSYSCALL_PAGE)
+                && (unsigned long) retip > PROBABLY_VSYSCALL_PAGE
+		&& fp > first)
             {
                 // __kernel_vsyscall stack on system call exit is
                 // [0] %ebp, [1] %edx, [2] %ecx, [3] return address.
