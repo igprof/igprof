@@ -390,8 +390,8 @@ parse (const char *func, void *address, unsigned *patches)
         else if (insns[0] == 0x48 && insns[1] == 0x8d && insns[2] == 0x05)
             *patches++ = 0x700 + n+3, n += 7, insns += 7; /* lea $0x*(%rip),%rax */
 
-        else if (insns[0] == 0x48 && insns[1] == 0x89 && insns[2] == 0xe5)
-            n += 3, insns += 3;                         /* mov %rsp,%rbp */
+        else if (insns[0] == 0x48 && insns[1] == 0x89)
+            n += 3, insns += 3;                         /* mov %r*,%r* */
 
         else if (insns[0] == 0x49 && insns[1] == 0x89)
             n += 3, insns += 3;                         /* mov %r*,%r* */
