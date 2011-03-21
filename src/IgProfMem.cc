@@ -54,6 +54,7 @@ static int                      s_moduleid      = -1;
 static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
+  uint64_t tstart, tend;
   void *cache = IgProf::tracecache();
   IgProfTrace *buf = IgProf::buffer(s_moduleid);
   if (! buf)
@@ -71,10 +72,14 @@ add(void *ptr, size_t size)
       size = actual;
   }
 
+  IGPROF_RDTSC(tstart);
+
   void                  *addresses [IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
   IgProfTrace::Record   entries [3];
   int                   nentries = 0;
+
+  IGPROF_RDTSC(tend);
 
   if (s_count_total)
   {
@@ -105,7 +110,8 @@ add(void *ptr, size_t size)
   }
 
   // Drop three top ones (stacktrace, me, hook).
-  buf->push(addresses+3, depth-3, entries, nentries);
+  buf->push(addresses+3, depth-3, entries, nentries,
+	    IgProfTrace::statFrom(depth, tstart, tend));
 }
 
 /** Remove knowledge about allocation.  If we are tracking leaks,
@@ -120,9 +126,10 @@ remove (void *ptr)
     if (! buf)
       return;
 
+    IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
     IgProfTrace::Record entry
       = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, (IgProfTrace::Address) ptr };
-    buf->push(0, 0, &entry, 1);
+    buf->push(0, 0, &entry, 1, perf);
   }
 }
 

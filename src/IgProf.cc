@@ -12,6 +12,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <cerrno>
+#include <cmath>
 #include <list>
 #include <unistd.h>
 #include <sys/signal.h>
@@ -31,7 +32,8 @@ struct IgProfWrappedArg { void *(*start_routine)(void *); void *arg; };
 struct IgProfTraceAlloc { IgProfTrace *buf; bool perthread; };
 struct IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
                         const char *tofile; FILE *output;
-                        IgProfSymCache *symcache; int blocksig; };
+                        IgProfSymCache *symcache; int blocksig;
+			IgProfTrace::PerfStat perf; };
 class IgProfExitDump { public: ~IgProfExitDump(void); };
 typedef std::list<void (*) (void)> IgProfCallList;
 typedef std::list<IgProfTraceAlloc *> IgProfBufList;
@@ -195,6 +197,7 @@ static void *
 dumpAllProfiles(void *arg)
 {
   IgProfDumpInfo *info = (IgProfDumpInfo *) arg;
+  IgProfTrace::PerfStat &perf = info->perf;
   itimerval stopped = { { 0, 0 }, { 0, 0 } };
   itimerval prof, virt, real;
   sigset_t  sigmask;
@@ -252,12 +255,14 @@ dumpAllProfiles(void *arg)
             buf->lock();
             dumpOneProfile(*info, buf->stackRoot());
             dumpResetIDs(buf->stackRoot());
+	    perf += buf->perfStats();
             buf->unlock();
           }
 
     s_masterbuf->lock();
     dumpOneProfile(*info, s_masterbuf->stackRoot());
     dumpResetIDs(s_masterbuf->stackRoot());
+    perf += s_masterbuf->perfStats();
     s_masterbuf->unlock();
 
     if (tofile[0] == '|')
@@ -275,6 +280,17 @@ dumpAllProfiles(void *arg)
     pthread_sigmask(SIG_SETMASK, &sigmask, 0);
   }
 
+  double depthAvg = (1. * perf.sumDepth) / perf.ntraces;
+  double ticksAvg = (1. * perf.sumTicks) / perf.ntraces;
+  double tperdAvg = (1./16 * perf.sumTPerD) / perf.ntraces;
+  IgProf::debug("trace perf: ntraces=%.0f"
+		" depth=[av %.1f, rms %.1f]"
+		" ticks=[av %.1f, rms %.1f]"
+		" ticks-per-depth=[av %.1f, rms %.1f]\n",
+                1. * perf.ntraces,
+		depthAvg, sqrt((1. * perf.sum2Depth) / perf.ntraces - depthAvg * depthAvg),
+		ticksAvg, sqrt((1. * perf.sum2Ticks) / perf.ntraces - ticksAvg * ticksAvg),
+		tperdAvg, sqrt((1./16/16 * perf.sum2TPerD) / perf.ntraces - tperdAvg * tperdAvg));
   return 0;
 }
 
@@ -299,7 +315,8 @@ asyncDumpThread(void *)
     if (! (++dodump % 32) && ! stat(s_dumpflag, &st))
     {
       unlink(s_dumpflag);
-      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 1 };
+      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 1,
+                              { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
       dodump = 0;
     }
@@ -315,7 +332,8 @@ extern "C" void
 igprof_dump_now(const char *tofile)
 {
   pthread_t tid;
-  IgProfDumpInfo info = { 0, 0, 0, 0, tofile, 0, 0, 1 };
+  IgProfDumpInfo info = { 0, 0, 0, 0, tofile, 0, 0, 1,
+                          { 0, 0, 0, 0, 0, 0, 0 } };
   pthread_create(&tid, 0, &dumpAllProfiles, &info);
   pthread_join(tid, 0);
 }
@@ -820,7 +838,8 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
     if (enabled)
     {
       IgProf::debug("kill(%d,%d) called, dumping state\n", (int) pid, sig);
-      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0 };
+      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
+                              { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
     }
     IgProf::enable(true);
@@ -840,7 +859,8 @@ IgProfExitDump::~IgProfExitDump (void)
   s_enabled = 0;
   s_quitting = 1;
   IgProf::exitThread(true);
-  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0 };
+  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
+                          { 0, 0, 0, 0, 0, 0, 0 } };
   dumpAllProfiles(&info);
   IgProf::debug("igprof quitting\n");
   s_initialized = false; // signal local data is unsafe to use

@@ -60,6 +60,7 @@
 class IgProfTrace : protected IgProfBuffer
 {
 public:
+  struct PerfStat;
   struct StackCache;
   struct Stack;
   struct CounterDef;
@@ -75,6 +76,20 @@ public:
 
   /// A large-sized accumulated value for counters.
   typedef uintmax_t Value;
+
+  /// Performance statistics for tracing.
+  struct PerfStat
+  {
+    uint64_t    ntraces;        //< Number of traces.
+    uint64_t    sumDepth;       //< sum(trace_depth).
+    uint64_t    sum2Depth;      //< sum(trace_depth^2).
+    uint64_t    sumTicks;       //< sum(ticks_for_trace).
+    uint64_t    sum2Ticks;      //< sum(ticks_for_trace^2).
+    uint64_t    sumTPerD;       //< sum((ticks << 4) / depth).
+    uint64_t    sum2TPerD;      //< sum(((ticks << 4) / depth)^2).
+
+    PerfStat &operator+=(const PerfStat &other);
+  };
 
   /// Structure for call stack cache at the end.
   struct StackCache
@@ -173,9 +188,11 @@ public:
   IgProfTrace(void);
   ~IgProfTrace(void);
 
-  void                  push(void **stack, int depth, Record *recs, int nrecs);
+  void                  push(void **stack, int depth, Record *recs, int nrecs, const PerfStat &s);
   void                  mergeFrom(IgProfTrace &other);
   Stack *               stackRoot(void) const;
+  const PerfStat &      perfStats(void) const;
+  static PerfStat       statFrom(int depth, uint64_t tstart, uint64_t tend);
 
   void                  lock(void);
   void                  unlock(void);
@@ -203,6 +220,7 @@ private:
   StackCache            *callcache_;    //< Start of address cache.
   Resource              *resfree_;      //< Resource free list.
   Stack                 *stack_;        //< Stack root.
+  PerfStat		perfStats_;	//< Performance stats.
 
   // Unavailable copy constructor, assignment operator
   IgProfTrace(IgProfTrace &);
@@ -212,5 +230,39 @@ private:
 inline IgProfTrace::Stack *
 IgProfTrace::stackRoot (void) const
 { return stack_; }
+
+inline IgProfTrace::PerfStat &
+IgProfTrace::PerfStat::operator+=(const PerfStat &other)
+{
+  ntraces   += other.ntraces;
+  sumDepth  += other.sumDepth;
+  sum2Depth += other.sum2Depth;
+  sumTicks  += other.sumTicks;
+  sum2Ticks += other.sum2Ticks;
+  sumTPerD  += other.sumTPerD;
+  sum2TPerD += other.sum2TPerD;
+  return *this;
+}
+
+inline IgProfTrace::PerfStat
+IgProfTrace::statFrom(int depth, uint64_t tstart, uint64_t tend)
+{
+  PerfStat result;
+  uint64_t dep       = depth;
+  uint64_t nticks    = tend - tstart;
+  uint64_t tperd     = (nticks << 4) / dep;
+  result.ntraces   = 1;
+  result.sumDepth  = dep;
+  result.sum2Depth = dep * dep;
+  result.sumTicks  = nticks;
+  result.sum2Ticks = nticks * nticks;
+  result.sumTPerD  = tperd;
+  result.sum2TPerD = tperd * tperd;
+  return result;
+}
+
+inline const IgProfTrace::PerfStat &
+IgProfTrace::perfStats(void) const
+{ return perfStats_; }
 
 #endif // IG_PROF_IG_PROF_TRACE_H

@@ -45,15 +45,20 @@ static int                      s_moduleid      = -1;
 static void __attribute__((noinline))
 add (int fd)
 {
+  uint64_t tstart, tend;
   void *cache = IgProf::tracecache();
   IgProfTrace *buf = IgProf::buffer(s_moduleid);
   if (! buf)
     return;
 
+  IGPROF_RDTSC(tstart);
+
   void                  *addresses[IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
   IgProfTrace::Record   entries [2];
   int                   nentries = 0;
+
+  IGPROF_RDTSC(tend);
 
   if (s_count_used)
   {
@@ -75,7 +80,8 @@ add (int fd)
   }
 
   // Drop two bottom frames, four top ones (stacktrace, me, two for hook).
-  buf->push(addresses+4, depth-4, entries, nentries);
+  buf->push(addresses+4, depth-4, entries, nentries,
+	    IgProfTrace::statFrom(depth, tstart, tend));
 }
 
 /** Remove knowledge about the file descriptor.  If we are tracking
@@ -90,9 +96,10 @@ remove (int fd)
     if (! buf)
       return;
 
+    IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
     IgProfTrace::Record entry
       = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, fd };
-    buf->push(0, 0, &entry, 1);
+    buf->push(0, 0, &entry, 1, perf);
   }
 }
 

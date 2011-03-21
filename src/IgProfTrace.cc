@@ -32,6 +32,15 @@ IgProfTrace::IgProfTrace(void)
 
   // The resource free list starts out empty.
   IGPROF_ASSERT(! resfree_);
+
+  // Initialise performance stats.
+  perfStats_.ntraces   = 0;
+  perfStats_.sumDepth  = 0;
+  perfStats_.sum2Depth = 0;
+  perfStats_.sumTicks  = 0;
+  perfStats_.sum2Ticks = 0;
+  perfStats_.sumTPerD  = 0;
+  perfStats_.sum2TPerD = 0;
 }
 
 IgProfTrace::~IgProfTrace(void)
@@ -228,10 +237,11 @@ IgProfTrace::unlock(void)
 
 /** Push a call frame and its records into the buffer. */
 void
-IgProfTrace::push(void **stack, int depth, Record *recs, int nrecs)
+IgProfTrace::push(void **stack, int depth, Record *recs, int nrecs, const PerfStat &perf)
 {
   pthread_mutex_lock(&mutex_);
   dopush(stack, depth, recs, nrecs);
+  perfStats_ += perf;
   pthread_mutex_unlock(&mutex_);
 }
 
@@ -318,6 +328,7 @@ IgProfTrace::mergeFrom(IgProfTrace &other)
 
   callstack[MAX_DEPTH] = stack_->address; // null really
   mergeFrom(0, other.stack_, &callstack[MAX_DEPTH], recs);
+  perfStats_ += other.perfStats_;
 
   pthread_mutex_unlock(&other.mutex_);
   pthread_mutex_unlock(&mutex_);

@@ -50,11 +50,17 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
     void *cache = IgProf::tracecache();
     if (IgProfTrace *buf = IgProf::buffer(s_moduleid))
     {
+      uint64_t tstart, tend;
+      IGPROF_RDTSC(tstart);
+
       int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
 
+      IGPROF_RDTSC(tend);
+
       // Drop two bottom frames, three top ones (stacktrace, me, signal frame).
-      buf->push(addresses+3, depth-3, &entry, 1);
+      buf->push(addresses+3, depth-3, &entry, 1,
+		IgProfTrace::statFrom(depth, tstart, tend));
     }
   }
   IgProf::enable(false);
@@ -270,12 +276,18 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     nticks = int(dt / tv2sec(left.it_interval) + 0.5);
     if (enabled && nticks && buf)
     {
+      uint64_t tstart, tend;
+      IGPROF_RDTSC(tstart);
+
       void *addresses [IgProfTrace::MAX_DEPTH];
       void *cache = IgProf::tracecache();
       int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
       if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
-      buf->push(addresses+1, depth-1, &entry, 1);
+      IGPROF_RDTSC(tend);
+
+      buf->push(addresses+1, depth-1, &entry, 1,
+		IgProfTrace::statFrom(depth, tstart, tend));
     }
     IgProf::debug("resuming profiling after blinking for fork() for"
 		  " %.3fms, %d ticks\n", dt*1000, nticks);
@@ -311,12 +323,18 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   nticks = int(dt / tv2sec(left.it_interval) + 0.5);
   if (enabled && nticks && buf)
   {
+    uint64_t tstart, tend;
+    IGPROF_RDTSC(tstart);
+
     void *addresses [IgProfTrace::MAX_DEPTH];
     void *cache = IgProf::tracecache();
     int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
     if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
-    buf->push(addresses+1, depth-1, &entry, 1);
+    IGPROF_RDTSC(tend);
+
+    buf->push(addresses+1, depth-1, &entry, 1,
+	      IgProfTrace::statFrom(depth, tstart, tend));
   }
 
   IgProf::debug("resuming profiling after blinking for system() for"

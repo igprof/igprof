@@ -54,4 +54,10 @@
 # define IGPROF_TRACE(expr) do { ; } while (0)
 #endif
 
+#define IGPROF_RDTSC(v)                                   \
+  do { unsigned lo, hi;                                   \
+       __asm__ volatile ("rdtsc" : "=a" (lo), "=d" (hi)); \
+       (v) = ((uint64_t) lo) | ((uint64_t) hi << 32);     \
+  } while (0)
+
 #endif // IG_PROF_IG_PROF_MACROS_H
