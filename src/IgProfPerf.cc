@@ -47,13 +47,12 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
   bool enabled = IgProf::disable(false);
   if (enabled)
   {
-    void *cache = IgProf::tracecache();
     if (IgProfTrace *buf = IgProf::buffer(s_moduleid))
     {
       uint64_t tstart, tend;
       IGPROF_RDTSC(tstart);
 
-      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
 
       IGPROF_RDTSC(tend);
@@ -280,8 +279,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
       IGPROF_RDTSC(tstart);
 
       void *addresses [IgProfTrace::MAX_DEPTH];
-      void *cache = IgProf::tracecache();
-      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
       IGPROF_RDTSC(tend);
@@ -327,8 +325,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
     IGPROF_RDTSC(tstart);
 
     void *addresses [IgProfTrace::MAX_DEPTH];
-    void *cache = IgProf::tracecache();
-    int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+    int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
     if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
     IGPROF_RDTSC(tend);

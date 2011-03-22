@@ -67,26 +67,8 @@ IgHookTrace::tosymbol (void *address)
         ? info.dli_saddr : address;
 }
 
-void *
-IgHookTrace::initcache (int nframes UNUSED)
-{
-#if __linux && __x86_64__
-    return unw_tdep_make_frame_cache (nframes);
-#else
-    return 0;
-#endif
-}
-
-void
-IgHookTrace::delcache (void *cache UNUSED)
-{
-#if __linux && __x86_64__
-    unw_tdep_free_frame_cache ((unw_tdep_frame_t *) cache);
-#endif
-}
-
 int
-IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
+IgHookTrace::stacktrace (void **addresses, int nmax)
 {
 #if __linux && __i386__
 // Safer assumption for the VSYSCALL_PAGE.
@@ -196,32 +178,7 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
 
     return depth;
 #elif __linux && __x86_64__
-    unw_cursor_t     cur;
-    unw_context_t    ctx;
-    unw_context_t    saved;
-    unw_tdep_frame_t *fcache = (unw_tdep_frame_t *) cache;
-    int              depth = nmax;
-    int              ret;
-
-    // If we have a cache, first try fast trace. Fall back on slow trace.
-    unw_getcontext(&ctx);
-    memcpy(&saved, &ctx, sizeof(ctx));
-
-    unw_init_local(&cur, &ctx);
-    if (! cache || (ret = unw_tdep_trace(&cur, addresses, &depth, fcache)) < 0)
-    {
-        depth = 0;
-        unw_init_local(&cur, &saved);
-        while (depth < nmax)
-        {
-            unw_word_t ip;
-            unw_get_reg(&cur, UNW_REG_IP, &ip);
-            addresses[depth++] = (void *) ip;
-            if ((ret = unw_step(&cur)) <= 0)
-              break;
-        }
-    }
-
+    return unw_backtrace(addresses, nmax);
 #if 0 // Debug code for tracking unwind failures.
     if (addresses[depth-1] != (void *) 0x40cce9)
     {
@@ -242,8 +199,6 @@ IgHookTrace::stacktrace (void **addresses, int nmax, void *cache UNUSED)
       write(2, buf, sprintf(buf, " UWEND\n"));
     }
 #endif
-
-    return depth;
 #elif __APPLE__ && __ppc__
     struct frame { frame *sp; void *cr; char *lr; };
     char                *sigtramplow = (char *) &_sigtramp;

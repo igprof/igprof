@@ -89,7 +89,6 @@ static pthread_t        s_mainthread;
 static pthread_t        s_dumpthread;
 static pthread_key_t    s_bufkey;
 static pthread_key_t    s_flagkey;
-static pthread_key_t    s_tracekey;
 static char             s_outname[MAX_FNAME];
 static char             s_dumpflag[MAX_FNAME];
 
@@ -398,9 +397,7 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, doub
       s_pthreads = true;
       pthread_key_create(&s_bufkey, 0);
       pthread_key_create(&s_flagkey, 0);
-      pthread_key_create(&s_tracekey, 0);
       pthread_setspecific(s_flagkey, new IgProfAtomic(1));
-      pthread_setspecific(s_tracekey, IgHookTrace::initcache(N_TRACE_CACHE));
     }
     dlclose(program);
 
@@ -500,7 +497,6 @@ IgProf::initThread(void)
 
   IgProfAtomic *enabled = new IgProfAtomic(1);
   pthread_setspecific(s_flagkey, enabled);
-  pthread_setspecific(s_tracekey, IgHookTrace::initcache(N_TRACE_CACHE));
 
   for (int i = 0; i < N_MODULES && s_bufs[i].buf; ++i)
     if (s_bufs[i].perthread)
@@ -551,9 +547,6 @@ IgProf::exitThread(bool final)
   else
     pthread_setspecific(s_bufkey, 0);
 
-  if (s_pthreads)
-    IgHookTrace::delcache(pthread_getspecific(s_tracekey));
-
   delete [] bufs;
 }
 
@@ -577,16 +570,6 @@ IgProf::buffer(int moduleid)
     bufs = (IgProfTraceAlloc *) pthread_getspecific(s_bufkey);
 
   return bufs ? bufs[moduleid].buf : 0;
-}
-
-/** Return stack trace cache in the current thread, for speeding up
-    stack walks.  It is safe to call this function from any thread
-    and in asynchronous signal handlers at any time.  Returns the
-    cache to use or a null if no cache is needed. */
-void *
-IgProf::tracecache(void)
-{
-  return s_pthreads ? pthread_getspecific(s_tracekey) : 0;
 }
 
 /** Check if the profiler is currently enabled.  This function should
@@ -661,7 +644,7 @@ IgProf::panic(const char *file, int line, const char *func, const char *expr)
            program_invocation_name, file, line, func, expr);
 
   void *trace [128];
-  int levels = IgHookTrace::stacktrace(trace, 128, 0);
+  int levels = IgHookTrace::stacktrace(trace, 128);
   for (int i = 2; i < levels; ++i)
   {
     const char  *sym = 0;
@@ -735,7 +718,7 @@ threadWrapper(void *arg)
 
   // Make sure we've called stack trace code at least once in
   // this thread before the profile signal hits.
-  void *dummy = 0; IgHookTrace::stacktrace(&dummy, 1, 0);
+  void *dummy = 0; IgHookTrace::stacktrace(&dummy, 1);
 
   // Run per-profiler initialisation.
   if (s_activated)

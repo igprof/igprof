@@ -85,7 +85,7 @@ dothrow (IgHook::SafeData<igtrace_dothrow_t> &hook,
          void (*dest) (void *))
 {
     void *stack [800];
-    int depth = IgHookTrace::stacktrace (stack, sizeof (stack)/sizeof(stack[0]), 0);
+    int depth = IgHookTrace::stacktrace (stack, sizeof (stack)/sizeof(stack[0]));
 
     // If it passes filters, walk the stack to print out information.
     if (IgTrace::filter (tinfo->name (), stack, depth))

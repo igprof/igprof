@@ -55,7 +55,6 @@ static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
   uint64_t tstart, tend;
-  void *cache = IgProf::tracecache();
   IgProfTrace *buf = IgProf::buffer(s_moduleid);
   if (! buf)
     return;
@@ -75,7 +74,7 @@ add(void *ptr, size_t size)
   IGPROF_RDTSC(tstart);
 
   void                  *addresses [IgProfTrace::MAX_DEPTH];
-  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH, cache);
+  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   IgProfTrace::Record   entries [3];
   int                   nentries = 0;
 

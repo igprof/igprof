@@ -313,7 +313,7 @@ static void
 munmapreport(void *addr, size_t len)
 {
   void *stack [800];
-  int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]), 0);
+  int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]));
 
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("munmap", stack, depth))
@@ -370,7 +370,7 @@ static void
 mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, __off64_t off, void *ret)
 {
   void *stack [800];
-  int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]), 0);
+  int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]));
 
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("mmap", stack, depth))
