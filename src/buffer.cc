@@ -1,4 +1,4 @@
-#include "IgProfBuffer.h"
+#include "buffer.h"
 #include <sys/mman.h>
 #include <memory.h>
 #include <errno.h>

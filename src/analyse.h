@@ -1,7 +1,7 @@
 #ifndef IG_PROF_ANALYZE
 #define IG_PROF_ANALYZE
 
-#include "IgResolveSymbols.h"
+#include "sym-resolve.h"
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>

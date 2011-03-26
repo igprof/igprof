@@ -1,9 +1,9 @@
-#include "IgProf.h"
-#include "IgProfTrace.h"
-#include "IgProfSymCache.h"
-#include "IgProfAtomic.h"
-#include "IgHook.h"
-#include "IgHookTrace.h"
+#include "profile.h"
+#include "profile-trace.h"
+#include "sym-cache.h"
+#include "atomic.h"
+#include "hook.h"
+#include "walk-syms.h"
 #include <algorithm>
 #include <sys/types.h>
 #include <sys/time.h>

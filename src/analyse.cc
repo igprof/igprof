@@ -1,4 +1,4 @@
-#include "IgProfAnalyse.h"
+#include "analyse.h"
 #include <iostream>
 #include <fstream>
 #include <cstdarg>

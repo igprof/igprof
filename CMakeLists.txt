@@ -37,21 +37,21 @@ ENDIF()
 # Build targets.
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR} ${UNWIND_INCLUDE_DIR})
 ADD_LIBRARY(igprof SHARED
-            src/IgHook.cc
-            src/IgHookTrace.cc
-            src/IgProfBuffer.cc
-            src/IgProf.cc
-            src/IgProfFileDesc.cc
-            src/IgProfMem.cc
-            src/IgProfPerf.cc
-            src/IgProfSymCache.cc
-            src/IgProfTrace.cc
-            src/IgTrace.cc
-            src/IgTraceMem.cc
-            src/IgTraceMMap.cc
-            src/IgTraceThrow.cc)
+            src/hook.cc
+            src/buffer.cc
+            src/sym-cache.cc
+            src/walk-syms.cc
+            src/profile.cc
+            src/profile-fd.cc
+            src/profile-mem.cc
+            src/profile-perf.cc
+            src/profile-trace.cc
+            src/trace.cc
+            src/trace-mem.cc
+            src/trace-mmap.cc
+            src/trace-throw.cc)
 TARGET_LINK_LIBRARIES(igprof ${IGPROF_LIBS} ${UNWIND_LIBRARY})
-ADD_EXECUTABLE(igprof-analyse src/IgProfAnalyse.cc)
+ADD_EXECUTABLE(igprof-analyse src/analyse.cc)
 TARGET_LINK_LIBRARIES(igprof-analyse ${CMAKE_DL_LIBS})
 INSTALL(TARGETS igprof igprof-analyse
 	RUNTIME DESTINATION bin
@@ -70,7 +70,7 @@ INSTALL(FILES
         src/igtrace-mmap-summary
         DESTINATION bin
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-INSTALL(FILES src/IgResolveSymbols.h DESTINATION include/igprof)
+INSTALL(FILES src/sym-resolve.h DESTINATION include/igprof)
 
 # Tests.
 IF(IGPROF_BUILD_TESTS)

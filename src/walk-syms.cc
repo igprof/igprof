@@ -1,4 +1,4 @@
-#include "IgHookTrace.h"
+#include "walk-syms.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>

@@ -1,8 +1,8 @@
 #ifndef IG_PROF_IG_PROF_H
 # define IG_PROF_IG_PROF_H
 
-# include "IgProfMacros.h"
-# include "IgHook.h"
+# include "macros.h"
+# include "hook.h"
 
 class IgProfTrace;
 

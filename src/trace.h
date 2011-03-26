@@ -1,8 +1,8 @@
 #ifndef IG_TRACE_IG_TRACE_H
 # define IG_TRACE_IG_TRACE_H
 
-# include "IgHook.h"
-# include "IgTraceMacros.h"
+# include "hook.h"
+# include "trace-macros.h"
 
 /** Core tracing implementation.  Implements utilities needed
     to implement actual trace modules. */

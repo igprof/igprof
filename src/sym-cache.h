@@ -1,9 +1,9 @@
 #ifndef IG_PROF_IG_PROF_SYM_CACHE_H
 # define IG_PROF_IG_PROF_SYM_CACHE_H
 
-# include "IgProfMacros.h"
-# include "IgProfBuffer.h"
-# include "IgProf.h"
+# include "macros.h"
+# include "buffer.h"
+# include "profile.h"
 # include <limits.h>
 # include <stdint.h>
 

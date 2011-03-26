@@ -1,9 +1,9 @@
 #ifndef IG_PROF_IG_PROF_TRACE_H
 # define IG_PROF_IG_PROF_TRACE_H
 
-# include "IgProfMacros.h"
-# include "IgProfBuffer.h"
-# include "IgProf.h"
+# include "macros.h"
+# include "buffer.h"
+# include "profile.h"
 # include <pthread.h>
 # include <limits.h>
 # include <stdint.h>

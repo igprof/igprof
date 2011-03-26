@@ -1,6 +1,6 @@
-#include "IgTrace.h"
-#include "IgHook.h"
-#include "IgHookTrace.h"
+#include "trace.h"
+#include "hook.h"
+#include "walk-syms.h"
 #include <typeinfo>
 #include <cxxabi.h>
 #include <cstdlib>

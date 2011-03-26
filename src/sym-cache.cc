@@ -1,5 +1,5 @@
-#include "IgProfSymCache.h"
-#include "IgHookTrace.h"
+#include "sym-cache.h"
+#include "walk-syms.h"
 #include <memory.h>
 
 /** Initialise a symbol translation buffer.  */

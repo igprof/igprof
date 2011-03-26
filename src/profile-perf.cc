@@ -1,7 +1,7 @@
-#include "IgProf.h"
-#include "IgProfTrace.h"
-#include "IgHook.h"
-#include "IgHookTrace.h"
+#include "profile.h"
+#include "profile-trace.h"
+#include "hook.h"
+#include "walk-syms.h"
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>

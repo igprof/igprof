@@ -1,8 +1,8 @@
 #ifndef IG_PROF_IG_PROF_BUFFER_H
 # define IG_PROF_IG_PROF_BUFFER_H
 
-# include "IgProfMacros.h"
-# include "IgProf.h"
+# include "macros.h"
+# include "profile.h"
 # include <stdlib.h>
 # include <stdint.h>
 

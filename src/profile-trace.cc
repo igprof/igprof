@@ -1,5 +1,5 @@
-#include "IgProfTrace.h"
-#include "IgHookTrace.h"
+#include "profile-trace.h"
+#include "walk-syms.h"
 #include <memory.h>
 #include <stdio.h>
 #include <inttypes.h>

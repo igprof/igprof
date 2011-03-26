@@ -1,7 +1,7 @@
-#include "IgTrace.h"
-#include "IgTraceAtomic.h"
-#include "IgHook.h"
-#include "IgHookTrace.h"
+#include "trace.h"
+#include "trace-atomic.h"
+#include "hook.h"
+#include "walk-syms.h"
 #include <typeinfo>
 #include <cxxabi.h>
 #include <cstdlib>

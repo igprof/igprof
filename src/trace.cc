@@ -1,6 +1,6 @@
-#include "IgTrace.h"
-#include "IgTraceAtomic.h"
-#include "IgHookTrace.h"
+#include "trace.h"
+#include "trace-atomic.h"
+#include "walk-syms.h"
 #include <sys/types.h>
 #include <sys/time.h>
 #include <cstdlib>
