@@ -7,7 +7,7 @@
 # include <stdint.h>
 
 /** Utility class for implementing private heap and hashed data structures.  */
-class IgProfBuffer
+class HIDDEN IgProfBuffer
 {
 protected:
   IgProfBuffer(void);

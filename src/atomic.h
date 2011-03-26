@@ -8,6 +8,7 @@
 
 typedef int IgProfAtomic; // correct for all supported platforms for now
 
+HIDDEN
 inline IgProfAtomic
 IgProfAtomicInc (volatile IgProfAtomic *val)
 {
@@ -35,6 +36,7 @@ IgProfAtomicInc (volatile IgProfAtomic *val)
 # endif
 }
 
+HIDDEN
 inline IgProfAtomic
 IgProfAtomicDec (volatile IgProfAtomic *val)
 {

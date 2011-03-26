@@ -7,7 +7,7 @@
 
 /** Core tracing implementation.  Implements utilities needed
     to implement actual trace modules. */
-class IgTrace
+class HIDDEN IgTrace
 {
 public:
     static int                  panic (const char *file, int line,

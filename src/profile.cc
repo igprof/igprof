@@ -28,13 +28,13 @@
 
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
-struct IgProfWrappedArg { void *(*start_routine)(void *); void *arg; };
-struct IgProfTraceAlloc { IgProfTrace *buf; bool perthread; };
-struct IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
-                        const char *tofile; FILE *output;
-                        IgProfSymCache *symcache; int blocksig;
-			IgProfTrace::PerfStat perf; };
-class IgProfExitDump { public: ~IgProfExitDump(void); };
+struct HIDDEN IgProfWrappedArg { void *(*start_routine)(void *); void *arg; };
+struct HIDDEN IgProfTraceAlloc { IgProfTrace *buf; bool perthread; };
+struct HIDDEN IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
+                               const char *tofile; FILE *output;
+                               IgProfSymCache *symcache; int blocksig;
+			       IgProfTrace::PerfStat perf; };
+class HIDDEN IgProfExitDump { public: ~IgProfExitDump(void); };
 typedef std::list<void (*) (void)> IgProfCallList;
 typedef std::list<IgProfTraceAlloc *> IgProfBufList;
 

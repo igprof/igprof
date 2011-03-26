@@ -1,7 +1,9 @@
 #ifndef WALK_SYMS_H
 # define WALK_SYMS_H
 
-class IgHookTrace
+# include "macros.h"
+
+class HIDDEN IgHookTrace
 {
 public:
     static int          stacktrace (void **addresses, int nmax);

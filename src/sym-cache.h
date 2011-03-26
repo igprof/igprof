@@ -8,7 +8,7 @@
 # include <stdint.h>
 
 /** A symbol lookup cache.  */
-class IgProfSymCache : protected IgProfBuffer
+class HIDDEN IgProfSymCache : protected IgProfBuffer
 {
   static const unsigned int BINARY_HASH = 128;
   static const unsigned int SYMBOL_HASH = 128*1024;

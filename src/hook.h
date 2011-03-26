@@ -1,7 +1,9 @@
 #ifndef HOOK_H
 # define HOOK_H
 
-class IgHook
+# include "macros.h"
+
+class HIDDEN IgHook
 {
 public:
     enum Status

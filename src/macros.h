@@ -1,7 +1,9 @@
 #ifndef MACROS_H
 # define MACROS_H
 
-#define UNUSED __attribute__((unused))
+#define UNUSED  __attribute__((unused))
+#define HIDDEN  __attribute__((visibility("hidden")))
+#define VISIBLE __attribute__((visibility("default")))
 
 #define MERGE2(a,b)              a##b
 #define MERGE3(a,b,c)            a##b##c

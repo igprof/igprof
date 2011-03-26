@@ -57,7 +57,7 @@
     implementation is safe for use in asynchronous signals provided
     the caller avoids re-enter the same buffer from nested
     signals.  */
-class IgProfTrace : protected IgProfBuffer
+class HIDDEN IgProfTrace : protected IgProfBuffer
 {
 public:
   struct PerfStat;

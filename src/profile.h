@@ -8,7 +8,7 @@ class IgProfTrace;
 
 /** Core profiling implementation.  Implements utilities needed
     to implement actual profiler modules as well as final dumps. */
-class IgProf
+class HIDDEN IgProf
 {
 public:
   static int            panic(const char *file, int line,
