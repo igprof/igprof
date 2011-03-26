@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <cxxabi.h>
 
 #ifdef __APPLE__
 # include <crt_externs.h>
@@ -37,6 +38,9 @@ struct HIDDEN IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
 class HIDDEN IgProfExitDump { public: ~IgProfExitDump(void); };
 typedef std::list<void (*) (void)> IgProfCallList;
 typedef std::list<IgProfTraceAlloc *> IgProfBufList;
+
+static void igprof_init_thread(void);
+static void igprof_exit_thread(bool final);
 
 // -------------------------------------------------------------------
 // Traps for this profiling module
@@ -337,6 +341,26 @@ igprof_dump_now(const char *tofile)
   pthread_join(tid, 0);
 }
 
+/** Dump out profile data when application is about to exit. */
+static void
+exitDump(void *)
+{
+  if (! s_activated) return;
+  igprof_debug("final exit in thread 0x%lx, saving profile data\n",
+               (unsigned long) pthread_self());
+  igprof_disable(true);
+  s_activated = false;
+  s_enabled = 0;
+  s_quitting = 1;
+  igprof_exit_thread(true);
+  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
+                          { 0, 0, 0, 0, 0, 0, 0 } };
+  dumpAllProfiles(&info);
+  igprof_debug("igprof quitting\n");
+  s_initialized = false; // signal local data is unsafe to use
+  s_pthreads = false; // make sure we no longer use threads stuff
+}
+
 // -------------------------------------------------------------------
 /** Initialise the profiler core itself.  Prepares the the program
     for profiling.  Captures various exit points so we generate a
@@ -386,6 +410,9 @@ igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double cloc
       while (*opts && *opts != ',' && *opts != ' ')
         opts++;
     }
+
+    // Install exit handler to generate actual dump.
+    abi::__cxa_atexit(&exitDump, 0, 0);
 
     s_bufs = new IgProfTraceAlloc[N_MODULES];
     memset(s_bufs, 0, N_MODULES * sizeof(*s_bufs));
@@ -793,14 +820,16 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   // Force the merge of per-thread profile tree into the main tree
   // if a thread calls exit().  Then forward the call.
   pthread_t thread = pthread_self();
+  igprof_debug("%s(%d) called in thread id 0x%lx\n",
+               hook.function, code, (unsigned long) thread);
+#if 0
   if (s_pthreads && thread != s_mainthread)
   {
-    igprof_debug("merging thread id 0x%lx profile on %s(%d)\n",
-                 (unsigned long) thread, hook.function, code);
     igprof_disable(true);
     igprof_exit_thread(false);
     igprof_enable(true);
   }
+#endif
   hook.chain (code);
 }
 
@@ -830,25 +859,4 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
 }
 
 // -------------------------------------------------------------------
-/** Dump out profile data when application is about to exit. */
-IgProfExitDump::~IgProfExitDump (void)
-{
-  if (! s_activated) return;
-  igprof_debug("merging thread id 0x%lx profile on final exit\n",
-               (unsigned long) pthread_self());
-  igprof_disable(true);
-  s_activated = false;
-  s_enabled = 0;
-  s_quitting = 1;
-  igprof_exit_thread(true);
-  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
-                          { 0, 0, 0, 0, 0, 0, 0 } };
-  dumpAllProfiles(&info);
-  igprof_debug("igprof quitting\n");
-  s_initialized = false; // signal local data is unsafe to use
-  s_pthreads = false; // make sure we no longer use threads stuff
-}
-
-// -------------------------------------------------------------------
 static bool autoboot = igprof_init(0, 0, false);
-static IgProfExitDump exitdump;
