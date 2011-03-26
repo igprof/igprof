@@ -29,7 +29,6 @@ static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::T
 static bool                     s_initialized   = false;
 static int                      s_signal        = SIGPROF;
 static int                      s_itimer        = ITIMER_PROF;
-static int                      s_moduleid      = -1;
 
 /** Convert timeval to seconds. */
 static inline double tv2sec(const timeval &tv)
@@ -47,7 +46,7 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
   bool enabled = igprof_disable(false);
   if (enabled)
   {
-    if (IgProfTrace *buf = igprof_buffer(s_moduleid))
+    if (IgProfTrace *buf = igprof_buffer())
     {
       uint64_t tstart, tend;
       RDTSC(tstart);
@@ -164,7 +163,7 @@ initialize(void)
   clockres = precision.it_interval.tv_sec
              + 1e-6 * precision.it_interval.tv_usec;
 
-  if (! igprof_init(&s_moduleid, &threadInit, true, clockres))
+  if (! igprof_init("performance profiler", &threadInit, true, clockres))
     return;
 
   igprof_disable(true);
@@ -267,7 +266,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   {
     setitimer(s_itimer, &fast, &slow);
     getitimer(s_itimer, &left);
-    IgProfTrace *buf = igprof_buffer(s_moduleid);
+    IgProfTrace *buf = igprof_buffer();
     dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
     nticks = int(dt / tv2sec(left.it_interval) + 0.5);
     if (enabled && nticks && buf)
@@ -313,7 +312,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 
   setitimer(s_itimer, &fast, &slow);
   getitimer(s_itimer, &left);
-  IgProfTrace *buf = igprof_buffer(s_moduleid);
+  IgProfTrace *buf = igprof_buffer();
   dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
   nticks = int(dt / tv2sec(left.it_interval) + 0.5);
   if (enabled && nticks && buf)

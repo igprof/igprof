@@ -39,14 +39,13 @@ static IgProfTrace::CounterDef  s_ct_live       = { "FD_LIVE", IgProfTrace::TICK
 static bool                     s_count_used    = 0;
 static bool                     s_count_live    = 0;
 static bool                     s_initialized   = false;
-static int                      s_moduleid      = -1;
 
 /** Record file descriptor.  Increments counters in the tree. */
 static void __attribute__((noinline))
 add (int fd)
 {
   uint64_t tstart, tend;
-  IgProfTrace *buf = igprof_buffer(s_moduleid);
+  IgProfTrace *buf = igprof_buffer();
   if (! buf)
     return;
 
@@ -91,7 +90,7 @@ remove (int fd)
 {
   if (s_count_live)
   {
-    IgProfTrace *buf = igprof_buffer(s_moduleid);
+    IgProfTrace *buf = igprof_buffer();
     if (! buf)
       return;
 
@@ -159,7 +158,7 @@ initialize(void)
   if (! enable)
     return;
 
-  if (! igprof_init(&s_moduleid, 0, false))
+  if (! igprof_init("file descriptor profiler", 0, false))
     return;
 
   igprof_disable(true);

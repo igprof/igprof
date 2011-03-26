@@ -16,11 +16,8 @@ HIDDEN const char *
 igprof_options(void);
 
 HIDDEN bool
-igprof_init(int *moduleid, void (*threadinit)(void),
+igprof_init(const char *id, void (*threadinit)(void),
 	    bool perthread, double clockres = 0.);
-
-HIDDEN bool
-igprof_is_enabled(bool globally);
 
 HIDDEN bool
 igprof_enable(bool globally);
@@ -29,6 +26,6 @@ HIDDEN bool
 igprof_disable(bool globally);
 
 HIDDEN IgProfTrace *
-igprof_buffer(int moduleid);
+igprof_buffer(void);
 
 #endif // PROFILE_H

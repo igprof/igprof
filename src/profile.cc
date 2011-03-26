@@ -13,7 +13,7 @@
 #include <cstring>
 #include <cerrno>
 #include <cmath>
-#include <list>
+#include <set>
 #include <unistd.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
@@ -29,16 +29,14 @@
 
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
-struct HIDDEN IgProfWrappedArg { void *(*start_routine)(void *); void *arg; };
-struct HIDDEN IgProfTraceAlloc { IgProfTrace *buf; bool perthread; };
-struct HIDDEN IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
-                               const char *tofile; FILE *output;
-                               IgProfSymCache *symcache; int blocksig;
-			       IgProfTrace::PerfStat perf; };
-typedef std::list<void (*) (void)> IgProfCallList;
-typedef std::list<IgProfTraceAlloc *> IgProfBufList;
+struct HIDDEN IgProfWrappedArg
+{ void *(*start_routine)(void *); void *arg; };
 
-static void igprof_init_thread(void);
+struct HIDDEN IgProfDumpInfo
+{ int depth; int nsyms; int nlibs; int nctrs;
+  const char *tofile; FILE *output;
+  IgProfSymCache *symcache; int blocksig;
+  IgProfTrace::PerfStat perf; };
 
 // -------------------------------------------------------------------
 // Traps for this profiling module
@@ -71,19 +69,17 @@ LIBHOOK(4, int, dopthread_create, _pthread21,
         "pthread_create", "GLIBC_2.1", 0)
 
 // Data for this profiler module
-static const size_t     N_TRACE_CACHE   = 2000000;
-static const int        N_MODULES       = 8;
 static const int        MAX_FNAME       = 1024;
 static IgProfAtomic     s_enabled       = 0;
-static bool             s_initialized   = false;
+static const char       *s_initialized  = 0;
 static bool             s_activated     = false;
+static bool             s_perthread     = false;
 static volatile int     s_quitting      = 0;
 static double           s_clockres      = 0;
 static pthread_mutex_t  s_buflock       = PTHREAD_MUTEX_INITIALIZER;
-static IgProfBufList    *s_buflist      = 0;
-static IgProfTraceAlloc *s_bufs         = 0;
 static IgProfTrace      *s_masterbuf    = 0;
-static IgProfCallList   *s_threadinits  = 0;
+static IgProfTrace      *s_tracebuf     = 0;
+static void             (*s_threadinit)() = 0;
 static const char       *s_options      = 0;
 static char             s_masterbufdata[sizeof(IgProfTrace)];
 static pthread_t        s_mainthread;
@@ -93,56 +89,56 @@ static pthread_key_t    s_flagkey;
 static char             s_outname[MAX_FNAME];
 static char             s_dumpflag[MAX_FNAME];
 
-// Static data that needs to be constructed lazily on demand
-static IgProfCallList &
-threadinits(void)
+/** Return set of currently outstanding profile buffers. */
+static std::set<IgProfTrace *> &
+allTraceBuffers(void)
 {
-  if (! s_threadinits)
-    s_threadinits = new IgProfCallList;
-  return *s_threadinits;
+  static std::set<IgProfTrace *> *s_bufs = 0;
+  if (! s_bufs) s_bufs = new std::set<IgProfTrace *>;
+  return *s_bufs;
 }
 
-static IgProfBufList &
-buflist(void)
+/** Create a new profile buffer and remember it. */
+static IgProfTrace *
+makeTraceBuffer(void)
 {
-  if (! s_buflist)
-    s_buflist = new IgProfBufList;
-  return *s_buflist;
+  if (s_perthread)
+  {
+    IgProfTrace *buf = new IgProfTrace;
+    pthread_mutex_lock(&s_buflock);
+    allTraceBuffers().insert(buf);
+    pthread_mutex_unlock(&s_buflock);
+    return buf;
+  }
+  else
+    return s_masterbuf;
 }
 
+/** Dispose a profile buffer. */
 static void
-initBuf(IgProfTraceAlloc &info, bool perthread)
+disposeTraceBuffer(IgProfTrace *buf)
 {
-  info.perthread = perthread;
-  info.buf = new IgProfTrace;
+  if (buf && buf != s_masterbuf)
+  {
+    igprof_debug("merging profile %p to master %p\n",
+                 (void *) buf, (void *) s_masterbuf);
+    s_masterbuf->mergeFrom(*buf);
+    allTraceBuffers().erase(buf);
+    delete buf;
+  }
 }
 
+/** Free a thread's trace buffer. */
 static void
 freeTraceBuffer(void *arg)
 {
-  IgProfTraceAlloc *bufs = (IgProfTraceAlloc *) arg;
-
+  ASSERT(arg);
   pthread_mutex_lock(&s_buflock);
-  IgProfBufList &bl = buflist();
-  IgProfBufList::iterator ibuf = std::find(bl.begin(), bl.end(), bufs);
-  if (ibuf != bl.end())
-    bl.erase(ibuf);
-
-  for (int i = 0; i < N_MODULES && bufs; ++i)
-  {
-    IgProfTrace *p = bufs[i].buf;
-    if (p)
-    {
-      s_masterbuf->mergeFrom(*p);
-      bufs[i].buf = 0;
-      delete p;
-    }
-  }
-
+  disposeTraceBuffer((IgProfTrace *) arg);
   pthread_mutex_unlock(&s_buflock);
-  delete [] bufs;
 }
 
+/** Free a thread's profile-enabled flag. */
 static void
 freeThreadFlag(void *arg)
 {
@@ -278,18 +274,17 @@ dumpAllProfiles(void *arg)
     pthread_mutex_lock(&s_buflock);
     IgProfSymCache symcache;
     info->symcache = &symcache;
-    IgProfBufList &bl = buflist();
-    for (IgProfBufList::iterator i = bl.begin(), e = bl.end(); i != e; ++i)
-      if (IgProfTraceAlloc *bufs = *i)
-        for (int ib = 0; ib < N_MODULES; ++ib)
-          if (IgProfTrace *buf = bufs[ib].buf)
-          {
-            buf->lock();
-            dumpOneProfile(*info, buf->stackRoot());
-            dumpResetIDs(buf->stackRoot());
-	    perf += buf->perfStats();
-            buf->unlock();
-          }
+    std::set<IgProfTrace *> &bufs = allTraceBuffers();
+    std::set<IgProfTrace *>::iterator i, e;
+    for (i = bufs.begin(), e = bufs.end(); i != e; ++i)
+    {
+      IgProfTrace *buf = *i;
+      buf->lock();
+      dumpOneProfile(*info, buf->stackRoot());
+      dumpResetIDs(buf->stackRoot());
+      perf += buf->perfStats();
+      buf->unlock();
+    }
 
     s_masterbuf->lock();
     dumpOneProfile(*info, s_masterbuf->stackRoot());
@@ -377,6 +372,8 @@ exitDump(void *)
   if (! s_activated) return;
   igprof_debug("final exit in thread 0x%lx, saving profile data\n",
                (unsigned long) pthread_self());
+
+  // Deactivate.
   igprof_disable(true);
   s_activated = false;
   s_enabled = 0;
@@ -386,11 +383,12 @@ exitDump(void *)
   setitimer(ITIMER_VIRTUAL, &stopped, 0);
   setitimer(ITIMER_REAL, &stopped, 0);
 
+  // Dump all buffers.
   IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
                           { 0, 0, 0, 0, 0, 0, 0 } };
   dumpAllProfiles(&info);
   igprof_debug("igprof quitting\n");
-  s_initialized = false; // signal local data is unsafe to use
+  s_initialized = 0; // signal local data is unsafe to use
 }
 
 // -------------------------------------------------------------------
@@ -402,152 +400,118 @@ exitDump(void *)
 
     Returns @c true if profiling is activated in this process.  */
 bool
-igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double clockres)
+igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clockres)
 {
-  if (! s_initialized)
+  // Refuse to initialise more than once.
+  if (s_initialized)
   {
-    s_initialized = true;
-
-    const char *options = igprof_options();
-    if (! options || ! *options)
-    {
-      igprof_debug("$IGPROF not set, not profiling this process\n");
-      return s_activated = false;
-    }
-
-    for (const char *opts = options; *opts; )
-    {
-      while (*opts == ' ' || *opts == ',')
-        ++opts;
-
-      if (! strncmp(opts, "igprof:out='", 12))
-      {
-        int i = 0;
-        opts += 12;
-        while (i < MAX_FNAME-1 && *opts && *opts != '\'')
-          s_outname[i++] = *opts++;
-        s_outname[i] = 0;
-      }
-      else if (! strncmp(opts, "igprof:dump='", 13))
-      {
-        int i = 0;
-        opts += 13;
-        while (i < MAX_FNAME-1 && *opts && *opts != '\'')
-          s_dumpflag[i++] = *opts++;
-        s_dumpflag[i] = 0;
-      }
-      else
-        opts++;
-
-      while (*opts && *opts != ',' && *opts != ' ')
-        opts++;
-    }
-
-    // Install exit handler to generate actual dump.
-    abi::__cxa_atexit(&exitDump, 0, 0);
-
-    s_bufs = new IgProfTraceAlloc[N_MODULES];
-    memset(s_bufs, 0, N_MODULES * sizeof(*s_bufs));
-    buflist().push_back(s_bufs);
-
-    pthread_key_create(&s_bufkey, &freeTraceBuffer);
-    pthread_key_create(&s_flagkey, &freeThreadFlag);
-    pthread_setspecific(s_flagkey, new IgProfAtomic(1));
-
-    const char *target = getenv("IGPROF_TARGET");
-    s_mainthread = pthread_self();
-    if (target && ! strstr(program_invocation_name, target))
-    {
-      igprof_debug("Current process not selected for profiling:"
-                   " process '%s' does not match '%s'\n",
-                   program_invocation_name, target);
-      return s_activated = false;
-    }
-
-    igprof_debug("Activated in %s, main thread id 0x%lx\n",
-                 program_invocation_name, s_mainthread);
-    igprof_debug("Options: %s\n", options);
-
-    IgHook::hook(doexit_hook_main.raw);
-    IgHook::hook(doexit_hook_main2.raw);
-    IgHook::hook(dokill_hook_main.raw);
-#if __linux
-    if (doexit_hook_main.raw.chain)  IgHook::hook(doexit_hook_libc.raw);
-    if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
-    if (dokill_hook_main.raw.chain)  IgHook::hook(dokill_hook_libc.raw);
-#endif
-    if (s_dumpflag[0])
-      pthread_create (&s_dumpthread, 0, &asyncDumpThread, 0);
-
-    IgHook::hook(dopthread_create_hook_main.raw);
-#if __linux
-    IgHook::hook(dopthread_create_hook_pthread20.raw);
-    IgHook::hook(dopthread_create_hook_pthread21.raw);
-#endif
-    s_activated = true;
-    s_enabled = 1;
+    fprintf(stderr, "IgProf: %s is already active, cannot also activate %s\n",
+            s_initialized, id);
+    _exit(1);
   }
 
-  if (! s_activated)
-    return false;
+  s_initialized = id;
 
-  if (! moduleid)
-    return true;
+  // Check if we should be activated at all.
+  const char *target = getenv("IGPROF_TARGET");
+  if (target && ! strstr(program_invocation_name, target))
+  {
+    igprof_debug("Current process not selected for profiling:"
+                 " process '%s' does not match '%s'\n",
+                 program_invocation_name, target);
+    return s_activated = false;
+  }
 
-  igprof_disable(true);
+  // Check profiling options.
+  const char *options = igprof_options();
+  if (! options || ! *options)
+  {
+    igprof_debug("$IGPROF not set, not profiling this process (%s)\n",
+		 program_invocation_name);
+    return s_activated = false;
+  }
 
+  for (const char *opts = options; *opts; )
+  {
+    while (*opts == ' ' || *opts == ',')
+      ++opts;
+
+    if (! strncmp(opts, "igprof:out='", 12))
+    {
+      int i = 0;
+      opts += 12;
+      while (i < MAX_FNAME-1 && *opts && *opts != '\'')
+        s_outname[i++] = *opts++;
+      s_outname[i] = 0;
+    }
+    else if (! strncmp(opts, "igprof:dump='", 13))
+    {
+      int i = 0;
+      opts += 13;
+      while (i < MAX_FNAME-1 && *opts && *opts != '\'')
+        s_dumpflag[i++] = *opts++;
+      s_dumpflag[i] = 0;
+    }
+    else
+      opts++;
+
+    while (*opts && *opts != ',' && *opts != ' ')
+      opts++;
+  }
+
+  // Install exit handler to generate actual dump.
+  abi::__cxa_atexit(&exitDump, 0, 0);
+
+  // Create master buffer. If in per-thread mode, create another buffer
+  // for profiling this thread; master buffer is then just for merging.
+  // Otherwise, in global buffer mode, just use master buffer for all.
+  s_masterbuf = new (s_masterbufdata) IgProfTrace;
+  s_perthread = perthread;
+  s_threadinit = threadinit;
+  s_mainthread = pthread_self();
+  s_tracebuf = makeTraceBuffer();
+
+  // Report as activated.
+  igprof_debug("Activated in %s, main thread id 0x%lx\n",
+               program_invocation_name, s_mainthread);
+  igprof_debug("Options: %s\n", options);
+
+  // Remember clock resolution.
   if (clockres > 0)
   {
     igprof_debug("Timing resolution set to %f\n", clockres);
     s_clockres = clockres;
   }
 
-  if (! s_masterbuf)
-    s_masterbuf = new (s_masterbufdata) IgProfTrace;
+  // Initialise per thread stuff.
+  pthread_key_create(&s_flagkey, &freeThreadFlag);
+  pthread_setspecific(s_flagkey, new IgProfAtomic(0));
 
-  int modid;
-  for (modid = 0; modid < N_MODULES; ++modid)
-    if (! s_bufs[modid].buf)
-    {
-      initBuf(s_bufs[modid], perthread);
-      *moduleid = modid;
-      break;
-    }
+  pthread_key_create(&s_bufkey, &freeTraceBuffer);
+  pthread_setspecific(s_bufkey, s_tracebuf);
 
-  if (modid == N_MODULES)
-  {
-    igprof_debug("Too many profilers enabled (%d), please"
-                  " rebuild IgProf with larger N_MODULES\n",
-                  N_MODULES);
-    abort ();
-  }
+  // Start dump thread if we watch for a file.
+  if (s_dumpflag[0])
+    pthread_create (&s_dumpthread, 0, &asyncDumpThread, 0);
 
-  if (threadinit)
-    threadinits().push_back(threadinit);
+  // Hook into functions we care about.
+  IgHook::hook(doexit_hook_main.raw);
+  IgHook::hook(doexit_hook_main2.raw);
+  IgHook::hook(dokill_hook_main.raw);
+  IgHook::hook(dopthread_create_hook_main.raw);
+#if __linux
+  if (doexit_hook_main.raw.chain)  IgHook::hook(doexit_hook_libc.raw);
+  if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
+  if (dokill_hook_main.raw.chain)  IgHook::hook(dokill_hook_libc.raw);
+  IgHook::hook(dopthread_create_hook_pthread20.raw);
+  IgHook::hook(dopthread_create_hook_pthread21.raw);
+#endif
 
-  igprof_enable(true);
+  // Activate.
+  s_enabled = 1;
+  s_activated = true;
+  igprof_enable(false);
   return true;
-}
-
-/** Setup a thread so it can be used in profiling.  This should be
-    called for every thread that will participate in profiling.  */
-static void
-igprof_init_thread(void)
-{
-  IgProfTraceAlloc *bufs = new IgProfTraceAlloc[N_MODULES];
-  memset(bufs, 0, N_MODULES * sizeof(*bufs));
-  pthread_setspecific(s_bufkey, bufs);
-
-  IgProfAtomic *enabled = new IgProfAtomic(1);
-  pthread_setspecific(s_flagkey, enabled);
-
-  for (int i = 0; i < N_MODULES && s_bufs[i].buf; ++i)
-    if (s_bufs[i].perthread)
-      initBuf(bufs[i], true);
-
-  pthread_mutex_lock(&s_buflock);
-  buflist().push_back(bufs);
-  pthread_mutex_unlock(&s_buflock);
 }
 
 /** Return a profile buffer for a profiler in the current thread.  It
@@ -556,49 +520,20 @@ igprof_init_thread(void)
     to indicate no data should be gathered in the calling context, for
     example if the profile core itself has already been destroyed.  */
 IgProfTrace *
-igprof_buffer(int moduleid)
+igprof_buffer(void)
 {
-  // Check which pool to return.  We return the one from s_bufs in
-  // non-threaded applications and always in the main thread.  In
-  // other threads we return the main thread buffer if a single buffer
-  // was requested, otherwise a per-thread buffer.
-  pthread_t thread = pthread_self();
-  IgProfTraceAlloc *bufs = s_bufs;
-  if (! s_activated)
-    bufs = 0;
-  else if (thread != s_mainthread && s_bufs[moduleid].perthread)
-    bufs = (IgProfTraceAlloc *) pthread_getspecific(s_bufkey);
-
-  return bufs ? bufs[moduleid].buf : 0;
+  return s_activated ? (IgProfTrace *) pthread_getspecific(s_bufkey) : 0;
 }
 
-/** Check if the profiler is currently enabled.  This function should
-    be called by asynchronous signal handlers to check whether they
-    should record profile data -- not for the actual running where
-    the value of the flag has little useful value, but to make sure
-    no data is gathered after the system has started to close down.  */
-bool
-igprof_is_enabled(bool globally)
-{
-  if (! globally)
-  {
-    IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
-    return flag ? (*flag > 0 && s_enabled > 0) : false;
-  }
-  else
-    return s_enabled > 0;
-}
-
-/** Enable the profiling system, either globally or just in this
-    thread.  This is safe to call from anywhere.  Returns @c true if
-    the profiler is enabled after the call. */
+/** Enable the profiler in this thread. Safe to call from anywhere.
+    Returns @c true if the profiler is enabled after the call. */
 bool
 igprof_enable(bool globally)
 {
   if (! globally)
   {
     IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
-    return flag ? (IgProfAtomicInc(flag) > 0 && s_enabled > 0) : false;
+    return IgProfAtomicInc(flag) > 0 && s_enabled > 0;
   }
   else
   {
@@ -607,16 +542,15 @@ igprof_enable(bool globally)
   }
 }
 
-/** Disable the profiling system, either globally or just in this
-    thread.  This is safe to call from anywhere.  Returns @c true if
-    the profiler was enabled before the call.  */
+/** Disable the profiler in this thread. Safe to call from anywhere.
+    Returns @c true if the profiler was enabled before the call.  */
 bool
 igprof_disable(bool globally)
 {
   if (! globally)
   {
     IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
-    return flag ? (IgProfAtomicDec(flag) >= 0 && s_enabled > 0) : false;
+    return IgProfAtomicDec(flag) >= 0 && s_enabled > 0;
   }
   else
   {
@@ -698,22 +632,14 @@ threadWrapper(void *arg)
   // Report the thread and enable per-thread profiling pools.
   if (s_activated)
   {
-    // Removing the __extension__ gives a warning which
-    // is acknowledged as a language problem in the C++ Standard Core
-    // Language Defect Report
-    //
-    // http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#195
-    //
-    // since the suggested decision seems to be that the syntax should
-    // actually be "Conditionally-Supported Behavior" in some
-    // future C++ standard I simply silence the warning.
     __extension__
-    igprof_debug("captured thread id 0x%lx for profiling (%p, %p)\n",
+    igprof_debug("captured thread id 0x%lx for profiling (%p(%p))\n",
                  (unsigned long) pthread_self(),
-                 (void *)(start_routine),
-                 start_arg);
+                 (void *)(start_routine), start_arg);
 
-    igprof_init_thread();
+    /* Setup thread for use in profiling. */
+    pthread_setspecific(s_bufkey, makeTraceBuffer());
+    pthread_setspecific(s_flagkey, new IgProfAtomic(1));
   }
 
   // Make sure we've called stack trace code at least once in
@@ -721,32 +647,17 @@ threadWrapper(void *arg)
   void *dummy = 0; IgHookTrace::stacktrace(&dummy, 1);
 
   // Run per-profiler initialisation.
-  if (s_activated)
-  {
-    IgProfCallList                      &l = threadinits();
-    IgProfCallList::reverse_iterator    i = l.rbegin();
-    IgProfCallList::reverse_iterator    end = l.rend();
-    for ( ; i != end; ++i)
-      (*i)();
-  }
+  if (s_activated && s_threadinit)
+    (*s_threadinit)();
 
   // Run the user thread.
   void *ret = (*start_routine)(start_arg);
 
-  // Harvest thread profile result.
+  // Report thread exits. Profile result is harvested by key destructor.
   if (s_activated)
   {
-    // Removing the __extension__ gives a warning which
-    // is acknowledged as a language problem in the C++ Standard Core
-    // Language Defect Report
-    //
-    // http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#195
-    //
-    // since the suggested decision seems to be that the syntax should
-    // actually be "Conditionally-Supported Behavior" in some
-    // future C++ standard I simply silence the warning.
     __extension__
-    igprof_debug("leaving thread id 0x%lx from profiling (%p, %p)\n",
+    igprof_debug("leaving thread id 0x%lx from profiling (%p(%p))\n",
                  (unsigned long) pthread_self(),
                  (void *) start_routine, start_arg);
 
@@ -769,7 +680,7 @@ dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
   size_t stack = 0;
   if (attr && pthread_attr_getstacksize(attr, &stack) == 0 && stack < 64*1024)
   {
-    igprof_debug("pthread_create requests too small stack %lu -> use 64kB\n",
+    igprof_debug("pthread_create increasing stack from %lu to 64kB\n",
 		 (unsigned long) stack);
     pthread_attr_setstacksize((pthread_attr_t *) attr, 64*1024);
   }
@@ -797,7 +708,7 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   // Force the merge of per-thread profile tree into the main tree
   // if a thread calls exit().  Then forward the call.
   pthread_t thread = pthread_self();
-  igprof_debug("%s(%d) called in thread id 0x%lx\n",
+  igprof_debug("%s(%d) called in thread 0x%lx\n",
                hook.function, code, (unsigned long) thread);
   hook.chain (code);
 }
@@ -826,6 +737,3 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
   }
   return hook.chain (pid, sig);
 }
-
-// -------------------------------------------------------------------
-static bool autoboot = igprof_init(0, 0, false);

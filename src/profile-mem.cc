@@ -46,7 +46,6 @@ static bool                     s_count_largest = 0;
 static bool                     s_count_live    = 0;
 static int                      s_overhead      = OVERHEAD_NONE;
 static bool                     s_initialized   = false;
-static int                      s_moduleid      = -1;
 
 /** Record an allocation at @a ptr of @a size bytes.  Increments counters
     in the tree for the allocations as per current configuration and adds
@@ -55,7 +54,7 @@ static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
   uint64_t tstart, tend;
-  IgProfTrace *buf = igprof_buffer(s_moduleid);
+  IgProfTrace *buf = igprof_buffer();
   if (! buf)
     return;
 
@@ -121,7 +120,7 @@ remove (void *ptr)
 {
   if (s_count_live && ptr)
   {
-    IgProfTrace *buf = igprof_buffer(s_moduleid);
+    IgProfTrace *buf = igprof_buffer();
     if (! buf)
       return;
 
@@ -211,7 +210,7 @@ initialize(void)
   if (! enable)
     return;
 
-  if (! igprof_init(&s_moduleid, 0, false))
+  if (! igprof_init("memory profiler", 0, false))
     return;
 
   igprof_disable(true);

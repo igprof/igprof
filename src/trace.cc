@@ -47,7 +47,8 @@ IgTrace::initialize (void)
         const char *options = IgTrace::options ();
         if (! options || ! *options)
         {
-            igprof_debug ("$IGPROF not set, not tracing this process\n");
+            igprof_debug ("$IGTRACE not set, not tracing this process (%s)\n",
+			  program_invocation_name);
             return s_activated = false;
         }
         while (options && *options)
