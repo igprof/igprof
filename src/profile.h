@@ -20,9 +20,6 @@ igprof_init(int *moduleid, void (*threadinit)(void),
 	    bool perthread, double clockres = 0.);
 
 HIDDEN bool
-igprof_is_multi_threaded(void);
-
-HIDDEN bool
 igprof_is_enabled(bool globally);
 
 HIDDEN bool

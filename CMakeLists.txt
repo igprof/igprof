@@ -1,5 +1,6 @@
 PROJECT(IGPROF C CXX)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+FIND_PACKAGE(Threads)
 
 # Options.
 OPTION(IGPROF_BUILD_TESTS "Build tests." OFF)
@@ -16,6 +17,8 @@ ADD_DEFINITIONS(-D__STDC_FORMAT_MACROS)
 ADD_DEFINITIONS(-D__STDC_LIMIT_MACROS)
 IF(${CMAKE_SYSTEM_NAME} MATCHES Linux)
   ADD_DEFINITIONS(-D_GNU_SOURCE)
+  SET(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS_INIT} -Wl,-z,nodefs
+      CACHE STRING "Flags used by the linker during the creation of dll's.")
 ENDIF()
 
 # Use ANSI mode for C and stricter compile options with GCC.
@@ -50,7 +53,8 @@ ADD_LIBRARY(igprof SHARED
             src/trace-mem.cc
             src/trace-mmap.cc
             src/trace-throw.cc)
-TARGET_LINK_LIBRARIES(igprof ${IGPROF_LIBS} ${UNWIND_LIBRARY})
+#SET_TARGET_PROPERTIES(igprof PROPERTIES LINK_FLAGS -Wl,-z,nodefs)
+TARGET_LINK_LIBRARIES(igprof ${IGPROF_LIBS} ${UNWIND_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 ADD_EXECUTABLE(igprof-analyse src/analyse.cc)
 TARGET_LINK_LIBRARIES(igprof-analyse ${CMAKE_DL_LIBS})
 INSTALL(TARGETS igprof igprof-analyse

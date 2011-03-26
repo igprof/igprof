@@ -35,12 +35,10 @@ struct HIDDEN IgProfDumpInfo { int depth; int nsyms; int nlibs; int nctrs;
                                const char *tofile; FILE *output;
                                IgProfSymCache *symcache; int blocksig;
 			       IgProfTrace::PerfStat perf; };
-class HIDDEN IgProfExitDump { public: ~IgProfExitDump(void); };
 typedef std::list<void (*) (void)> IgProfCallList;
 typedef std::list<IgProfTraceAlloc *> IgProfBufList;
 
 static void igprof_init_thread(void);
-static void igprof_exit_thread(bool final);
 
 // -------------------------------------------------------------------
 // Traps for this profiling module
@@ -79,7 +77,6 @@ static const int        MAX_FNAME       = 1024;
 static IgProfAtomic     s_enabled       = 0;
 static bool             s_initialized   = false;
 static bool             s_activated     = false;
-static bool             s_pthreads      = false;
 static volatile int     s_quitting      = 0;
 static double           s_clockres      = 0;
 static pthread_mutex_t  s_buflock       = PTHREAD_MUTEX_INITIALIZER;
@@ -118,6 +115,38 @@ initBuf(IgProfTraceAlloc &info, bool perthread)
 {
   info.perthread = perthread;
   info.buf = new IgProfTrace;
+}
+
+static void
+freeTraceBuffer(void *arg)
+{
+  IgProfTraceAlloc *bufs = (IgProfTraceAlloc *) arg;
+
+  pthread_mutex_lock(&s_buflock);
+  IgProfBufList &bl = buflist();
+  IgProfBufList::iterator ibuf = std::find(bl.begin(), bl.end(), bufs);
+  if (ibuf != bl.end())
+    bl.erase(ibuf);
+
+  for (int i = 0; i < N_MODULES && bufs; ++i)
+  {
+    IgProfTrace *p = bufs[i].buf;
+    if (p)
+    {
+      s_masterbuf->mergeFrom(*p);
+      bufs[i].buf = 0;
+      delete p;
+    }
+  }
+
+  pthread_mutex_unlock(&s_buflock);
+  delete [] bufs;
+}
+
+static void
+freeThreadFlag(void *arg)
+{
+  delete (IgProfAtomic *) arg;
 }
 
 /** Dump out the profile data.  */
@@ -352,13 +381,16 @@ exitDump(void *)
   s_activated = false;
   s_enabled = 0;
   s_quitting = 1;
-  igprof_exit_thread(true);
+  itimerval stopped = { { 0, 0 }, { 0, 0 } };
+  setitimer(ITIMER_PROF, &stopped, 0);
+  setitimer(ITIMER_VIRTUAL, &stopped, 0);
+  setitimer(ITIMER_REAL, &stopped, 0);
+
   IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
                           { 0, 0, 0, 0, 0, 0, 0 } };
   dumpAllProfiles(&info);
   igprof_debug("igprof quitting\n");
   s_initialized = false; // signal local data is unsafe to use
-  s_pthreads = false; // make sure we no longer use threads stuff
 }
 
 // -------------------------------------------------------------------
@@ -418,15 +450,9 @@ igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double cloc
     memset(s_bufs, 0, N_MODULES * sizeof(*s_bufs));
     buflist().push_back(s_bufs);
 
-    void *program = dlopen(0, RTLD_NOW);
-    if (program && dlsym(program, "pthread_create"))
-    {
-      s_pthreads = true;
-      pthread_key_create(&s_bufkey, 0);
-      pthread_key_create(&s_flagkey, 0);
-      pthread_setspecific(s_flagkey, new IgProfAtomic(1));
-    }
-    dlclose(program);
+    pthread_key_create(&s_bufkey, &freeTraceBuffer);
+    pthread_key_create(&s_flagkey, &freeThreadFlag);
+    pthread_setspecific(s_flagkey, new IgProfAtomic(1));
 
     const char *target = getenv("IGPROF_TARGET");
     s_mainthread = pthread_self();
@@ -438,10 +464,8 @@ igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double cloc
       return s_activated = false;
     }
 
-    igprof_debug("Activated in %s, %s, main thread id 0x%lx\n",
-                 program_invocation_name,
-                 s_pthreads ? "multi-threaded" : "no threads",
-                 s_mainthread);
+    igprof_debug("Activated in %s, main thread id 0x%lx\n",
+                 program_invocation_name, s_mainthread);
     igprof_debug("Options: %s\n", options);
 
     IgHook::hook(doexit_hook_main.raw);
@@ -452,17 +476,14 @@ igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double cloc
     if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
     if (dokill_hook_main.raw.chain)  IgHook::hook(dokill_hook_libc.raw);
 #endif
-    if (s_pthreads)
-    {
-      if (s_dumpflag[0])
-        pthread_create (&s_dumpthread, 0, &asyncDumpThread, 0);
+    if (s_dumpflag[0])
+      pthread_create (&s_dumpthread, 0, &asyncDumpThread, 0);
 
-      IgHook::hook(dopthread_create_hook_main.raw);
+    IgHook::hook(dopthread_create_hook_main.raw);
 #if __linux
-      IgHook::hook(dopthread_create_hook_pthread20.raw);
-      IgHook::hook(dopthread_create_hook_pthread21.raw);
+    IgHook::hook(dopthread_create_hook_pthread20.raw);
+    IgHook::hook(dopthread_create_hook_pthread21.raw);
 #endif
-    }
     s_activated = true;
     s_enabled = 1;
   }
@@ -508,11 +529,6 @@ igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double cloc
   return true;
 }
 
-/** Return @c true if the process was linked against threading package.  */
-bool
-igprof_is_multi_threaded(void)
-{ return s_pthreads; }
-
 /** Setup a thread so it can be used in profiling.  This should be
     called for every thread that will participate in profiling.  */
 static void
@@ -532,49 +548,6 @@ igprof_init_thread(void)
   pthread_mutex_lock(&s_buflock);
   buflist().push_back(bufs);
   pthread_mutex_unlock(&s_buflock);
-}
-
-/** Finalise a thread.  */
-static void
-igprof_exit_thread(bool final)
-{
-  if (! s_pthreads && ! final)
-    return;
-
-  itimerval stopped = { { 0, 0 }, { 0, 0 } };
-  setitimer(ITIMER_PROF, &stopped, 0);
-  setitimer(ITIMER_VIRTUAL, &stopped, 0);
-  setitimer(ITIMER_REAL, &stopped, 0);
-
-  pthread_t thread = pthread_self ();
-  IgProfTraceAlloc *bufs
-    = (thread == s_mainthread ? s_bufs
-       : (IgProfTraceAlloc *) pthread_getspecific(s_bufkey));
-
-  pthread_mutex_lock(&s_buflock);
-  IgProfBufList &bl = buflist();
-  IgProfBufList::iterator ibuf = std::find(bl.begin(), bl.end(), bufs);
-  if (ibuf != bl.end())
-    bl.erase(ibuf);
-  pthread_mutex_unlock(&s_buflock);
-
-  for (int i = 0; i < N_MODULES && bufs; ++i)
-  {
-    IgProfTrace *p = bufs[i].buf;
-    if (p)
-    {
-      s_masterbuf->mergeFrom(*p);
-      bufs[i].buf = 0;
-      delete p;
-    }
-  }
-
-  if (thread == s_mainthread)
-    s_bufs = 0;
-  else
-    pthread_setspecific(s_bufkey, 0);
-
-  delete [] bufs;
 }
 
 /** Return a profile buffer for a profiler in the current thread.  It
@@ -607,7 +580,7 @@ igprof_buffer(int moduleid)
 bool
 igprof_is_enabled(bool globally)
 {
-  if (! globally && s_pthreads)
+  if (! globally)
   {
     IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
     return flag ? (*flag > 0 && s_enabled > 0) : false;
@@ -622,7 +595,7 @@ igprof_is_enabled(bool globally)
 bool
 igprof_enable(bool globally)
 {
-  if (! globally && s_pthreads)
+  if (! globally)
   {
     IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
     return flag ? (IgProfAtomicInc(flag) > 0 && s_enabled > 0) : false;
@@ -640,7 +613,7 @@ igprof_enable(bool globally)
 bool
 igprof_disable(bool globally)
 {
-  if (! globally && s_pthreads)
+  if (! globally)
   {
     IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
     return flag ? (IgProfAtomicDec(flag) >= 0 && s_enabled > 0) : false;
@@ -776,7 +749,11 @@ threadWrapper(void *arg)
     igprof_debug("leaving thread id 0x%lx from profiling (%p, %p)\n",
                  (unsigned long) pthread_self(),
                  (void *) start_routine, start_arg);
-    igprof_exit_thread(false);
+
+    itimerval stopped = { { 0, 0 }, { 0, 0 } };
+    setitimer(ITIMER_PROF, &stopped, 0);
+    setitimer(ITIMER_VIRTUAL, &stopped, 0);
+    setitimer(ITIMER_REAL, &stopped, 0);
   }
   return ret;
 }
@@ -822,14 +799,6 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   pthread_t thread = pthread_self();
   igprof_debug("%s(%d) called in thread id 0x%lx\n",
                hook.function, code, (unsigned long) thread);
-#if 0
-  if (s_pthreads && thread != s_mainthread)
-  {
-    igprof_disable(true);
-    igprof_exit_thread(false);
-    igprof_enable(true);
-  }
-#endif
   hook.chain (code);
 }
 

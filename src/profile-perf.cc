@@ -82,10 +82,7 @@ enableSignalHandler(void)
   sigset_t profset;
   sigemptyset(&profset);
   sigaddset(&profset, s_signal);
-  if (igprof_is_multi_threaded())
-    pthread_sigmask(SIG_UNBLOCK, &profset, 0);
-  else
-    sigprocmask(SIG_UNBLOCK, &profset, 0);
+  pthread_sigmask(SIG_UNBLOCK, &profset, 0);
 
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
