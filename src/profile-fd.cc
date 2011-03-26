@@ -11,27 +11,27 @@
 
 // -------------------------------------------------------------------
 // Traps for this profiling module
-IGPROF_DUAL_HOOK(3, int, doopen, _main, _libc,
-                 (const char *fn, int flags, int mode), (fn, flags, mode),
-                 "open", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(3, int, doopen64, _main, _libc,
-                 (const char *fn, int flags, int mode), (fn, flags, mode),
-                 "__open64", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(1, int, doclose, _main, _libc,
-                 (int fd), (fd),
-                 "close", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(1, int, dodup, _main, _libc,
-                 (int fd), (fd),
-                 "dup", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(2, int, dodup2, _main, _libc,
-                 (int fd, int newfd), (fd, newfd),
-                 "dup2", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(3, int, dosocket, _main, _libc,
-                 (int domain, int type, int proto), (domain, type, proto),
-                 "socket", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(3, int, doaccept, _main, _libc,
-                 (int fd, sockaddr *addr, socklen_t *len), (fd, addr, len),
-                 "accept", 0, "libc.so.6")
+DUAL_HOOK(3, int, doopen, _main, _libc,
+          (const char *fn, int flags, int mode), (fn, flags, mode),
+          "open", 0, "libc.so.6")
+DUAL_HOOK(3, int, doopen64, _main, _libc,
+          (const char *fn, int flags, int mode), (fn, flags, mode),
+          "__open64", 0, "libc.so.6")
+DUAL_HOOK(1, int, doclose, _main, _libc,
+          (int fd), (fd),
+          "close", 0, "libc.so.6")
+DUAL_HOOK(1, int, dodup, _main, _libc,
+          (int fd), (fd),
+          "dup", 0, "libc.so.6")
+DUAL_HOOK(2, int, dodup2, _main, _libc,
+          (int fd, int newfd), (fd, newfd),
+          "dup2", 0, "libc.so.6")
+DUAL_HOOK(3, int, dosocket, _main, _libc,
+          (int domain, int type, int proto), (domain, type, proto),
+          "socket", 0, "libc.so.6")
+DUAL_HOOK(3, int, doaccept, _main, _libc,
+          (int fd, sockaddr *addr, socklen_t *len), (fd, addr, len),
+          "accept", 0, "libc.so.6")
 
 // Data for this profiling module
 static IgProfTrace::CounterDef  s_ct_used       = { "FD_USED", IgProfTrace::TICK, -1 };
@@ -50,14 +50,14 @@ add (int fd)
   if (! buf)
     return;
 
-  IGPROF_RDTSC(tstart);
+  RDTSC(tstart);
 
   void                  *addresses[IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   IgProfTrace::Record   entries [2];
   int                   nentries = 0;
 
-  IGPROF_RDTSC(tend);
+  RDTSC(tend);
 
   if (s_count_used)
   {

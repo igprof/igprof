@@ -21,7 +21,7 @@ protected:
       if (size_t(freeend_ - freestart_) < amount)
         allocatePool();
 
-      IGPROF_ASSERT(size_t(freeend_ - freestart_) > amount);
+      ASSERT(size_t(freeend_ - freestart_) > amount);
       void *p = freestart_;
       freestart_ += amount;
       return p;

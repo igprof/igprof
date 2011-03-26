@@ -40,33 +40,33 @@ typedef std::list<IgProfTraceAlloc *> IgProfBufList;
 
 // -------------------------------------------------------------------
 // Traps for this profiling module
-IGPROF_DUAL_HOOK(1, void, doexit, _main, _libc,
-                 (int code), (code),
-                 "exit", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(1, void, doexit, _main2, _libc2,
-                 (int code), (code),
-                 "_exit", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(2, int,  dokill, _main, _libc,
-                 (pid_t pid, int sig), (pid, sig),
-                 "kill", 0, "libc.so.6")
+DUAL_HOOK(1, void, doexit, _main, _libc,
+          (int code), (code),
+          "exit", 0, "libc.so.6")
+DUAL_HOOK(1, void, doexit, _main2, _libc2,
+          (int code), (code),
+          "_exit", 0, "libc.so.6")
+DUAL_HOOK(2, int,  dokill, _main, _libc,
+          (pid_t pid, int sig), (pid, sig),
+          "kill", 0, "libc.so.6")
 
-IGPROF_LIBHOOK(4, int, dopthread_create, _main,
-               (pthread_t *thread, const pthread_attr_t *attr,
-                void * (*start_routine)(void *), void *arg),
-               (thread, attr, start_routine, arg),
-               "pthread_create", 0, 0)
+LIBHOOK(4, int, dopthread_create, _main,
+        (pthread_t *thread, const pthread_attr_t *attr,
+         void * (*start_routine)(void *), void *arg),
+        (thread, attr, start_routine, arg),
+        "pthread_create", 0, 0)
 
-IGPROF_LIBHOOK(4, int, dopthread_create, _pthread20,
-               (pthread_t *thread, const pthread_attr_t *attr,
-                void * (*start_routine)(void *), void *arg),
-               (thread, attr, start_routine, arg),
-               "pthread_create", "GLIBC_2.0", 0)
+LIBHOOK(4, int, dopthread_create, _pthread20,
+        (pthread_t *thread, const pthread_attr_t *attr,
+         void * (*start_routine)(void *), void *arg),
+        (thread, attr, start_routine, arg),
+        "pthread_create", "GLIBC_2.0", 0)
 
-IGPROF_LIBHOOK(4, int, dopthread_create, _pthread21,
-               (pthread_t *thread, const pthread_attr_t *attr,
-                void * (*start_routine)(void *), void *arg),
-               (thread, attr, start_routine, arg),
-               "pthread_create", "GLIBC_2.1", 0)
+LIBHOOK(4, int, dopthread_create, _pthread21,
+        (pthread_t *thread, const pthread_attr_t *attr,
+         void * (*start_routine)(void *), void *arg),
+        (thread, attr, start_routine, arg),
+        "pthread_create", "GLIBC_2.1", 0)
 
 // Data for this profiler module
 static const size_t     N_TRACE_CACHE   = 2000000;

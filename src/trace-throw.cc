@@ -16,10 +16,10 @@ public:
 };
 
 // Traps for this profiler module
-IGPROF_HOOK (3, void, dothrow, _main,
-              (void *exception, std::type_info *tinfo, void (*dest) (void *)),
-              (exception, tinfo, dest),
-              "__cxa_throw")
+HOOK(3, void, dothrow, _main,
+     (void *exception, std::type_info *tinfo, void (*dest) (void *)),
+     (exception, tinfo, dest),
+     "__cxa_throw")
 
 // Data for this trace module
 static bool             s_initialized = false;

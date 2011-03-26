@@ -14,9 +14,9 @@ public:
 };
 
 // Traps for this profiler module
-IGPROF_DUAL_HOOK (1, void *, domalloc, _main, _libc,
-                   (size_t n), (n),
-                   "malloc", 0, "libc.so.6")
+DUAL_HOOK(1, void *, domalloc, _main, _libc,
+          (size_t n), (n),
+          "malloc", 0, "libc.so.6")
 
 // Data for this trace module
 static bool s_initialized = false;

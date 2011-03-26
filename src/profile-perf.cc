@@ -13,16 +13,16 @@ typedef sig_t sighandler_t;
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
-IGPROF_LIBHOOK(0, int, dofork, _main, (), (), "fork", 0, 0)
-IGPROF_LIBHOOK(1, int, dosystem, _main, (const char *cmd), (cmd), "system", 0, 0)
-IGPROF_LIBHOOK(3, int, dopthread_sigmask, _main,
-               (int how, sigset_t *newmask, sigset_t *oldmask),
-               (how, newmask, oldmask),
-               "pthread_sigmask", 0, 0)
-IGPROF_LIBHOOK(3, int, dosigaction, _main,
-               (int signum, const struct sigaction *act, struct sigaction *oact),
-               (signum, act, oact),
-               "sigaction", 0, 0)
+LIBHOOK(0, int, dofork, _main, (), (), "fork", 0, 0)
+LIBHOOK(1, int, dosystem, _main, (const char *cmd), (cmd), "system", 0, 0)
+LIBHOOK(3, int, dopthread_sigmask, _main,
+        (int how, sigset_t *newmask, sigset_t *oldmask),
+        (how, newmask, oldmask),
+        "pthread_sigmask", 0, 0)
+LIBHOOK(3, int, dosigaction, _main,
+        (int signum, const struct sigaction *act, struct sigaction *oact),
+        (signum, act, oact),
+        "sigaction", 0, 0)
 
 // Data for this profiler module
 static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
@@ -50,12 +50,12 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
     if (IgProfTrace *buf = IgProf::buffer(s_moduleid))
     {
       uint64_t tstart, tend;
-      IGPROF_RDTSC(tstart);
+      RDTSC(tstart);
 
       int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
 
-      IGPROF_RDTSC(tend);
+      RDTSC(tend);
 
       // Drop two bottom frames, three top ones (stacktrace, me, signal frame).
       buf->push(addresses+3, depth-3, &entry, 1,
@@ -276,13 +276,13 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     if (enabled && nticks && buf)
     {
       uint64_t tstart, tend;
-      IGPROF_RDTSC(tstart);
+      RDTSC(tstart);
 
       void *addresses [IgProfTrace::MAX_DEPTH];
       int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
-      IGPROF_RDTSC(tend);
+      RDTSC(tend);
 
       buf->push(addresses+1, depth-1, &entry, 1,
 		IgProfTrace::statFrom(depth, tstart, tend));
@@ -322,13 +322,13 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   if (enabled && nticks && buf)
   {
     uint64_t tstart, tend;
-    IGPROF_RDTSC(tstart);
+    RDTSC(tstart);
 
     void *addresses [IgProfTrace::MAX_DEPTH];
     int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
     if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
-    IGPROF_RDTSC(tend);
+    RDTSC(tend);
 
     buf->push(addresses+1, depth-1, &entry, 1,
 	      IgProfTrace::statFrom(depth, tstart, tend));

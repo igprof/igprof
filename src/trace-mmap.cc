@@ -14,18 +14,18 @@
 #include <cxxabi.h>
 
 // Traps for this profiler module
-IGPROF_HOOK(2, int, domunmap, _main,
-             (void *addr, size_t len),
-             (addr, len),
-             "munmap")
-IGPROF_HOOK(6, void *, dommap32, _main,
-             (void *addr, size_t len, int prot, int flags, int fd, __off_t off),
-             (addr, len, prot, flags, fd, off),
-             "mmap")
-IGPROF_HOOK(6, void *, dommap64, _main,
-             (void *addr, size_t len, int prot, int flags, int fd, __off64_t off),
-             (addr, len, prot, flags, fd, off),
-             "mmap64")
+HOOK(2, int, domunmap, _main,
+     (void *addr, size_t len),
+     (addr, len),
+     "munmap")
+HOOK(6, void *, dommap32, _main,
+     (void *addr, size_t len, int prot, int flags, int fd, __off_t off),
+     (addr, len, prot, flags, fd, off),
+     "mmap")
+HOOK(6, void *, dommap64, _main,
+     (void *addr, size_t len, int prot, int flags, int fd, __off64_t off),
+     (addr, len, prot, flags, fd, off),
+     "mmap64")
 
 // Data for this trace module
 static bool             s_initialized = false;

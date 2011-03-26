@@ -102,7 +102,7 @@ public:
   struct Stack
   {
     void        *address;       //< Instruction pointer value.
-#if IGPROF_DEBUG
+#if DEBUG
     Stack       *parent;        //< The calling stack frame, or null for the root.
 #endif
     Stack       *sibling;       //< The next child frame of the same parent.

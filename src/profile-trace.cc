@@ -31,7 +31,7 @@ IgProfTrace::IgProfTrace(void)
   stack_ = allocate<Stack>();
 
   // The resource free list starts out empty.
-  IGPROF_ASSERT(! resfree_);
+  ASSERT(! resfree_);
 
   // Initialise performance stats.
   perfStats_.ntraces   = 0;
@@ -70,7 +70,7 @@ IgProfTrace::childStackNode(Stack *parent, void *address)
   Stack *next = *kid;
   Stack *k = *kid = allocate<Stack>();
   k->address = address;
-#if IGPROF_DEBUG
+#if DEBUG
   k->parent = parent;
 #endif
   k->sibling = next;
@@ -122,17 +122,17 @@ IgProfTrace::findResource(Record &rec,
 inline void
 IgProfTrace::releaseResource(Resource **rlink, Resource *res)
 {
-  IGPROF_ASSERT(res);
-  IGPROF_ASSERT(rlink);
-  IGPROF_ASSERT(res->counter);
-  IGPROF_ASSERT(res->counter != &FREED);
-  IGPROF_ASSERT(res->counter->resources);
-  IGPROF_ASSERT(*rlink == res);
+  ASSERT(res);
+  ASSERT(rlink);
+  ASSERT(res->counter);
+  ASSERT(res->counter != &FREED);
+  ASSERT(res->counter->resources);
+  ASSERT(*rlink == res);
 
   // Deduct the resource from the counter.
   Counter *ctr = res->counter;
-  IGPROF_ASSERT(ctr->value >= res->size);
-  IGPROF_ASSERT(ctr->ticks > 0);
+  ASSERT(ctr->value >= res->size);
+  ASSERT(ctr->ticks > 0);
   ctr->value -= res->size;
   ctr->ticks--;
 
@@ -141,18 +141,18 @@ IgProfTrace::releaseResource(Resource **rlink, Resource *res)
 
   if (Resource *prev = res->prevlive)
   {
-    IGPROF_ASSERT(prev->nextlive == res);
+    ASSERT(prev->nextlive == res);
     prev->nextlive = res->nextlive;
   }
   else
   {
-    IGPROF_ASSERT(ctr->resources == res);
+    ASSERT(ctr->resources == res);
     ctr->resources = res->nextlive;
   }
 
   if (Resource *next = res->nextlive)
   {
-    IGPROF_ASSERT(next->prevlive == res);
+    ASSERT(next->prevlive == res);
     next->prevlive = res->prevlive;
   }
 
@@ -180,7 +180,7 @@ IgProfTrace::releaseResource(Record &rec)
 void
 IgProfTrace::acquireResource(Record &rec, Counter *ctr)
 {
-  IGPROF_ASSERT(ctr);
+  ASSERT(ctr);
 
   // Locate the resource in the hash table.
   Resource  **rlink;
@@ -189,7 +189,7 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
   {
     IgProf::debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
                   ctr->def->name, rec.resource, res->size, (void *)this);
-#if IGPROF_DEBUG
+#if DEBUG
     int depth = 0;
     for (Stack *s = ctr->frame; s; s = s->parent)
     {
@@ -398,7 +398,7 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
   // Merge the children.
   for (frame = frame->children; frame; frame = frame->sibling)
   {
-    IGPROF_ASSERT(depth < MAX_DEPTH);
+    ASSERT(depth < MAX_DEPTH);
     callstack[-1] = frame->address;
     mergeFrom(depth+1, frame, &callstack[-1], recs);
   }

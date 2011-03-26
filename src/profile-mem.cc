@@ -10,28 +10,28 @@
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
-IGPROF_DUAL_HOOK(1, void *, domalloc, _main, _libc,
-                 (size_t n), (n),
-                 "malloc", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(2, void *, docalloc, _main, _libc,
-                 (size_t n, size_t m), (n, m),
-                 "calloc", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(2, void *, dorealloc, _main, _libc,
-                 (void *ptr, size_t n), (ptr, n),
-                 "realloc", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(3, int, dopmemalign, _main, _libc,
-                 (void **ptr, size_t alignment, size_t size),
-                 (ptr, alignment, size),
-                 "posix_memalign", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(2, void *, domemalign, _main, _libc,
-                 (size_t alignment, size_t size), (alignment, size),
-                 "memalign", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(1, void *, dovalloc, _main, _libc,
-                 (size_t size), (size),
-                 "valloc", 0, "libc.so.6")
-IGPROF_DUAL_HOOK(1, void, dofree, _main, _libc,
-                 (void *ptr), (ptr),
-                 "free", 0, "libc.so.6")
+DUAL_HOOK(1, void *, domalloc, _main, _libc,
+          (size_t n), (n),
+          "malloc", 0, "libc.so.6")
+DUAL_HOOK(2, void *, docalloc, _main, _libc,
+          (size_t n, size_t m), (n, m),
+          "calloc", 0, "libc.so.6")
+DUAL_HOOK(2, void *, dorealloc, _main, _libc,
+          (void *ptr, size_t n), (ptr, n),
+          "realloc", 0, "libc.so.6")
+DUAL_HOOK(3, int, dopmemalign, _main, _libc,
+          (void **ptr, size_t alignment, size_t size),
+          (ptr, alignment, size),
+          "posix_memalign", 0, "libc.so.6")
+DUAL_HOOK(2, void *, domemalign, _main, _libc,
+          (size_t alignment, size_t size), (alignment, size),
+          "memalign", 0, "libc.so.6")
+DUAL_HOOK(1, void *, dovalloc, _main, _libc,
+          (size_t size), (size),
+          "valloc", 0, "libc.so.6")
+DUAL_HOOK(1, void, dofree, _main, _libc,
+          (void *ptr), (ptr),
+          "free", 0, "libc.so.6")
 
 // Data for this profiler module
 static const int                OVERHEAD_NONE   = 0; // Memory use without malloc overheads
@@ -71,14 +71,14 @@ add(void *ptr, size_t size)
       size = actual;
   }
 
-  IGPROF_RDTSC(tstart);
+  RDTSC(tstart);
 
   void                  *addresses [IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   IgProfTrace::Record   entries [3];
   int                   nentries = 0;
 
-  IGPROF_RDTSC(tend);
+  RDTSC(tend);
 
   if (s_count_total)
   {
