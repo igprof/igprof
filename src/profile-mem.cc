@@ -41,9 +41,6 @@ static const int                OVERHEAD_DELTA  = 2; // Memory use malloc overhe
 static IgProfTrace::CounterDef  s_ct_total      = { "MEM_TOTAL",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_largest    = { "MEM_MAX",      IgProfTrace::MAX, -1 };
 static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK_PEAK, -1 };
-static bool                     s_count_total   = 0;
-static bool                     s_count_largest = 0;
-static bool                     s_count_live    = 0;
 static int                      s_overhead      = OVERHEAD_NONE;
 static bool                     s_initialized   = false;
 
@@ -75,40 +72,27 @@ add(void *ptr, size_t size)
   void                  *addresses [IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   IgProfTrace::Record   entries [3];
-  int                   nentries = 0;
 
   RDTSC(tend);
 
-  if (s_count_total)
-  {
-    entries[nentries].type = IgProfTrace::COUNT;
-    entries[nentries].def = &s_ct_total;
-    entries[nentries].amount = size;
-    entries[nentries].ticks = 1;
-    nentries++;
-  }
+  entries[0].type = IgProfTrace::COUNT;
+  entries[0].def = &s_ct_total;
+  entries[0].amount = size;
+  entries[0].ticks = 1;
 
-  if (s_count_largest)
-  {
-    entries[nentries].type = IgProfTrace::COUNT;
-    entries[nentries].def = &s_ct_largest;
-    entries[nentries].amount = size;
-    entries[nentries].ticks = 1;
-    nentries++;
-  }
+  entries[1].type = IgProfTrace::COUNT;
+  entries[1].def = &s_ct_largest;
+  entries[1].amount = size;
+  entries[1].ticks = 1;
 
-  if (s_count_live)
-  {
-    entries[nentries].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
-    entries[nentries].def = &s_ct_live;
-    entries[nentries].amount = size;
-    entries[nentries].ticks = 1;
-    entries[nentries].resource = (IgProfTrace::Address) ptr;
-    nentries++;
-  }
+  entries[2].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
+  entries[2].def = &s_ct_live;
+  entries[2].amount = size;
+  entries[2].ticks = 1;
+  entries[2].resource = (IgProfTrace::Address) ptr;
 
   // Drop three top ones (stacktrace, me, hook).
-  buf->push(addresses+3, depth-3, entries, nentries,
+  buf->push(addresses+3, depth-3, entries, 3,
 	    IgProfTrace::statFrom(depth, tstart, tend));
 }
 
@@ -118,7 +102,7 @@ add(void *ptr, size_t size)
 static void
 remove (void *ptr)
 {
-  if (s_count_live && ptr)
+  if (ptr)
   {
     IgProfTrace *buf = igprof_buffer();
     if (! buf)
@@ -142,7 +126,6 @@ initialize(void)
 
   const char    *options = igprof_options();
   bool          enable = false;
-  bool          opts = false;
 
   while (options && *options)
   {
@@ -155,33 +138,7 @@ initialize(void)
       options += 3;
       while (*options)
       {
-        if (! strncmp(options, ":total", 6))
-        {
-          s_count_total = 1;
-          options += 6;
-          opts = true;
-        }
-        else if (! strncmp(options, ":largest", 8))
-        {
-          s_count_largest = 1;
-          options += 8;
-          opts = true;
-        }
-        else if (! strncmp(options, ":live", 5))
-        {
-          s_count_live = 1;
-          options += 5;
-          opts = true;
-        }
-        else if (! strncmp(options, ":all", 4))
-        {
-          s_count_total = 1;
-          s_count_largest = 1;
-          s_count_live = 1;
-          options += 4;
-          opts = true;
-        }
-        else if (! strncmp(options, ":overhead=none", 14))
+        if (! strncmp(options, ":overhead=none", 14))
         {
           s_overhead = OVERHEAD_NONE;
           options += 14;
@@ -214,20 +171,6 @@ initialize(void)
     return;
 
   igprof_disable(true);
-  if (! opts)
-  {
-    igprof_debug("Memory: defaulting to total memory counting\n");
-    s_count_total = 1;
-  }
-  else
-  {
-    if (s_count_total)
-      igprof_debug("Memory: enabling total counting\n");
-    if (s_count_largest)
-      igprof_debug("Memory: enabling max counting\n");
-    if (s_count_live)
-      igprof_debug("Memory: enabling live counting\n");
-  }
   igprof_debug("Memory: reporting %sallocation overhead%s\n",
                (s_overhead == OVERHEAD_NONE ? "memory use without "
                 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),

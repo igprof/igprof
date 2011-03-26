@@ -36,8 +36,6 @@ DUAL_HOOK(3, int, doaccept, _main, _libc,
 // Data for this profiling module
 static IgProfTrace::CounterDef  s_ct_used       = { "FD_USED", IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_live       = { "FD_LIVE", IgProfTrace::TICK_PEAK, -1 };
-static bool                     s_count_used    = 0;
-static bool                     s_count_live    = 0;
 static bool                     s_initialized   = false;
 
 /** Record file descriptor.  Increments counters in the tree. */
@@ -54,31 +52,22 @@ add (int fd)
   void                  *addresses[IgProfTrace::MAX_DEPTH];
   int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   IgProfTrace::Record   entries [2];
-  int                   nentries = 0;
 
   RDTSC(tend);
 
-  if (s_count_used)
-  {
-    entries[nentries].type = IgProfTrace::COUNT;
-    entries[nentries].def = &s_ct_used;
-    entries[nentries].amount = 1;
-    entries[nentries].ticks = 1;
-    nentries++;
-  }
+  entries[0].type = IgProfTrace::COUNT;
+  entries[0].def = &s_ct_used;
+  entries[0].amount = 1;
+  entries[0].ticks = 1;
 
-  if (s_count_live)
-  {
-    entries[nentries].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
-    entries[nentries].def = &s_ct_live;
-    entries[nentries].amount = 1;
-    entries[nentries].ticks = 1;
-    entries[nentries].resource = fd;
-    nentries++;
-  }
+  entries[1].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
+  entries[1].def = &s_ct_live;
+  entries[1].amount = 1;
+  entries[1].ticks = 1;
+  entries[1].resource = fd;
 
   // Drop two bottom frames, four top ones (stacktrace, me, two for hook).
-  buf->push(addresses+4, depth-4, entries, nentries,
+  buf->push(addresses+4, depth-4, entries, 2,
 	    IgProfTrace::statFrom(depth, tstart, tend));
 }
 
@@ -88,17 +77,14 @@ add (int fd)
 static void
 remove (int fd)
 {
-  if (s_count_live)
-  {
-    IgProfTrace *buf = igprof_buffer();
-    if (! buf)
-      return;
+  IgProfTrace *buf = igprof_buffer();
+  if (! buf)
+    return;
 
-    IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
-    IgProfTrace::Record entry
-      = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, fd };
-    buf->push(0, 0, &entry, 1, perf);
-  }
+  IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
+  IgProfTrace::Record entry
+    = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, fd };
+  buf->push(0, 0, &entry, 1, perf);
 }
 
 // -------------------------------------------------------------------
@@ -112,7 +98,6 @@ initialize(void)
 
   const char    *options = igprof_options();
   bool          enable = false;
-  bool          opts = false;
 
   while (options && *options)
   {
@@ -123,30 +108,6 @@ initialize(void)
     {
       enable = true;
       options += 2;
-      while (*options)
-      {
-        if (! strncmp(options, ":used", 5))
-        {
-          s_count_used = 1;
-          options += 5;
-          opts = true;
-        }
-        else if (! strncmp(options, ":live", 5))
-        {
-          s_count_live = 1;
-          options += 5;
-          opts = true;
-        }
-        else if (! strncmp(options, ":all", 4))
-        {
-          s_count_used = 1;
-          s_count_live = 1;
-          options += 4;
-          opts = true;
-        }
-        else
-          break;
-      }
     }
     else
       options++;
@@ -162,20 +123,6 @@ initialize(void)
     return;
 
   igprof_disable(true);
-  if (!opts)
-  {
-    igprof_debug("FD: defaulting to total descriptor counting\n");
-    s_count_used = 1;
-  }
-  else
-  {
-    if (s_count_used)
-      igprof_debug("FD: enabling usage counting\n");
-    if (s_count_live)
-      igprof_debug("FD: enabling live counting\n");
-  }
-
-
   IgHook::hook(doopen_hook_main.raw);
   IgHook::hook(doopen64_hook_main.raw);
   IgHook::hook(doclose_hook_main.raw);
