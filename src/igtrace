@@ -49,13 +49,10 @@ while [ "$#" != 0 ]; do
       usage; exit 1;;
 
     -t | --target )
-      IGTRACE_TARGET="$2"; shift; shift;
-      export IGTRACE_TARGET ;;
+      export IGPROF_TARGET="$2"; shift; shift ;;
 
     -d | --debug )
-      IGHOOK_DEBUGGING=1 IGTRACE_DEBUGGING=1;
-      export IGHOOK_DEBUGGING IGTRACE_DEBUGGING;
-      shift ;;
+      export IGPROF_DEBUGGING=1; shift ;;
 
     -D | --demangle )
       OPTS=${OPTS+"$OPTS "}"demangle"; shift ;;

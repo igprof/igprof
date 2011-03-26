@@ -1,10 +1,12 @@
 #ifndef IG_PROF_IG_PROF_MACROS_H
 # define IG_PROF_IG_PROF_MACROS_H
 
+#define UNUSED __attribute__((unused))
+
 #define IGPROF_MERGE2(a,b)              a##b
 #define IGPROF_MERGE3(a,b,c)            a##b##c
 
-#define IGPROF_ARGS0()
+#define IGPROF_ARGS0()                  /* empty */
 #define IGPROF_ARGS1(a)                 a
 #define IGPROF_ARGS2(a,b)               a,b
 #define IGPROF_ARGS3(a,b,c)             a,b,c
@@ -13,7 +15,7 @@
 #define IGPROF_ARGS6(a,b,c,d,e,f)       a,b,c,d,e,f
 #define IGPROF_ARGS7(a,b,c,d,e,f,g)     a,b,c,d,e,f,g
 
-#define IGPROF_ARGSREST0()
+#define IGPROF_ARGSREST0()              /* empty */
 #define IGPROF_ARGSREST1(a)             ,a
 #define IGPROF_ARGSREST2(a,b)           ,a,b
 #define IGPROF_ARGSREST3(a,b,c)         ,a,b,c

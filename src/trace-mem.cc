@@ -14,7 +14,7 @@ public:
 };
 
 // Traps for this profiler module
-IGTRACE_DUAL_HOOK (1, void *, domalloc, _main, _libc,
+IGPROF_DUAL_HOOK (1, void *, domalloc, _main, _libc,
                    (size_t n), (n),
                    "malloc", 0, "libc.so.6")
 
@@ -60,14 +60,14 @@ IgTraceMem::initialize (void)
     if (domalloc_hook_main.raw.chain) IgHook::hook (domalloc_hook_libc.raw);
 #endif
 
-    IgTrace::debug ("Tracing memory allocations\n");
+    IgProf::debug ("Tracing memory allocations\n");
     IgTrace::enable ();
 }
 
 //////////////////////////////////////////////////////////////////////
 // Traps for this trace module.
 static void *
-domalloc (IgHook::SafeData<igtrace_domalloc_t> &hook, size_t size)
+domalloc (IgHook::SafeData<igprof_domalloc_t> &hook, size_t size)
 {
     bool enabled = IgTrace::disable ();
     void *result = (*hook.chain) (size);

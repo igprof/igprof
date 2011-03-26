@@ -16,7 +16,7 @@ public:
 };
 
 // Traps for this profiler module
-IGTRACE_HOOK (3, void, dothrow, _main,
+IGPROF_HOOK (3, void, dothrow, _main,
               (void *exception, std::type_info *tinfo, void (*dest) (void *)),
               (exception, tinfo, dest),
               "__cxa_throw")
@@ -73,14 +73,14 @@ IgTraceThrow::initialize (void)
 
     IgTrace::disable ();
     IgHook::hook (dothrow_hook_main.raw);
-    IgTrace::debug ("Tracing exceptions thrown\n");
+    IgProf::debug ("Tracing exceptions thrown\n");
     IgTrace::enable ();
 }
 
 //////////////////////////////////////////////////////////////////////
 // Traps for this trace module.
 static void
-dothrow (IgHook::SafeData<igtrace_dothrow_t> &hook,
+dothrow (IgHook::SafeData<igprof_dothrow_t> &hook,
          void *exception, std::type_info *tinfo,
          void (*dest) (void *))
 {

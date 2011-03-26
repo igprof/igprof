@@ -1,4 +1,5 @@
 #include "walk-syms.h"
+#include "macros.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -21,8 +22,6 @@ extern "C" void _sigtramp (void);
 #if !defined MAP_ANONYMOUS && defined MAP_ANON
 # define MAP_ANONYMOUS MAP_ANON
 #endif
-
-#define UNUSED __attribute__((unused))
 
 bool
 IgHookTrace::symbol (void *address,

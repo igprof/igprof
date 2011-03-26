@@ -1,4 +1,5 @@
 #include "hook.h"
+#include "profile.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -37,30 +38,6 @@
 # define dlvsym(h,fn,v) dlsym(h,fn)
 #endif
 
-#define UNUSED __attribute__((unused))
-
-/** Internal printf()-like debugging utility.  Produces output if
-    $IGHOOK_DEBUGGING environment variable is set to any value.  */
-static void
-debug (const char *format, ...)
-{
-    static const char *debugging = getenv ("IGHOOK_DEBUGGING");
-    if (debugging)
-    {
-        timeval tv;
-        gettimeofday (&tv, 0);
-        fprintf (stderr, "*** IgHook(%lu, %.3f): ",
-                 (unsigned long) getpid(),
-                 tv.tv_sec + 1e-6*tv.tv_usec);
-
-        va_list args;
-        va_start (args, format);
-        vfprintf (stderr, format, args);
-        va_end (args);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
 /** Allocate a trampoline area into @a ptr.  Returns error code on
     failure, success otherwise.  The memory is allocated into an
     address suitable for single-instruction branches (see @c direct
@@ -199,16 +176,16 @@ protect (void *address, bool writable)
     }
     if (retcode != KERN_SUCCESS)
     {
-        debug ("vm_protect(%p, %d, %d): %d\n",
-               address, pagesize, protection, retcode);
+	IgProf::debug ("vm_protect(%p, %d, %d): %d\n",
+                       address, pagesize, protection, retcode);
         return IgHook::ErrMemoryProtection;
     }
 #else
     int protection = PROT_READ | PROT_EXEC | (writable ? PROT_WRITE : 0);
     if (mprotect (address, pagesize, protection))
     {
-        debug ("mprotect(%p, %d, %d): %d\n",
-               address, pagesize, protection, errno);
+	IgProf::debug ("mprotect(%p, %d, %d): %d\n",
+                       address, pagesize, protection, errno);
         return IgHook::ErrMemoryProtection;
     }
 #endif
@@ -247,14 +224,14 @@ lookup (const char *fn, const char *v, const char *lib, void *&sym)
         void *handle = dlopen (lib, RTLD_LAZY | RTLD_GLOBAL);
         if (! handle)
         {
-            debug ("dlopen('%s'): %s\n", lib, dlerror ());
+	    IgProf::debug ("dlopen('%s'): %s\n", lib, dlerror ());
             return IgHook::ErrLibraryNotFound;
         }
 
         sym = v ? dlvsym (handle, fn, v) : dlsym (handle, fn);
         if (! sym)
         {
-            debug ("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
+	    IgProf::debug ("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
             return IgHook::ErrSymbolNotFoundInLibrary;
         }
     }
@@ -266,7 +243,7 @@ lookup (const char *fn, const char *v, const char *lib, void *&sym)
         if (! sym) sym = v ? dlvsym (program, fn, v) : dlsym (RTLD_NEXT, fn);
         if (! sym)
         {
-            debug ("dlsym(self, '%s'): %s\n", fn, dlerror ());
+	    IgProf::debug ("dlsym(self, '%s'): %s\n", fn, dlerror ());
             return IgHook::ErrSymbolNotFoundInSelf;
         }
     }
@@ -287,8 +264,8 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned char *insns = (unsigned char *) address;
     if (insns [0] == 0xe9)
     {
-        debug ("%s (%p): hook trampoline already installed, ignoring\n",
-               func, address);
+	IgProf::debug ("%s (%p): hook trampoline already installed, ignoring\n",
+                       func, address);
         return -1;
     }
 
@@ -329,8 +306,8 @@ parse (const char *func, void *address, unsigned *patches)
 
         else
         {
-            debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
-                   func, address, insns - (unsigned char *) address, *insns);
+	    IgProf::debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
+                           func, address, insns - (unsigned char *) address, *insns);
             return -1;
         }
     }
@@ -341,13 +318,13 @@ parse (const char *func, void *address, unsigned *patches)
 	unsigned long target = (unsigned long) insns + *(int *)(insns+1) + 5;
 	if ((target & 0xfff) == 0x004)
 	{
-            debug ("%s (%p): hook trampoline already installed, ignoring\n",
-                   func, address);
+	    IgProf::debug ("%s (%p): hook trampoline already installed, ignoring\n",
+                           func, address);
             return -1;
 	}
 	else
-            debug ("%s (%p): jump instruction found, but not a hook target\n",
-                   func, address);
+            IgProf::debug ("%s (%p): jump instruction found, but not a hook target\n",
+                           func, address);
     }
 
     while (n < 5)
@@ -423,9 +400,9 @@ parse (const char *func, void *address, unsigned *patches)
 
         else
         {
-            debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
-                   func, address, insns - (unsigned char *) address,
-                   insns[0], insns[1], insns[2], insns[3]);
+	    IgProf::debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
+                           func, address, insns - (unsigned char *) address,
+                           insns[0], insns[1], insns[2], insns[3]);
             return -1;
         }
     }
@@ -436,7 +413,7 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned int instr = *insns;
     if ((instr & 0xfc1fffff) == 0x7c0903a6) // check it's not mfctr
     {
-        debug ("%s (%p): mfctr can't be instrumented\n", func, address);
+	IgProf::debug ("%s (%p): mfctr can't be instrumented\n", func, address);
         return -1;
     }
 
@@ -740,11 +717,11 @@ IgHook::hook (const char *function,
         *trampoline = tramp;
 
     if (version)
-        debug ("%s/%s (%p): instrumenting %d bytes into %p\n",
-               function, version, sym, prologue, tramp);
+        IgProf::debug ("%s/%s (%p): instrumenting %d bytes into %p\n",
+                       function, version, sym, prologue, tramp);
     else
-        debug ("%s (%p): instrumenting %d bytes into %p\n",
-               function, sym, prologue, tramp);
+        IgProf::debug ("%s (%p): instrumenting %d bytes into %p\n",
+                       function, sym, prologue, tramp);
 
     prepare (tramp, replacement, chain, sym, prologue, patches);
 

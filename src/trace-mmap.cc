@@ -1,5 +1,5 @@
 #include "trace.h"
-#include "trace-atomic.h"
+#include "atomic.h"
 #include "hook.h"
 #include "walk-syms.h"
 #include <typeinfo>
@@ -14,15 +14,15 @@
 #include <cxxabi.h>
 
 // Traps for this profiler module
-IGTRACE_HOOK(2, int, domunmap, _main,
+IGPROF_HOOK(2, int, domunmap, _main,
              (void *addr, size_t len),
              (addr, len),
              "munmap")
-IGTRACE_HOOK(6, void *, dommap32, _main,
+IGPROF_HOOK(6, void *, dommap32, _main,
              (void *addr, size_t len, int prot, int flags, int fd, __off_t off),
              (addr, len, prot, flags, fd, off),
              "mmap")
-IGTRACE_HOOK(6, void *, dommap64, _main,
+IGPROF_HOOK(6, void *, dommap64, _main,
              (void *addr, size_t len, int prot, int flags, int fd, __off64_t off),
              (addr, len, prot, flags, fd, off),
              "mmap64")
@@ -33,7 +33,7 @@ static bool             s_demangle = false;
 static char             *s_demanglehere = 0;
 static size_t           s_demanglelen = 0;
 static pthread_mutex_t  s_demanglelock = PTHREAD_MUTEX_INITIALIZER;
-static IgTraceAtomic    s_reporting = 0;
+static IgProfAtomic    s_reporting = 0;
 
 /** Initialise mapping profiling.  Traps various system calls to keep track
     of memory usage, and if requested, leaks.  */
@@ -82,7 +82,7 @@ initialize(void)
   IgHook::hook(domunmap_hook_main.raw);
   IgHook::hook(dommap32_hook_main.raw);
   IgHook::hook(dommap64_hook_main.raw);
-  IgTrace::debug("Tracing memory mappings\n");
+  IgProf::debug("Tracing memory mappings\n");
   s_initialized = true;
   IgTrace::enable();
   return true;
@@ -427,51 +427,51 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
 }
 
 static int
-domunmap(IgHook::SafeData<igtrace_domunmap_t> &hook,
+domunmap(IgHook::SafeData<igprof_domunmap_t> &hook,
          void *addr, size_t len)
 {
   if (s_initialized)
   {
-    IgTraceAtomic newval = IgTraceAtomicInc(&s_reporting);
+    IgProfAtomic newval = IgProfAtomicInc(&s_reporting);
 
     if (newval == 1)
       munmapreport(addr, len);
 
-    IgTraceAtomicDec(&s_reporting);
+    IgProfAtomicDec(&s_reporting);
   }
   return (*hook.chain)(addr, len);
 }
 
 static void *
-dommap32(IgHook::SafeData<igtrace_dommap32_t> &hook,
+dommap32(IgHook::SafeData<igprof_dommap32_t> &hook,
          void *addr, size_t len, int prot, int flags, int fd, __off_t off)
 {
   void *ret = (*hook.chain)(addr, len, prot, flags, fd, off);
   if (s_initialized)
   {
-    IgTraceAtomic newval = IgTraceAtomicInc(&s_reporting);
+    IgProfAtomic newval = IgProfAtomicInc(&s_reporting);
 
     if (newval == 1)
       mmapreport("32", addr, len, prot, flags, fd, off, ret);
 
-    IgTraceAtomicDec(&s_reporting);
+    IgProfAtomicDec(&s_reporting);
   }
   return ret;
 }
 
 static void *
-dommap64(IgHook::SafeData<igtrace_dommap64_t> &hook,
+dommap64(IgHook::SafeData<igprof_dommap64_t> &hook,
          void *addr, size_t len, int prot, int flags, int fd, __off64_t off)
 {
   void *ret = (*hook.chain)(addr, len, prot, flags, fd, off);
   if (s_initialized)
   {
-    IgTraceAtomic newval = IgTraceAtomicInc(&s_reporting);
+    IgProfAtomic newval = IgProfAtomicInc(&s_reporting);
 
     if (newval == 1)
       mmapreport("64", addr, len, prot, flags, fd, off, ret);
 
-    IgTraceAtomicDec(&s_reporting);
+    IgProfAtomicDec(&s_reporting);
   }
   return ret;
 }

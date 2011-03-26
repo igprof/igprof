@@ -1,5 +1,5 @@
 #include "trace.h"
-#include "trace-atomic.h"
+#include "atomic.h"
 #include "walk-syms.h"
 #include <sys/types.h>
 #include <sys/time.h>
@@ -25,7 +25,7 @@ struct IgTraceFilter
 };
 
 // Data for this profiler module
-static IgTraceAtomic    s_enabled       = 0;
+static IgProfAtomic    s_enabled       = 0;
 static bool             s_initialized   = false;
 static bool             s_activated     = false;
 static volatile int     s_quitting      = 0;
@@ -47,7 +47,7 @@ IgTrace::initialize (void)
         const char *options = IgTrace::options ();
         if (! options || ! *options)
         {
-            IgTrace::debug ("$IGTRACE not set, not tracing this process\n");
+            IgProf::debug ("$IGPROF not set, not tracing this process\n");
             return s_activated = false;
         }
         while (options && *options)
@@ -100,17 +100,17 @@ IgTrace::initialize (void)
                 options++;
         }
 
-        const char *target = getenv ("IGTRACE_TARGET");
+        const char *target = getenv ("IGPROF_TARGET");
         if (target && ! strstr (program_invocation_name, target))
         {
-            IgTrace::debug ("Current process not selected for tracing:"
-                            " process '%s' does not match '%s'\n",
-                            program_invocation_name, target);
+            IgProf::debug ("Current process not selected for tracing:"
+                           " process '%s' does not match '%s'\n",
+                           program_invocation_name, target);
             return s_activated = false;
         }
 
-        IgTrace::debug ("Activated in %s\n", program_invocation_name);
-        IgTrace::debug ("Options: %s\n", IgTrace::options ());
+        IgProf::debug ("Activated in %s\n", program_invocation_name);
+        IgProf::debug ("Options: %s\n", IgTrace::options ());
         s_activated = true;
         s_enabled = 1;
     }
@@ -140,7 +140,7 @@ IgTrace::enabled (void)
 bool
 IgTrace::enable (void)
 {
-    IgTraceAtomic newval = IgTraceAtomicInc (&s_enabled);
+    IgProfAtomic newval = IgProfAtomicInc (&s_enabled);
     return newval > 0;
 }
 
@@ -152,7 +152,7 @@ IgTrace::enable (void)
 bool
 IgTrace::disable (void)
 {
-    IgTraceAtomic newval = IgTraceAtomicDec (&s_enabled);
+    IgProfAtomic newval = IgProfAtomicDec (&s_enabled);
     return newval >= 0;
 }
 
@@ -162,58 +162,6 @@ IgTrace::options (void)
 {
      static const char *s_options = getenv ("IGTRACE");
      return s_options;
-}
-
-/** Internal assertion helper routine.  */
-int
-IgTrace::panic (const char *file, int line, const char *func, const char *expr)
-{
-    IgTrace::disable ();
-
-#if __linux
-    fprintf (stderr, "%s: ", program_invocation_name);
-#endif
-    fprintf (stderr, "%s:%d: %s: assertion failure: %s\n", file, line, func, expr);
-
-    void *trace [128];
-    int levels = IgHookTrace::stacktrace (trace, 128);
-    for (int i = 2; i < levels; ++i)
-    {
-        const char      *sym = 0;
-        const char      *lib = 0;
-        long            offset = 0;
-        long            liboffset = 0;
-        IgHookTrace::symbol (trace [i], sym, lib, offset, liboffset);
-        fprintf (stderr, "  %p %s %s %ld [%s %s %ld]\n",
-                 trace [i], sym, (offset < 0 ? "-" : "+"),
-                 labs(offset), lib, (liboffset < 0 ? "-" : "+"),
-                 labs(liboffset));
-    }
-
-    // abort ();
-    IgTrace::enable ();
-    return 1;
-}
-
-/** Internal printf()-like debugging utility.  Produces output if
-    $IGTRACE_DEBUGGING environment variable is set to any value.  */
-void
-IgTrace::debug (const char *format, ...)
-{
-    static const char *debugging = getenv ("IGTRACE_DEBUGGING");
-    if (debugging)
-    {
-        timeval tv;
-        gettimeofday (&tv, 0);
-        fprintf (stderr, "*** IgTrace(%lu, %.3f): ",
-                 (unsigned long) getpid(),
-                 tv.tv_sec + 1e-6*tv.tv_usec);
-
-        va_list args;
-        va_start (args, format);
-        vfprintf (stderr, format, args);
-        va_end (args);
-    }
 }
 
 /** Return program name. */
@@ -259,6 +207,3 @@ IgTrace::filter (const char *info, void *stack [], int depth)
 
     return pass;
 }
-
-//////////////////////////////////////////////////////////////////////
-static bool autoboot = IgTrace::initialize ();

@@ -49,9 +49,7 @@ while [ "$#" != 0 ]; do
       OPTS="$OPTS igprof:dump='$2'"; shift; shift;;
 
     -d | --debug )
-      IGHOOK_DEBUGGING=1 IGPROF_DEBUGGING=1;
-      export IGHOOK_DEBUGGING IGPROF_DEBUGGING;
-      shift ;;
+      export IGPROF_DEBUGGING=1; shift ;;
 
     -f | --full )
       MEM="mem" FD="fd" PERF="perf" ALL=":all"; shift ;;

@@ -2,7 +2,8 @@
 # define IG_TRACE_IG_TRACE_H
 
 # include "hook.h"
-# include "trace-macros.h"
+# include "macros.h"
+# include "profile.h"
 
 /** Core tracing implementation.  Implements utilities needed
     to implement actual trace modules. */
