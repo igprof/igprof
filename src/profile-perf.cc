@@ -169,18 +169,18 @@ initialize(void)
 
   igprof_disable_globally();
   if (s_itimer == ITIMER_REAL)
-    igprof_debug("Perf: measuring real time\n");
+    igprof_debug("performance profiler: measuring real time\n");
   else if (s_itimer == ITIMER_VIRTUAL)
-    igprof_debug("Perf: profiling user time\n");
+    igprof_debug("performance profiler: measuring user time\n");
   else if (s_itimer == ITIMER_PROF)
-    igprof_debug("Perf: profiling process time\n");
+    igprof_debug("performance profiler: measuring process cpu time\n");
 
   // Enable profiler.
   IgHook::hook(dofork_hook_main.raw);
   IgHook::hook(dosystem_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
-  igprof_debug("Performance profiler enabled\n");
+  igprof_debug("performance profiler enabled\n");
 
   enableSignalHandler();
   enableTimer();

@@ -121,7 +121,7 @@ disposeTraceBuffer(IgProfTrace *buf)
 {
   if (buf && buf != s_masterbuf)
   {
-    igprof_debug("merging profile %p to master %p\n",
+    igprof_debug("merging profile buffer %p to master buffer %p\n",
                  (void *) buf, (void *) s_masterbuf);
     s_masterbuf->mergeFrom(*buf);
     allTraceBuffers().erase(buf);
@@ -420,7 +420,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   const char *target = getenv("IGPROF_TARGET");
   if (target && ! strstr(program_invocation_name, target))
   {
-    igprof_debug("Current process not selected for profiling:"
+    igprof_debug("current process not selected for profiling:"
                  " process '%s' does not match '%s'\n",
                  program_invocation_name, target);
     return s_igprof_activated = false;
@@ -476,14 +476,14 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   s_tracebuf = makeTraceBuffer();
 
   // Report as activated.
-  igprof_debug("Activated in %s, main thread id 0x%lx\n",
+  igprof_debug("profiler activated in %s, main thread id 0x%lx\n",
                program_invocation_name, s_mainthread);
-  igprof_debug("Options: %s\n", options);
+  igprof_debug("profiler options: %s\n", options);
 
   // Remember clock resolution.
   if (clockres > 0)
   {
-    igprof_debug("Timing resolution set to %f\n", clockres);
+    igprof_debug("timing resolution is %f s\n", clockres);
     s_clockres = clockres;
   }
 

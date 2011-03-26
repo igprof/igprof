@@ -133,7 +133,7 @@ initialize(void)
   if (dosocket_hook_main.raw.chain) IgHook::hook(dosocket_hook_libc.raw);
   if (doaccept_hook_main.raw.chain) IgHook::hook(doaccept_hook_libc.raw);
 #endif
-  igprof_debug("File descriptor profiler enabled\n");
+  igprof_debug("file descriptor profiler enabled\n");
   igprof_enable_globally();
 }
 

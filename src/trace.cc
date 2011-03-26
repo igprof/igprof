@@ -104,14 +104,14 @@ IgTrace::initialize (void)
         const char *target = getenv ("IGPROF_TARGET");
         if (target && ! strstr (program_invocation_name, target))
         {
-            igprof_debug ("Current process not selected for tracing:"
+            igprof_debug ("current process not selected for tracing:"
                           " process '%s' does not match '%s'\n",
                           program_invocation_name, target);
             return s_activated = false;
         }
 
-        igprof_debug ("Activated in %s\n", program_invocation_name);
-        igprof_debug ("Options: %s\n", IgTrace::options ());
+        igprof_debug ("tracing activated in %s\n", program_invocation_name);
+        igprof_debug ("tracing options: %s\n", IgTrace::options ());
         s_activated = true;
         s_enabled = 1;
     }

@@ -63,7 +63,7 @@ IgProfTrace::expandResourceHash(void)
   newSize = (1u << newLogSize);
   newTable = (HResource *) allocateRaw(newSize * sizeof(HResource));
   __extension__
-  igprof_debug("Expanding resource hash table for %p"
+  igprof_debug("expanding resource hash table for %p"
 	       " from 2^%ju to 2^%ju, %ju used\n",
 	       (void *) this, (uintmax_t) hashLogSize_,
 	       (uintmax_t) newLogSize, (uintmax_t) hashUsed_);
@@ -86,7 +86,7 @@ IgProfTrace::expandResourceHash(void)
       if (UNLIKELY(++j == MAX_HASH_PROBES))
       {
 	__extension__
-        igprof_debug("Rehash of 0x%jx[%ju -> %ju] failed,"
+        igprof_debug("rehash of 0x%jx[%ju -> %ju] failed,"
 		     " re-expanding another time\n",
 		     (uintmax_t) restable_[i].resource,
 		     (uintmax_t) i, (uintmax_t) slot);
@@ -298,7 +298,7 @@ IgProfTrace::acquire(Counter *ctr, Address resource, Value size)
   // proceed as if we hadn't found it.
   if (UNLIKELY(hres && hres->record))
   {
-    igprof_debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
+    igprof_debug("new %s resource 0x%lx of %ju bytes was never freed in %p\n",
                  ctr->def->name, resource, hres->record->size, (void *)this);
 #if DEBUG
     int depth = 0;

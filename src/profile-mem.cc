@@ -161,7 +161,7 @@ initialize(void)
     return;
 
   igprof_disable_globally();
-  igprof_debug("Memory: reporting %sallocation overhead%s\n",
+  igprof_debug("memory profiler: reporting %sallocation overhead%s\n",
                (s_overhead == OVERHEAD_NONE ? "memory use without "
                 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
                (s_overhead == OVERHEAD_DELTA ? " only" : ""));
@@ -180,7 +180,7 @@ initialize(void)
   if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
 #endif
-  igprof_debug("Memory profiler enabled\n");
+  igprof_debug("memory profiler enabled\n");
   igprof_enable_globally();
 }
 

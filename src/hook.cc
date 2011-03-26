@@ -176,7 +176,7 @@ protect (void *address, bool writable)
     }
     if (retcode != KERN_SUCCESS)
     {
-	igprof_debug("vm_protect(%p, %d, %d): %d\n",
+	igprof_debug("vm_protect(%p, %d, %d) failed: %d\n",
                      address, pagesize, protection, retcode);
         return IgHook::ErrMemoryProtection;
     }
@@ -184,7 +184,7 @@ protect (void *address, bool writable)
     int protection = PROT_READ | PROT_EXEC | (writable ? PROT_WRITE : 0);
     if (mprotect (address, pagesize, protection))
     {
-	igprof_debug("mprotect(%p, %d, %d): %d\n",
+	igprof_debug("mprotect(%p, %d, %d) failed: %d\n",
                      address, pagesize, protection, errno);
         return IgHook::ErrMemoryProtection;
     }
