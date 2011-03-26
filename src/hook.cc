@@ -668,7 +668,7 @@ patch (void *address, void *trampoline, int prologue)
         insns [i] = 0x90; // nop
 #else
         // can't happen!
-        abort ();
+        igprof_abort ();
 #endif
     }
 }

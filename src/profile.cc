@@ -27,8 +27,11 @@
 #endif
 
 // Global variables initialised once here.
-HIDDEN bool             s_igprof_activated     = false;
-HIDDEN IgProfAtomic     s_igprof_enabled       = 0;
+HIDDEN void             (*igprof_abort)(void) __attribute__((noreturn)) = &abort;
+HIDDEN char *           (*igprof_getenv)(const char *) = &getenv;
+HIDDEN int              (*igprof_unsetenv)(const char *) = &unsetenv;
+HIDDEN bool             s_igprof_activated = false;
+HIDDEN IgProfAtomic     s_igprof_enabled = 0;
 HIDDEN pthread_key_t    s_igprof_bufkey;
 HIDDEN pthread_key_t    s_igprof_flagkey;
 
@@ -265,7 +268,7 @@ dumpAllProfiles(void *arg)
 
   igprof_debug("dumping state to %s\n", tofile);
   info->output = (tofile[0] == '|'
-                  ? (unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
+                  ? (igprof_unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
                   : fopen (tofile, "w+"));
   if (! info->output)
     igprof_debug("can't write to output %s: %s (error %d)\n",
@@ -416,8 +419,26 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
 
   s_initialized = id;
 
+  // The main binary may define some functions which we need. In
+  // particular bourne shells tend to redefine getenv(), unsetenv(),
+  // other binaries define a custom abort(). Get the real function
+  // definitions from libc. (What we'd really want is -Bdirect?)`
+  if (void *libc = dlopen("libc.so.6", RTLD_LAZY | RTLD_GLOBAL))
+  {
+    if (void *sym = dlsym(libc, "abort"))
+      igprof_abort = __extension__ (void(*)()) sym;
+
+    if (void *sym = dlsym(libc, "getenv"))
+      igprof_getenv = __extension__ (char *(*)(const char *)) sym;
+
+    if (void *sym = dlsym(libc, "unsetenv"))
+      igprof_unsetenv = __extension__ (int (*)(const char *)) sym;
+
+    dlclose(libc);
+  }
+
   // Check if we should be activated at all.
-  const char *target = getenv("IGPROF_TARGET");
+  const char *target = igprof_getenv("IGPROF_TARGET");
   if (target && ! strstr(program_invocation_name, target))
   {
     igprof_debug("current process not selected for profiling:"
@@ -480,6 +501,17 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
                program_invocation_name, s_mainthread);
   igprof_debug("profiler options: %s\n", options);
 
+  // Report override function use.
+  if (igprof_abort != &abort)
+    igprof_debug("abort() from system %p, app had %p\n",
+                 __extension__ (void *) igprof_abort, __extension__ (void *) &abort);
+  if (igprof_getenv != &getenv)
+    igprof_debug("getenv() from system %p, app had %p\n",
+                 __extension__ (void *) igprof_getenv, __extension__ (void *) &getenv);
+  if (igprof_unsetenv != &unsetenv)
+    igprof_debug("unsetenv() from system %p, app had %p\n",
+                 __extension__ (void *) igprof_unsetenv, __extension__ (void *) &unsetenv);
+
   // Remember clock resolution.
   if (clockres > 0)
   {
@@ -523,7 +555,7 @@ const char *
 igprof_options(void)
 {
   if (! s_options)
-    s_options = getenv("IGPROF");
+    s_options = igprof_getenv("IGPROF");
   return s_options;
 }
 
@@ -552,7 +584,7 @@ igprof_panic(const char *file, int line, const char *func, const char *expr)
             (liboffset < 0 ? "-" : "+"), labs(liboffset));
   }
 
-  // abort();
+  // igprof_abort();
   return 1;
 }
 
@@ -561,7 +593,7 @@ igprof_panic(const char *file, int line, const char *func, const char *expr)
 void
 igprof_debug(const char *format, ...)
 {
-  static const char *debugging = getenv("IGPROF_DEBUGGING");
+  static const char *debugging = igprof_getenv("IGPROF_DEBUGGING");
   if (debugging)
   {
     timeval tv;

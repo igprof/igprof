@@ -12,6 +12,9 @@ extern bool             s_igprof_activated;
 extern IgProfAtomic     s_igprof_enabled;
 extern pthread_key_t    s_igprof_bufkey;
 extern pthread_key_t    s_igprof_flagkey;
+extern void             (*igprof_abort) (void) __attribute__((noreturn));
+extern char *           (*igprof_getenv) (const char *);
+extern int              (*igprof_unsetenv) (const char *);
 
 HIDDEN const char *igprof_options(void);
 HIDDEN void igprof_debug(const char *format, ...);

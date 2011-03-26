@@ -101,7 +101,7 @@ IgTrace::initialize (void)
                 options++;
         }
 
-        const char *target = getenv ("IGPROF_TARGET");
+        const char *target = igprof_getenv("IGPROF_TARGET");
         if (target && ! strstr (program_invocation_name, target))
         {
             igprof_debug ("current process not selected for tracing:"
