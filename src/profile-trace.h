@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_TRACE_H
-# define IG_PROF_IG_PROF_TRACE_H
+#ifndef PROFILE_TRACE_H
+# define PROFILE_TRACE_H
 
 # include "macros.h"
 # include "buffer.h"
@@ -265,4 +265,4 @@ inline const IgProfTrace::PerfStat &
 IgProfTrace::perfStats(void) const
 { return perfStats_; }
 
-#endif // IG_PROF_IG_PROF_TRACE_H
+#endif // PROFILE_TRACE_H

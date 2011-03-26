@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_BUFFER_H
-# define IG_PROF_IG_PROF_BUFFER_H
+#ifndef BUFFER_H
+# define BUFFER_H
 
 # include "macros.h"
 # include "profile.h"
@@ -69,4 +69,4 @@ private:
   IgProfBuffer &operator=(IgProfBuffer &);
 };
 
-#endif // IG_PROF_IG_PROF_BUFFER_H
+#endif // BUFFER_H

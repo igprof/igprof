@@ -1,5 +1,5 @@
-#ifndef IG_RESOLVE_SYMBOLS
-#define IG_RESOLVE_SYMBOLS
+#ifndef SYM_RESOLVE_H
+#define SYM_RESOLVE_H
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -319,4 +319,4 @@ private:
   SymbolCache m_symbolCache;
 };
 
-#endif
+#endif // SYM_RESOLVE_H

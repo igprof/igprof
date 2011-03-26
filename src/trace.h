@@ -1,5 +1,5 @@
-#ifndef IG_TRACE_IG_TRACE_H
-# define IG_TRACE_IG_TRACE_H
+#ifndef TRACE_H
+# define TRACE_H
 
 # include "hook.h"
 # include "macros.h"
@@ -23,4 +23,4 @@ public:
     static bool                 disable (void);
 };
 
-#endif // IG_TRACE_IG_TRACE_H
+#endif // TRACE_H

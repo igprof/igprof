@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_ATOMIC_H
-# define IG_PROF_IG_PROF_ATOMIC_H
+#ifndef ATOMIC_H
+# define ATOMIC_H
 
 # if __i386__ || __x86_64__ || __ppc__
 # else
@@ -62,4 +62,4 @@ IgProfAtomicDec (volatile IgProfAtomic *val)
 # endif
 }
 
-#endif // IG_PROF_IG_PROF_ATOMIC_H
+#endif // ATOMIC_H

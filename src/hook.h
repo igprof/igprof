@@ -1,5 +1,5 @@
-#ifndef IG_HOOK_IG_HOOK_H
-# define IG_HOOK_IG_HOOK_H
+#ifndef HOOK_H
+# define HOOK_H
 
 class IgHook
 {
@@ -74,4 +74,4 @@ IgHook::hook (Data &data)
                  data.options, &data.chain, &data.original, &data.trampoline);
 }
 
-#endif // IG_HOOK_IG_HOOK_H
+#endif // HOOK_H

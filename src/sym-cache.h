@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_SYM_CACHE_H
-# define IG_PROF_IG_PROF_SYM_CACHE_H
+#ifndef SYM_CACHE_H
+# define SYM_CACHE_H
 
 # include "macros.h"
 # include "buffer.h"
@@ -63,4 +63,4 @@ private:
   IgProfSymCache &operator=(IgProfSymCache &);
 };
 
-#endif // IG_PROF_IG_PROF_SYM_CACHE_H
+#endif // SYM_CACHE_H

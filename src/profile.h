@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_H
-# define IG_PROF_IG_PROF_H
+#ifndef PROFILE_H
+# define PROFILE_H
 
 # include "macros.h"
 # include "hook.h"
@@ -31,4 +31,4 @@ public:
   static IgProfTrace *  buffer(int moduleid);
 };
 
-#endif // IG_PROF_IG_PROF_H
+#endif // PROFILE_H

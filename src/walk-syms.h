@@ -1,5 +1,5 @@
-#ifndef IG_HOOK_IG_HOOK_TRACE_H
-# define IG_HOOK_IG_HOOK_TRACE_H
+#ifndef WALK_SYMS_H
+# define WALK_SYMS_H
 
 class IgHookTrace
 {
@@ -11,4 +11,4 @@ public:
                                 long &liboffset);
 };
 
-#endif // IG_HOOK_IG_HOOK_TRACE_H
+#endif // WALK_SYMS_H

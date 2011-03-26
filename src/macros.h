@@ -1,5 +1,5 @@
-#ifndef IG_PROF_IG_PROF_MACROS_H
-# define IG_PROF_IG_PROF_MACROS_H
+#ifndef MACROS_H
+# define MACROS_H
 
 #define UNUSED __attribute__((unused))
 
@@ -62,4 +62,4 @@
        (v) = ((uint64_t) lo) | ((uint64_t) hi << 32);     \
   } while (0)
 
-#endif // IG_PROF_IG_PROF_MACROS_H
+#endif // MACROS_H

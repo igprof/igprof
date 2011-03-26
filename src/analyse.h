@@ -1,5 +1,5 @@
-#ifndef IG_PROF_ANALYZE
-#define IG_PROF_ANALYZE
+#ifndef ANALYSE_H
+#define ANALYSE_H
 
 #include "sym-resolve.h"
 #include <algorithm>
@@ -314,4 +314,4 @@ private:
   SymbolNames m_symbols;
 };
 
-#endif
+#endif // ANALYSE_H
