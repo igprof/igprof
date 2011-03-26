@@ -4,12 +4,14 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+static const size_t MAX_HASH_PROBES = 32;
 static IgProfTrace::Counter FREED;
-static const unsigned int RESOURCE_HASH = 1024*1024;
 
 /** Initialise a trace buffer.  */
 IgProfTrace::IgProfTrace(void)
-  : restable_(0),
+  : hashLogSize_(20),
+    hashUsed_(0),
+    restable_(0),
     callcache_(0),
     resfree_(0),
     stack_(0)
@@ -20,7 +22,7 @@ IgProfTrace::IgProfTrace(void)
   // has to be big for large memory applications, so it's ok to
   // allocate it separately.  Note the memory obtained here starts out
   // as zeroed out.
-  restable_ = (Resource **) allocateRaw(RESOURCE_HASH*sizeof(Resource *));
+  restable_ = (HResource *) allocateRaw((1u << hashLogSize_)*sizeof(HResource));
 
   // Allocate the call cache next.
   callcache_ = (StackCache *) allocateSpace(MAX_DEPTH*sizeof(StackCache));
@@ -44,7 +46,59 @@ IgProfTrace::IgProfTrace(void)
 IgProfTrace::~IgProfTrace(void)
 {
   if (restable_)
-    unallocateRaw(restable_, RESOURCE_HASH*sizeof(Resource *));
+    unallocateRaw(restable_, (1u << hashLogSize_) * sizeof(HResource));
+}
+
+void
+IgProfTrace::expandResourceHash(void)
+{
+  HResource *newTable;
+  size_t i, j, slot;
+  size_t oldSize = (1u << hashLogSize_);
+  size_t newLogSize = hashLogSize_;
+  size_t newSize;
+
+  TRY_AGAIN:
+  newLogSize += 2;
+  newSize = (1u << newLogSize);
+  newTable = (HResource *) allocateRaw(newSize * sizeof(HResource));
+  __extension__
+  igprof_debug("Expanding resource hash table for %p"
+	       " from 2^%ju to 2^%ju, %ju used\n",
+	       (void *) this, (uintmax_t) hashLogSize_,
+	       (uintmax_t) newLogSize, (uintmax_t) hashUsed_);
+  for (i = 0; i < oldSize; ++i)
+  {
+    if (! restable_[i].record)
+      continue;
+
+    slot = hash(restable_[i].resource, 8);
+    for (j = 0; true; ++slot)
+    {
+      slot &= newSize-1;
+      if (LIKELY(! newTable[slot].record))
+      {
+	newTable[slot] = restable_[i];
+	restable_[i].record->hashslot = &newTable[slot];
+	break;
+      }
+
+      if (UNLIKELY(++j == MAX_HASH_PROBES))
+      {
+	__extension__
+        igprof_debug("Rehash of 0x%jx[%ju -> %ju] failed,"
+		     " re-expanding another time\n",
+		     (uintmax_t) restable_[i].resource,
+		     (uintmax_t) i, (uintmax_t) slot);
+        unallocateRaw(newTable, newSize * sizeof(HResource));
+        goto TRY_AGAIN;
+      }
+    }
+  }
+
+  unallocateRaw(restable_, oldSize * sizeof(HResource));
+  hashLogSize_ = newLogSize;
+  restable_ = newTable;
 }
 
 IgProfTrace::Stack *
@@ -93,39 +147,38 @@ IgProfTrace::initCounter(Counter *&link, CounterDef *def, Stack *frame)
   return ctr;
 }
 
-inline bool
-IgProfTrace::findResource(Address resource,
-                          Resource **&rlink,
-                          Resource *&res,
-                          CounterDef *def)
+inline IgProfTrace::HResource *
+IgProfTrace::findResource(Address resource)
 {
   // Locate the resource in the hash table.
-  rlink = &restable_[hash(address) & (RESOURCE_HASH-1)];
-
-  while (Resource *r = *rlink)
+  HResource *hr;
+  HResource *free = 0;
+  size_t slot = hash(resource, 8);
+  size_t size = (1u << hashLogSize_);
+  for (size_t i = 0; i < MAX_HASH_PROBES; ++i, ++slot)
   {
-    if (r->resource == resource && r->def == def)
-    {
-      res = r;
-      return true;
-    }
-    if (r->resource > resource)
-      return false;
-    rlink = &r->nexthash;
+    hr = &restable_[slot & (size-1)];
+    if (hr->resource == resource)
+      return hr;
+    else if (! free && ! hr->record)
+      free = hr;
   }
 
-  return false;
+  return free;
 }
 
 inline void
-IgProfTrace::releaseResource(Resource **rlink, Resource *res)
+IgProfTrace::releaseResource(HResource *hres)
 {
+  ASSERT(hres);
+  ASSERT(hres->resource);
+  ASSERT(hashUsed_);
+
+  Resource *res = hres->record;
   ASSERT(res);
-  ASSERT(rlink);
   ASSERT(res->counter);
   ASSERT(res->counter != &FREED);
   ASSERT(res->counter->resources);
-  ASSERT(*rlink == res);
 
   // Deduct the resource from the counter.
   Counter *ctr = res->counter;
@@ -135,7 +188,8 @@ IgProfTrace::releaseResource(Resource **rlink, Resource *res)
   ctr->ticks--;
 
   // Unchain from hash and counter lists.
-  *rlink = res->nexthash;
+  hres->resource = 0;
+  hres->record = 0;
 
   if (Resource *prev = res->prevlive)
   {
@@ -159,6 +213,7 @@ IgProfTrace::releaseResource(Resource **rlink, Resource *res)
   res->nextlive = resfree_;
   res->counter = &FREED;
   resfree_ = res;
+  --hashUsed_;
 }
 
 /** Locate stack frame record for a call tree. */
@@ -227,18 +282,22 @@ IgProfTrace::tick(Stack *frame, CounterDef *def, Value amount, Value ticks)
   return c;
 }
 
+// Handle resource acquisition.
 void
 IgProfTrace::acquire(Counter *ctr, Address resource, Value size)
 {
   ASSERT(ctr);
 
   // Locate the resource in the hash table.
-  Resource  **rlink;
-  Resource  *res = 0;
-  if (findResource(resource, rlink, res, ctr->def))
+  HResource *hres = findResource(resource);
+  ASSERT(! hres || ! hres->record || hres->resource == resource);
+
+  // If it's already allocated, release the resource then
+  // proceed as if we hadn't found it.
+  if (UNLIKELY(hres && hres->record))
   {
     igprof_debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
-                 ctr->def->name, resource, res->size, (void *)this);
+                 ctr->def->name, resource, hres->record->size, (void *)this);
 #if DEBUG
     int depth = 0;
     for (Stack *s = ctr->frame; s; s = s->parent)
@@ -255,39 +314,48 @@ IgProfTrace::acquire(Counter *ctr, Address resource, Value size)
 #endif
 
     // Release the resource, then proceed as if we hadn't found it.
-    releaseResource(rlink, res);
+    releaseResource(hres);
   }
 
-  // It wasn't found, insert into the lists as per class documentation.
-  if ((res = resfree_))
+  // Find a free hash table entry - may require hash resize.
+  while (UNLIKELY(! hres))
+  {
+    expandResourceHash();
+    hres = findResource(resource);
+  }
+
+  ASSERT(! hres->record);
+
+  // Insert into the hash and lists.
+  Resource *res = resfree_;
+  if (LIKELY(res != 0))
     resfree_ = res->nextlive;
   else
     res = allocate<Resource>();
-  res->resource = resource;
-  res->size = amount;
-  res->nexthash = *rlink;
+  hres->resource = resource;
+  hres->record = res;
+  res->hashslot = hres;
   res->prevlive = 0;
   res->nextlive = ctr->resources;
   res->counter = ctr;
-  res->def = ctr->def;
-  ctr->resources = *rlink = res;
+  res->size = size;
+  ctr->resources = res;
   if (res->nextlive)
     res->nextlive->prevlive = res;
+  ++hashUsed_;
 }
 
 // Handle resource release.  There is no call stack involved here.
 void
-IgProfTrace::release(Address resource, CounterDef *def)
+IgProfTrace::release(Address resource)
 {
   // Locate the resource in the hash table.
-  Resource  **rlink;
-  Resource  *res = 0;
-  if (! findResource(resource, rlink, res, def))
-    // Not found, we missed the allocation, ignore this release.
-    return;
-  else
-    // Found, actually release it.
-    releaseResource(rlink, res);
+  HResource *hres = findResource(resource);
+  ASSERT(! hres || ! hres->record || hres->resource == resource);
+
+  // If not found, we missed the allocation, ignore this release.
+  if (LIKELY(hres && hres->record))
+    releaseResource(hres);
 }
 
 void
@@ -319,7 +387,7 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack)
       for (Resource *r = c->resources; r; r = r->nextlive)
       {
         Counter *ctr = tick(myframe, c->def, r->size, 1);
-	acquire(ctr, r->resource, r->size);
+	acquire(ctr, r->hashslot->resource, r->size);
       }
 
     // Adjust the peak counter if necessary.
@@ -359,7 +427,7 @@ IgProfTrace::debugDumpStack(Stack *s, int depth)
       __extension__
       fprintf(stderr, "RESOURCE res=%p (prev=%p next=%p) %ju %ju\n",
               (void *)r, (void *)r->prevlive, (void *)r->nextlive,
-              (uintmax_t)r->resource, r->size);
+              (uintmax_t)r->hashslot->resource, r->size);
     }
   }
 

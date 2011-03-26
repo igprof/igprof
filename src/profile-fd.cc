@@ -77,7 +77,7 @@ remove (int fd)
     return;
 
   buf->lock();
-  buf->release(fd, &s_ct_live);
+  buf->release(fd);
   buf->unlock();
 }
 

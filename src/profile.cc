@@ -196,7 +196,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
 
         for (IgProfTrace::Resource *res = ctr->resources; res; res = res->nextlive)
           __extension__
-          fprintf(info.output, ";LK=(%p,%ju)", (void *) res->resource, res->size);
+          fprintf(info.output, ";LK=(%p,%ju)", (void *) res->hashslot->resource, res->size);
       }
     }
     fputc('\n', info.output);

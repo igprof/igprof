@@ -100,7 +100,7 @@ remove (void *ptr)
       return;
 
     buf->lock();
-    buf->release((IgProfTrace::Address) ptr, &s_ct_live);
+    buf->release((IgProfTrace::Address) ptr);
     buf->unlock();
   }
 }

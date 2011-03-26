@@ -11,49 +11,49 @@
 /** A resizeable profiler trace buffer.
 
     Each trace buffer tracks stack traces and their linked profiling
-    counter values.  The buffer also counts resources linked with the
+    counter values. The buffer also counts resources linked with the
     counters: tracking which call stack acquired which yet-unreleased
     resource and the size of the resource.
 
     The buffer owner is responsible for arranging correct handling of
-    the buffer in presence of multiple threads.  Buffers that do not
+    the buffer in presence of multiple threads. Buffers that do not
     track resources can be made thread-local and access need not be
-    guarded.  Resource-accounting buffers must be shared among all the
+    guarded. Resource-accounting buffers must be shared among all the
     threads able to acquire or release the resource -- the resource
     records are entered into the buffer in the order of the profile
     events, but there is no other concept of time and therefore it
     would not be possible to merge buffers from multiple threads into
-    a canonical time order later on.  In the rare situation the
+    a canonical time order later on. In the rare situation the
     resources are thread-local the buffer can be thread-local too,
     otherwise the caller must ensure atomic access to the buffer.
 
     Technically a trace buffer consists of a header and a collection
-    of fixed-size memory pools for the data, and possibly some pools
-    for hash tables.  The stack trace and resource counter information
-    is stored starting in one of the arrays.  If the buffer tracks
-    resource information, a resource hash points to resource records.
-    The trace buffer grows by allocating more memory pool as needed.
+    of fixed-size memory pools for the data and resource hash tables.
+    The stack trace and resource counter information is carved out of
+    the memory pools. The resource hash points to resource records.
+    The trace buffer grows by allocating more memory pools as needed.
 
     The stack trace is represented as a tree of nodes keyed by call
-    address.  Each stack frame has a singly linked list of children,
-    the addresses called from that stack frame.  A frame also has a
-    singly linked list of profiling counters associated with the call
-    tree.  Each counter may point to a list of resources known to be
-    live within that buffer; the resources linked with the counter
-    form a singly linked list.  The root of the stack trace is a null
-    frame: one with zero call address.
+    address. Each stack frame has a singly linked list of children,
+    the addresses called from that stack frame. A frame also has
+    pointers to profiling counters associated with that call tree.
+    Each counter may point to a list of resources known to be live
+    within that buffer; the resources linked with the counter form a
+    singly linked list. The root of the stack trace is a null frame:
+    one with zero call address.
 
-    The resource hash table provides quick access to the most recent
-    record on each profiled resource.  Each hash bin points to a
-    resource; the resources in the same bin form a singly linked list,
-    a list separate from the singly linked list for resources by
-    counter.  A live resource points back to the counter owning that
-    resource, permitting that counter to be decremented when the
-    resource is released.
+    The resource hash table provides quick access to live resources.
+    The hash table slots have the resource id and pointer to the
+    above mentioned live resource record, which in turn points back
+    to the hash slot, and the counter owning that resource. This is
+    so that the counter can be found and decremented on freeing a
+    resource. The hash table is linear open probed and grows when
+    ever there is an insert conflict, typically when the hash is one
+    half to two thirds full.
 
     The memory is allocated and the pool otherwise managed by using
-    raw operating system pritimives: anonymous memory mappings.  The
-    buffer avoids calling any non-trivial library calls.  The buffer
+    raw operating system pritimives: anonymous memory mappings. The
+    buffer avoids calling any non-trivial library calls. The buffer
     implementation is safe for use in asynchronous signals provided
     the caller avoids re-enter the same buffer from nested
     signals.  */
@@ -137,35 +137,45 @@ public:
     Resource    *resources;     //< The live resources linked to this counter.
   };
 
-  /* Each resource is in two singly linked lists: the hash bin chain
-     and the live resources ("leaks") attached to a counter.  Updating
-     a resource always updates both linked lists.
+  /* Both the resource hash and a counter points to a live resource
+     record. The hash pointer is a direct pointer, and the resource
+     points back to the hash slot. The counter pointers are a singly
+     linked list of resources attached to the counter ("leaks"). Each
+     resource points back to the counter object. Updating a resource
+     always updates both linked lists.
 
      When a resource is acquired, the resource hash table is searched
-     for a previously existing record.  If none exists, the resource
+     for a previously existing record. If none exists, the resource
      is entered into the first free resource position, either taking
-     one from the free list or allocating a new one.  Otherwise the
-     existing resource is freed as described below and the search is
-     repeated; it is assumed the profiler missed the release of the
-     resource.  The counter values are then updated.
+     one from the free list or allocating a new one. Otherwise the
+     existing resource is freed as described below, and acquisition
+     proceeds as if the resource wasn't known; it is assumed the
+     profiler missed the release of the resource. The counter values
+     are then updated.
 
      When a resource is released and known in the trace buffer, the
-     record is removed from both the counter and resource hash chain
-     lists, and put on the free list (the "nextlive" chains the free
-     list).  If the resource is not known in the trace buffer it is
-     ignored, on the assumption the profiler missed the resource
-     acquisition, for example because it wasn't active at the time.  */
+     record is removed from the counter, the hash slot is freed, and
+     the record object is put on the free list (the "nextlive" chains
+     the free list). If the resource is not known in the trace buffer
+     the release is ignored on the assumption the profiler missed the
+     resource acquisition, for example because it wasn't active at
+     the time. */
+
+  /// Resource entry for hash table.
+  struct HResource
+  {
+    Address     resource;       //< Resource identity.
+    Resource    *record;        //< Resource record.
+  };
 
   /// Data for a resource.
   struct Resource
   {
-    Address     resource;       //< Resource identity.
-    Value       size;           //< Size of the resource.
-    Resource    *nexthash;      //< Next resource in same hash bin.
+    HResource   *hashslot;      //< Pointer to the hash slot of this resource.
     Resource    *prevlive;      //< Previous live resource in the same counter.
     Resource    *nextlive;      //< Next live resource in the same counter.
     Counter     *counter;       //< Counter tracking this resource.
-    CounterDef  *def;           //< Cached counter definition reference.
+    Value       size;           //< Size of the resource.
   };
 
   IgProfTrace(void);
@@ -175,7 +185,7 @@ public:
   Stack *               push(void **stack, int depth);
   Counter *             tick(Stack *frame, CounterDef *def, Value amount, Value ticks);
   void                  acquire(Counter *ctr, Address resource, Value size);
-  void                  release(Address resource, CounterDef *def);
+  void                  release(Address resource);
   void                  traceperf(int depth, uint64_t tstart, uint64_t tend);
   void                  mergeFrom(IgProfTrace &other);
   void                  unlock(void);
@@ -184,20 +194,20 @@ public:
   const PerfStat &      perfStats(void) const;
 
 private:
+  void                  expandResourceHash(void);
   Stack *               childStackNode(Stack *parent, void *address);
   Counter *             initCounter(Counter *&link, CounterDef *def, Stack *frame);
-  bool                  findResource(Address resource,
-                                     Resource **&rlink,
-                                     Resource *&res,
-                                     CounterDef *def);
-  void                  releaseResource(Resource **rlink, Resource *res);
+  HResource *           findResource(Address resource);
+  void                  releaseResource(HResource *hres);
   void                  mergeFrom(int depth, Stack *frame, void **callstack);
 
   void                  debugDump(void);
   static void           debugDumpStack(Stack *s, int depth);
 
   pthread_mutex_t       mutex_;         //< Concurrency protection.
-  Resource              **restable_;    //< Start of the resources hash.
+  size_t                hashLogSize_;   //< Log size of the resources hash.
+  size_t                hashUsed_;      //< Occupancy in the resources hash.
+  HResource             *restable_;     //< Start of the resources hash.
   StackCache            *callcache_;    //< Start of address cache.
   Resource              *resfree_;      //< Resource free list.
   Stack                 *stack_;        //< Stack root.

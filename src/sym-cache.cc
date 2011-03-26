@@ -18,7 +18,7 @@ IgProfSymCache::~IgProfSymCache(void)
 IgProfSymCache::Symbol *
 IgProfSymCache::symbolForAddress(void *address)
 {
-  Symbol *sym = symtable_[hash((uintptr_t) address) & (SYMBOL_HASH-1)];
+  Symbol *sym = symtable_[hash((uintptr_t) address, 32) & (SYMBOL_HASH-1)];
   while (sym)
   {
     if (sym->address == address)
@@ -36,7 +36,7 @@ IgProfSymCache::roundAddressToSymbol(void *address)
 {
   // Look up the address in call address to symbol address cache.
   void     *symaddr = address;
-  SymCache **sclink = &symcache_[hash((uintptr_t) address) & (SYMBOL_HASH-1)];
+  SymCache **sclink = &symcache_[hash((uintptr_t) address, 32) & (SYMBOL_HASH-1)];
   SymCache *cached;
   while ((cached = *sclink))
   {
@@ -64,7 +64,7 @@ IgProfSymCache::roundAddressToSymbol(void *address)
 
   // Look up in the symbol table.
   bool found = false;
-  Symbol **slink = &symtable_[hash((uintptr_t) symaddr) & (SYMBOL_HASH-1)];
+  Symbol **slink = &symtable_[hash((uintptr_t) symaddr, 32) & (SYMBOL_HASH-1)];
   while ((s = *slink))
   {
     if (s->address == sym.address)
@@ -87,7 +87,7 @@ IgProfSymCache::roundAddressToSymbol(void *address)
     *s = sym;
 
     // Find and if necessary create the binary and hook into the symbol.
-    Binary **blink = &bintable_[hash((uintptr_t) binary) & (BINARY_HASH-1)];
+    Binary **blink = &bintable_[hash((uintptr_t) binary, 32) & (BINARY_HASH-1)];
     while (Binary *binobj = *blink)
     {
       if (binobj->name == binary)
