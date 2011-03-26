@@ -248,13 +248,18 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
 {
   // Slow down profiling to once per 10sec, which should be slow
   // enough to complete fork() under any circumstances.
+  double ival;
   double dt = 0;
   int nticks = 0;
+  IgProfTrace *buf;
   bool enabled = igprof_disable();
+  itimerval orig;
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
-  setitimer(s_itimer, &slow, &left);
+  getitimer(s_itimer, &left);
+  setitimer(s_itimer, &slow, &orig);
+  getitimer(s_itimer, &slow);
   dt = tv2sec(left.it_interval) - tv2sec(left.it_value);
 
   // Do the fork() call.
@@ -265,12 +270,13 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   // Only do this in the parent; in child the timer is disabled.
   if (ret > 0)
   {
-    setitimer(s_itimer, &fast, &slow);
     getitimer(s_itimer, &left);
-    IgProfTrace *buf = igprof_buffer();
-    dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
-    nticks = int(dt / tv2sec(left.it_interval) + 0.5);
-    if (enabled && nticks && buf)
+    setitimer(s_itimer, &orig, 0);
+    getitimer(s_itimer, &fast);
+    ival = tv2sec(fast.it_interval);
+    dt += tv2sec(slow.it_value) - tv2sec(left.it_value);
+    nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
+    if (enabled && nticks && (buf = igprof_buffer()))
     {
       void *addresses [IgProfTrace::MAX_DEPTH];
       IgProfTrace::Stack *frame;
@@ -302,23 +308,29 @@ static int
 dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 {
   // See fork() for the implementation details.
-  int nticks = 0;
+  double ival;
   double dt = 0;
+  int nticks = 0;
+  IgProfTrace *buf;
   bool enabled = igprof_disable();
+  itimerval orig;
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
-  setitimer(s_itimer, &slow, &left);
+  getitimer(s_itimer, &left);
+  setitimer(s_itimer, &slow, &orig);
+  getitimer(s_itimer, &slow);
   dt = tv2sec(left.it_interval) - tv2sec(left.it_value);
 
   int ret = hook.chain(cmd);
 
-  setitimer(s_itimer, &fast, &slow);
   getitimer(s_itimer, &left);
-  IgProfTrace *buf = igprof_buffer();
-  dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
-  nticks = int(dt / tv2sec(left.it_interval) + 0.5);
-  if (enabled && nticks && buf)
+  setitimer(s_itimer, &orig, 0);
+  getitimer(s_itimer, &fast);
+  ival = tv2sec(fast.it_interval);
+  dt += tv2sec(slow.it_value) - tv2sec(left.it_value);
+  nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
+  if (enabled && nticks && (buf = igprof_buffer()))
   {
     void *addresses [IgProfTrace::MAX_DEPTH];
     IgProfTrace::Stack *frame;
