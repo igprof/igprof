@@ -71,6 +71,9 @@ public:
   /// Deepest supported stack depth.
   static const int MAX_DEPTH = 800;
 
+  /// Maximum number of counters supported per stack frace.
+  static const int MAX_COUNTERS = 3;
+
   /// A value that might be an address, usually memory resource.
   typedef uintptr_t Address;
 
@@ -107,7 +110,7 @@ public:
 #endif
     Stack       *sibling;       //< The next child frame of the same parent.
     Stack       *children;      //< The first child of this call frame.
-    Counter     *counters;      //< The first counter for this call frame, or null.
+    Counter     *counters[MAX_COUNTERS]; //< The counters for this call frame.
   };
 
   /// Counter type.
@@ -128,13 +131,14 @@ public:
   /// Counter value.
   struct Counter
   {
+    CounterDef  *def;           //< The definition of this counter.
     Value       ticks;          //< The number of times the counter was increased.
     Value       value;          //< The accumulated counter value.
     Value       peak;           //< The maximum value of the counter at any time.
-    CounterDef  *def;           //< The definition of this counter.
-    Stack       *frame;         //< The stack node owning the counter.
-    Counter     *next;          //< The next counter in the stack frame's chain.
     Resource    *resources;     //< The live resources linked to this counter.
+#if DEBUG
+    Stack       *frame;         //< The stack node owning the counter.
+#endif
   };
 
   /* Both the resource hash and a counter points to a live resource
@@ -196,7 +200,6 @@ public:
 private:
   void                  expandResourceHash(void);
   Stack *               childStackNode(Stack *parent, void *address);
-  Counter *             initCounter(Counter *&link, CounterDef *def, Stack *frame);
   HResource *           findResource(Address resource);
   void                  releaseResource(HResource *hres);
   void                  mergeFrom(int depth, Stack *frame, void **callstack);

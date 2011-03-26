@@ -180,21 +180,23 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
                 sym->binoffset, symname, sym->symoffset);
     }
 
-    for (IgProfTrace::Counter *ctr = frame->counters; ctr; ctr = ctr->next)
+    IgProfTrace::Counter **ctr = &frame->counters[0];
+    for (int i = 0; i < IgProfTrace::MAX_COUNTERS && *ctr; ++i, ++ctr)
     {
-      if (ctr->ticks || ctr->peak)
+      IgProfTrace::Counter *c = *ctr;
+      if (c->ticks || c->peak)
       {
-        if (ctr->def->id >= 0)
+        if (c->def->id >= 0)
           __extension__
           fprintf(info.output, " V%d:(%ju,%ju,%ju)",
-                  ctr->def->id, ctr->ticks, ctr->value, ctr->peak);
+                  c->def->id, c->ticks, c->value, c->peak);
         else
           __extension__
           fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
-                  (ctr->def->id = info.nctrs++), ctr->def->name,
-                  ctr->ticks, ctr->value, ctr->peak);
+                  (c->def->id = info.nctrs++), c->def->name,
+                  c->ticks, c->value, c->peak);
 
-        for (IgProfTrace::Resource *res = ctr->resources; res; res = res->nextlive)
+        for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
           __extension__
           fprintf(info.output, ";LK=(%p,%ju)", (void *) res->hashslot->resource, res->size);
       }
@@ -212,8 +214,9 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
 static void
 dumpResetIDs(IgProfTrace::Stack *frame)
 {
-  for (IgProfTrace::Counter *ctr = frame->counters; ctr; ctr = ctr->next)
-    ctr->def->id = -1;
+  IgProfTrace::Counter **ctr = &frame->counters[0];
+  for (int i = 0; i < IgProfTrace::MAX_COUNTERS && *ctr; ++i, ++ctr)
+    (*ctr)->def->id = -1;
 
   for (frame = frame->children; frame; frame = frame->sibling)
     dumpResetIDs(frame);

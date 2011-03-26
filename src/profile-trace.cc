@@ -127,24 +127,9 @@ IgProfTrace::childStackNode(Stack *parent, void *address)
 #endif
   k->sibling = next;
   k->children = 0;
-  k->counters = 0;
-
+  for (int i = 0; i < MAX_COUNTERS; ++i)
+    k->counters[i] = 0;
   return k;
-}
-
-inline IgProfTrace::Counter *
-IgProfTrace::initCounter(Counter *&link, CounterDef *def, Stack *frame)
-{
-  Counter *ctr = allocate<Counter>();
-  ctr->ticks = 0;
-  ctr->value = 0;
-  ctr->peak = 0;
-  ctr->def = def;
-  ctr->frame = frame;
-  ctr->next = 0;
-  ctr->resources = 0;
-  link = ctr;
-  return ctr;
 }
 
 inline IgProfTrace::HResource *
@@ -255,16 +240,33 @@ IgProfTrace::tick(Stack *frame, CounterDef *def, Value amount, Value ticks)
   ASSERT(def);
 
   // Locate and possibly initialise the counter.
-  Counter **ctr = 0;
   Counter *c = 0;
-  ctr = &frame->counters;
-  while (*ctr && (*ctr)->def != def)
-    ctr = &(*ctr)->next;
+  Counter **ctr = &frame->counters[0];
+  for (int i = 0; i < MAX_COUNTERS; ++i, ++ctr)
+  {
+    if (! *ctr)
+    {
+      *ctr = c = allocate<Counter>();
+      c->def = def;
+      c->ticks = 0;
+      c->value = 0;
+      c->peak = 0;
+      c->resources = 0;
+#if DEBUG
+      c->frame = frame;
+#endif
+      break;
+    }
 
-  // If not found, add it.
-  c = *ctr;
-  if (! c || c->def != def)
-    c = initCounter(*ctr, def, frame);
+    ASSERT((*ctr)->def);
+    if ((*ctr)->def == def)
+    {
+      c = *ctr;
+      break;
+    }
+  }
+
+  ASSERT(c);
 
   // Tick the counter.
   if (def->type == TICK)
@@ -379,8 +381,10 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack)
 {
   // Process counters at this call stack level.
   Stack *myframe = push(callstack, depth);
-  for (Counter *c = frame->counters; c; c = c->next)
+  Counter **ptr = &frame->counters[0];
+  for (int i = 0; i < MAX_COUNTERS && *ptr; ++i, ++ptr)
   {
+    Counter *c = *ptr;
     if (c->ticks && ! c->resources)
       tick(myframe, c->def, c->value, c->ticks);
     else if (c->ticks)
@@ -414,8 +418,10 @@ IgProfTrace::debugDumpStack(Stack *s, int depth)
           depth, (void *)s, (void *)s->address,
           (void *)s->sibling, (void *)s->children);
 
-  for (Counter *c = s->counters; c; c = c->next)
+  Counter **ptr = &s->counters[0];
+  for (int i = 0; i < MAX_COUNTERS && *ptr; ++i, ++ptr)
   {
+    Counter *c = *ptr;
     INDENT(2*depth+1);
     __extension__
     fprintf(stderr, "COUNTER ctr=%p %s %ju %ju %ju\n",
