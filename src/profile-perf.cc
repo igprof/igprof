@@ -42,7 +42,7 @@ static inline double tv2sec(const timeval &tv)
 static void
 profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
 {
-  void *addresses [IgProfTrace::MAX_DEPTH];
+  void *addresses[IgProfTrace::MAX_DEPTH];
   if (LIKELY(igprof_disable()))
   {
     IgProfTrace *buf = igprof_buffer();
@@ -278,7 +278,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
     if (enabled && nticks && (buf = igprof_buffer()))
     {
-      void *addresses [IgProfTrace::MAX_DEPTH];
+      void *addresses[IgProfTrace::MAX_DEPTH];
       IgProfTrace::Stack *frame;
       uint64_t tstart, tend;
       int depth;
@@ -332,7 +332,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
   if (enabled && nticks && (buf = igprof_buffer()))
   {
-    void *addresses [IgProfTrace::MAX_DEPTH];
+    void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace::Stack *frame;
     uint64_t tstart, tend;
     int depth;

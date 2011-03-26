@@ -3658,9 +3658,9 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     HeaderPrinter hp(showpaths, showcalls, maxval, maxcnt, diffMode);
 
     if (diffMode)
-      hp.print ("Flat profile (cumulatively different entries only)", "Total");
+      hp.print("Flat profile (cumulatively different entries only)", "Total");
     else
-      hp.print ("Flat profile (cumulative >= 1%)", "Total");
+      hp.print("Flat profile (cumulative >= 1%)", "Total");
 
     for (FinalTable::const_iterator i = table.begin();
          i != table.end();
@@ -3691,9 +3691,9 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
     std::cout << "\n";
 
     if (diffMode)
-      hp.print ("Flat profile (self different entries only)", "Self");
+      hp.print("Flat profile (self different entries only)", "Self");
     else
-      hp.print ("Flat profile (self >= 0.01%)", "Self");
+      hp.print("Flat profile (self >= 0.01%)", "Self");
 
     for (SelfSortedTable::const_iterator i = selfSortedTable.begin();
          i != selfSortedTable.end();

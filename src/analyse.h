@@ -229,7 +229,7 @@ thousands(double value, int leftPadding, int decimalPositions)
 std::string
 toString(int64_t value)
 {
-  char buffer [1024];
+  char buffer[1024];
   sprintf(buffer,"%" PRIi64, value);
   return buffer;
 }

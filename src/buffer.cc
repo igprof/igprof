@@ -10,7 +10,7 @@
 static const unsigned int MEM_POOL_SIZE = 8*1024*1024;
 
 /** Initialise a buffer.  */
-IgProfBuffer::IgProfBuffer (void)
+IgProfBuffer::IgProfBuffer(void)
   : poolfirst_(0),
     poolcur_(0),
     freestart_(0),
@@ -46,14 +46,14 @@ IgProfBuffer::unallocateRaw(void *p, size_t size)
 void *
 IgProfBuffer::allocateRaw(size_t size)
 {
-  void *data = mmap (0, size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void *data = mmap(0, size, PROT_READ | PROT_WRITE,
+		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (data != MAP_FAILED)
     return data;
   else
   {
     igprof_debug("failed to allocate memory for profile buffer: %s (%d)\n",
-                 strerror (errno), errno);
+                 strerror(errno), errno);
     igprof_abort();
   }
 }

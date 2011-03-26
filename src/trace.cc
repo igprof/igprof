@@ -18,10 +18,10 @@
 /// Structure for tracking filters.
 struct IgTraceFilter
 {
-    IgTraceFilter       *nextFilter;
-    char                *extraInfo;
-    char                *functionName;
-    char                *libraryName;
+  IgTraceFilter       *nextFilter;
+  char                *extraInfo;
+  char                *functionName;
+  char                *libraryName;
 };
 
 // Data for this profiler module
@@ -38,88 +38,88 @@ static IgTraceFilter    *s_filters      = 0;
 
     Returns @c true if tracing is activated in this process.  */
 bool
-IgTrace::initialize (void)
+IgTrace::initialize(void)
 {
-    if (! s_initialized)
+  if (! s_initialized)
+  {
+    s_initialized = true;
+
+    const char *options = IgTrace::options();
+    if (! options || ! *options)
     {
-        s_initialized = true;
+      igprof_debug("$IGTRACE not set, not tracing this process (%s)\n",
+		   program_invocation_name);
+      return s_activated = false;
+    }
+    while (options && *options)
+    {
+      while (*options == ' ' || *options == ',')
+	++options;
 
-        const char *options = IgTrace::options ();
-        if (! options || ! *options)
-        {
-            igprof_debug ("$IGTRACE not set, not tracing this process (%s)\n",
-			  program_invocation_name);
-            return s_activated = false;
-        }
-        while (options && *options)
-        {
-            while (*options == ' ' || *options == ',')
-                ++options;
+      if (! strncmp(options, "igtrace:reject='", 16))
+      {
+	options += 16;
 
-            if (! strncmp (options, "igtrace:reject='", 16))
-            {
-                options += 16;
+	const char *info = options;
+	int infolen = 0;
+	while (*options && *options != '\'' && *options != ':')
+	  ++options, ++infolen;
+	if (*options == ':')
+	  ++options;
 
-                const char *info = options;
-                int infolen = 0;
-                while (*options && *options != '\'' && *options != ':')
-                    ++options, ++infolen;
-                if (*options == ':')
-                    ++options;
+	const char *func = options;
+	int funclen = 0;
+	while (*options && *options != '\'' && *options != ':')
+	  ++options, ++funclen;
+	if (*options == ':')
+	  ++options;
 
-                const char *func = options;
-                int funclen = 0;
-                while (*options && *options != '\'' && *options != ':')
-                    ++options, ++funclen;
-                if (*options == ':')
-                    ++options;
+	const char *lib = options;
+	int liblen = 0;
+	while (*options && *options != '\'' && *options != ':')
+	  ++options, ++liblen;
 
-                const char *lib = options;
-                int liblen = 0;
-                while (*options && *options != '\'' && *options != ':')
-                    ++options, ++liblen;
+	IgTraceFilter *f = new IgTraceFilter;
+	f->nextFilter = 0;
+	f->extraInfo     = (infolen ? strndup(info, infolen) : 0);
+	f->functionName  = (funclen ? strndup(func, funclen) : 0);
+	f->libraryName   = (liblen  ? strndup(lib,  liblen)  : 0);
 
-                IgTraceFilter *f = new IgTraceFilter;
-                f->nextFilter = 0;
-                f->extraInfo     = (infolen ? strndup (info, infolen) : 0);
-                f->functionName  = (funclen ? strndup (func, funclen) : 0);
-                f->libraryName   = (liblen  ? strndup (lib,  liblen)  : 0);
+	IgTraceFilter **chain = &s_filters;
+	while (*chain)
+	  chain = &(*chain)->nextFilter;
 
-                IgTraceFilter **chain = &s_filters;
-                while (*chain)
-                    chain = &(*chain)->nextFilter;
+	*chain = f;
 
-                *chain = f;
+	while (*options && *options != '\'')
+	  ++options;
+      }
+      else
+	options++;
 
-                while (*options && *options != '\'')
-                    ++options;
-            }
-            else
-                options++;
-
-            while (*options && *options != ',' && *options != ' ')
-                options++;
-        }
-
-        const char *target = igprof_getenv("IGPROF_TARGET");
-        if (target && ! strstr (program_invocation_name, target))
-        {
-            igprof_debug ("current process not selected for tracing:"
-                          " process '%s' does not match '%s'\n",
-                          program_invocation_name, target);
-            return s_activated = false;
-        }
-
-        igprof_debug ("tracing activated in %s\n", program_invocation_name);
-        igprof_debug ("tracing options: %s\n", IgTrace::options ());
-        s_activated = true;
-        s_enabled = 1;
+      while (*options && *options != ',' && *options != ' ')
+	options++;
     }
 
-    if (! s_activated)
-        return false;
+    const char *target = igprof_getenv("IGPROF_TARGET");
+    if (target && ! strstr(program_invocation_name, target))
+    {
+      igprof_debug("current process not selected for tracing:"
+		   " process '%s' does not match '%s'\n",
+		   program_invocation_name, target);
+      return s_activated = false;
+    }
 
-    return true;
+    igprof_debug("tracing activated in %s\n", program_invocation_name);
+    igprof_debug("tracing options: %s\n", IgTrace::options());
+    s_activated = true;
+    s_enabled = 1;
+  }
+
+  if (! s_activated)
+    return false;
+
+  return true;
 }
 
 /** Check if the profiler is currently enabled.  This function should
@@ -128,9 +128,9 @@ IgTrace::initialize (void)
     the value of the flag has little useful value, but to make sure
     no data is gathered after the system has started to close down.  */
 bool
-IgTrace::enabled (void)
+IgTrace::enabled(void)
 {
-    return s_enabled > 0;
+  return s_enabled > 0;
 }
 
 /** Enable the profiling system.  This is safe to call from anywhere,
@@ -139,10 +139,10 @@ IgTrace::enabled (void)
 
     Returns @c true if the profiler is enabled after the call. */
 bool
-IgTrace::enable (void)
+IgTrace::enable(void)
 {
-    IgProfAtomic newval = IgProfAtomicInc (&s_enabled);
-    return newval > 0;
+  IgProfAtomic newval = IgProfAtomicInc(&s_enabled);
+  return newval > 0;
 }
 
 /** Disable the profiling system.  This is safe to call from anywhere,
@@ -151,60 +151,60 @@ IgTrace::enable (void)
 
     Returns @c true if the profiler was enabled before the call.  */
 bool
-IgTrace::disable (void)
+IgTrace::disable(void)
 {
-    IgProfAtomic newval = IgProfAtomicDec (&s_enabled);
-    return newval >= 0;
+  IgProfAtomic newval = IgProfAtomicDec(&s_enabled);
+  return newval >= 0;
 }
 
 /** Get user-provided profiling options.  */
 const char *
-IgTrace::options (void)
+IgTrace::options(void)
 {
-     static const char *s_options = getenv ("IGTRACE");
-     return s_options;
+  static const char *s_options = getenv("IGTRACE");
+  return s_options;
 }
 
 /** Return program name. */
 const char *
-IgTrace::program (void)
+IgTrace::program(void)
 {
-    return program_invocation_name;
+  return program_invocation_name;
 }
 
 /** Walk the stack evaluating filters.  */
 bool
-IgTrace::filter (const char *info, void *stack [], int depth)
+IgTrace::filter(const char *info, void *stack[], int depth)
 {
-    bool pass = true;
-    IgTraceFilter *f = s_filters;
-    while (f && pass)
+  bool pass = true;
+  IgTraceFilter *f = s_filters;
+  while (f && pass)
+  {
+    if (info && f->extraInfo && strstr(info, f->extraInfo))
+      pass = false;
+
+    for (int i = 0; i < depth && pass; ++i)
     {
-        if (info && f->extraInfo && strstr (info, f->extraInfo))
-            pass = false;
+      bool        passthis = true;
+      const char  *sym = 0;
+      const char  *lib = 0;
+      long        junk = 0;
 
-        for (int i = 0; i < depth && pass; ++i)
-        {
-            bool        passthis = true;
-            const char  *sym = 0;
-            const char  *lib = 0;
-            long        junk = 0;
+      if (! IgHookTrace::symbol(stack[i], sym, lib, junk, junk))
+	continue;
 
-            if (! IgHookTrace::symbol (stack[i], sym, lib, junk, junk))
-                continue;
+      if (passthis && sym && f->functionName && strstr(sym, f->functionName))
+	passthis = false;
 
-            if (passthis && sym && f->functionName && strstr (sym, f->functionName))
-                passthis = false;
+      if (passthis && lib && f->libraryName && strstr(lib, f->libraryName))
+	passthis = false;
 
-            if (passthis && lib && f->libraryName && strstr (lib, f->libraryName))
-                passthis = false;
-
-            if (! passthis)
-                pass = false;
-        }
-
-        f = f->nextFilter;
+      if (! passthis)
+	pass = false;
     }
 
-    return pass;
+    f = f->nextFilter;
+  }
+
+  return pass;
 }

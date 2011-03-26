@@ -58,15 +58,15 @@ IgProfTrace::expandResourceHash(void)
   size_t newLogSize = hashLogSize_;
   size_t newSize;
 
-  TRY_AGAIN:
+TRY_AGAIN:
   newLogSize += 2;
   newSize = (1u << newLogSize);
   newTable = (HResource *) allocateRaw(newSize * sizeof(HResource));
   __extension__
-  igprof_debug("expanding resource hash table for %p"
-	       " from 2^%ju to 2^%ju, %ju used\n",
-	       (void *) this, (uintmax_t) hashLogSize_,
-	       (uintmax_t) newLogSize, (uintmax_t) hashUsed_);
+    igprof_debug("expanding resource hash table for %p"
+		 " from 2^%ju to 2^%ju, %ju used\n",
+		 (void *) this, (uintmax_t) hashLogSize_,
+		 (uintmax_t) newLogSize, (uintmax_t) hashUsed_);
   for (i = 0; i < oldSize; ++i)
   {
     if (! restable_[i].record)
@@ -86,10 +86,10 @@ IgProfTrace::expandResourceHash(void)
       if (UNLIKELY(++j == MAX_HASH_PROBES))
       {
 	__extension__
-        igprof_debug("rehash of 0x%jx[%ju -> %ju] failed,"
-		     " re-expanding another time\n",
-		     (uintmax_t) restable_[i].resource,
-		     (uintmax_t) i, (uintmax_t) slot);
+	  igprof_debug("rehash of 0x%jx[%ju -> %ju] failed,"
+		       " re-expanding another time\n",
+		       (uintmax_t) restable_[i].resource,
+		       (uintmax_t) i, (uintmax_t) slot);
         unallocateRaw(newTable, newSize * sizeof(HResource));
         goto TRY_AGAIN;
       }
@@ -194,7 +194,7 @@ IgProfTrace::releaseResource(HResource *hres)
   }
 
   // Put it on free list.
-  memset (res, 0, sizeof (*res));
+  memset(res, 0, sizeof(*res));
   res->nextlive = resfree_;
   res->counter = &FREED;
   resfree_ = res;
@@ -224,8 +224,8 @@ IgProfTrace::push(void **stack, int depth)
     {
       // Look up this call stack child, then cache result.
       frame = childStackNode(frame, address);
-      cache [i].address = address;
-      cache [i].frame = frame;
+      cache[i].address = address;
+      cache[i].frame = frame;
       valid = 0;
     }
   }
@@ -408,7 +408,7 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack)
   }
 }
 
-#define INDENT(d) for (int i = 0; i < d; ++i) fputc (' ', stderr)
+#define INDENT(d) for (int i = 0; i < d; ++i) fputc(' ', stderr)
 
 void
 IgProfTrace::debugDumpStack(Stack *s, int depth)
@@ -424,16 +424,16 @@ IgProfTrace::debugDumpStack(Stack *s, int depth)
     Counter *c = *ptr;
     INDENT(2*depth+1);
     __extension__
-    fprintf(stderr, "COUNTER ctr=%p %s %ju %ju %ju\n",
-            (void *)c, c->def->name, c->ticks, c->value, c->peak);
+      fprintf(stderr, "COUNTER ctr=%p %s %ju %ju %ju\n",
+	      (void *)c, c->def->name, c->ticks, c->value, c->peak);
 
     for (Resource *r = c->resources; r; r = r->nextlive)
     {
       INDENT(2*depth+2);
       __extension__
-      fprintf(stderr, "RESOURCE res=%p (prev=%p next=%p) %ju %ju\n",
-              (void *)r, (void *)r->prevlive, (void *)r->nextlive,
-              (uintmax_t)r->hashslot->resource, r->size);
+	fprintf(stderr, "RESOURCE res=%p (prev=%p next=%p) %ju %ju\n",
+		(void *)r, (void *)r->prevlive, (void *)r->nextlive,
+		(uintmax_t)r->hashslot->resource, r->size);
     }
   }
 
@@ -444,9 +444,9 @@ IgProfTrace::debugDumpStack(Stack *s, int depth)
 void
 IgProfTrace::debugDump(void)
 {
-  fprintf (stderr, "TRACE BUFFER %p:\n", (void *)this);
-  fprintf (stderr, " RESTABLE:  %p\n", (void *)restable_);
-  fprintf (stderr, " CALLCACHE: %p\n", (void *)callcache_);
+  fprintf(stderr, "TRACE BUFFER %p:\n", (void *)this);
+  fprintf(stderr, " RESTABLE:  %p\n", (void *)restable_);
+  fprintf(stderr, " CALLCACHE: %p\n", (void *)callcache_);
 
   debugDumpStack(stack_, 0);
   // debugDumpResources();

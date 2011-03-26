@@ -122,7 +122,7 @@ xntoa(char *cur, char *end, unsigned long long num,
   }
 
   int i = 0;
-  char tmp [66];
+  char tmp[66];
   if (num == 0)
     tmp[i++] = '0';
   else
@@ -312,13 +312,13 @@ xsprintf(char *buf, size_t len, const char *format, ...)
 static void
 munmapreport(void *addr, size_t len)
 {
-  void *stack [800];
+  void *stack[800];
   int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]));
 
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("munmap", stack, depth))
   {
-    char        buf [2048];
+    char        buf[2048];
     const char  *sym = 0;
     const char  *lib = 0;
     long        symoff = 0;
@@ -339,7 +339,7 @@ munmapreport(void *addr, size_t len)
       if (IgHookTrace::symbol(symaddr, sym, lib, symoff, liboff))
         symaddr = (void *) ((intptr_t) symaddr - symoff);
 
-      char hexsym [32];
+      char hexsym[32];
       if (! sym || ! *sym)
       {
         sprintf(hexsym, "@?%p", symaddr);
@@ -360,7 +360,7 @@ munmapreport(void *addr, size_t len)
 
       write(2, buf, xsprintf(buf, sizeof(buf),
                              "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
-                             i-1, stack [i], sym, symoff, lib, liboff));
+                             i-1, stack[i], sym, symoff, lib, liboff));
     }
     pthread_mutex_unlock(&s_demanglelock);
   }
@@ -369,13 +369,13 @@ munmapreport(void *addr, size_t len)
 static void
 mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, __off64_t off, void *ret)
 {
-  void *stack [800];
+  void *stack[800];
   int depth = IgHookTrace::stacktrace(stack, sizeof(stack)/sizeof(stack[0]));
 
   // If it passes filters, walk the stack to print out information.
   if (IgTrace::filter("mmap", stack, depth))
   {
-    char        buf [2048];
+    char        buf[2048];
     const char  *sym = 0;
     const char  *lib = 0;
     long        symoff = 0;
@@ -399,7 +399,7 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
       if (IgHookTrace::symbol(symaddr, sym, lib, symoff, liboff))
         symaddr = (void *) ((intptr_t) symaddr - symoff);
 
-      char hexsym [32];
+      char hexsym[32];
       if (! sym || ! *sym)
       {
         sprintf(hexsym, "@?%p", symaddr);
@@ -420,7 +420,7 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
 
       write(2, buf, xsprintf(buf, sizeof(buf),
                              "  %3d: %-11p %.500s + %d [%.500s + %d]\n",
-                             i-2, stack [i], sym, symoff, lib, liboff));
+                             i-2, stack[i], sym, symoff, lib, liboff));
     }
     pthread_mutex_unlock(&s_demanglelock);
   }

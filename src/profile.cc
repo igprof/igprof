@@ -158,7 +158,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
     IgProfSymCache::Symbol *sym = info.symcache->get(frame->address);
 
     if (sym->id >= 0)
-      fprintf (info.output, "C%d FN%d+%ld", info.depth, sym->id, sym->symoffset);
+      fprintf(info.output, "C%d FN%d+%ld", info.depth, sym->id, sym->symoffset);
     else
     {
       const char        *symname = sym->name;
@@ -191,17 +191,17 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
       {
         if (c->def->id >= 0)
           __extension__
-          fprintf(info.output, " V%d:(%ju,%ju,%ju)",
-                  c->def->id, c->ticks, c->value, c->peak);
+	    fprintf(info.output, " V%d:(%ju,%ju,%ju)",
+		    c->def->id, c->ticks, c->value, c->peak);
         else
           __extension__
-          fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
-                  (c->def->id = info.nctrs++), c->def->name,
-                  c->ticks, c->value, c->peak);
+	    fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
+		    (c->def->id = info.nctrs++), c->def->name,
+		    c->ticks, c->value, c->peak);
 
         for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
           __extension__
-          fprintf(info.output, ";LK=(%p,%ju)", (void *) res->hashslot->resource, res->size);
+	    fprintf(info.output, ";LK=(%p,%ju)", (void *) res->hashslot->resource, res->size);
       }
     }
     fputc('\n', info.output);
@@ -269,7 +269,7 @@ dumpAllProfiles(void *arg)
   igprof_debug("dumping state to %s\n", tofile);
   info->output = (tofile[0] == '|'
                   ? (igprof_unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
-                  : fopen (tofile, "w+"));
+                  : fopen(tofile, "w+"));
   if (! info->output)
     igprof_debug("can't write to output %s: %s (error %d)\n",
                  tofile, strerror(errno), errno);
@@ -356,7 +356,7 @@ asyncDumpThread(void *)
     }
 
     // Have a nap.
-    usleep (10000);
+    usleep(10000);
   }
 
   return 0;
@@ -504,13 +504,16 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   // Report override function use.
   if (igprof_abort != &abort)
     igprof_debug("abort() from system %p, app had %p\n",
-                 __extension__ (void *) igprof_abort, __extension__ (void *) &abort);
+                 __extension__ (void *) igprof_abort,
+		 __extension__ (void *) &abort);
   if (igprof_getenv != &getenv)
     igprof_debug("getenv() from system %p, app had %p\n",
-                 __extension__ (void *) igprof_getenv, __extension__ (void *) &getenv);
+                 __extension__ (void *) igprof_getenv,
+		 __extension__ (void *) &getenv);
   if (igprof_unsetenv != &unsetenv)
     igprof_debug("unsetenv() from system %p, app had %p\n",
-                 __extension__ (void *) igprof_unsetenv, __extension__ (void *) &unsetenv);
+                 __extension__ (void *) igprof_unsetenv,
+		 __extension__ (void *) &unsetenv);
 
   // Remember clock resolution.
   if (clockres > 0)
@@ -528,7 +531,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
 
   // Start dump thread if we watch for a file.
   if (s_dumpflag[0])
-    pthread_create (&s_dumpthread, 0, &asyncDumpThread, 0);
+    pthread_create(&s_dumpthread, 0, &asyncDumpThread, 0);
 
   // Hook into functions we care about.
   IgHook::hook(doexit_hook_main.raw);
@@ -565,10 +568,10 @@ igprof_panic(const char *file, int line, const char *func, const char *expr)
 {
   igprof_disable_globally();
 
-  fprintf (stderr, "%s: %s:%d: %s: assertion failure: %s\n",
-           program_invocation_name, file, line, func, expr);
+  fprintf(stderr, "%s: %s:%d: %s: assertion failure: %s\n",
+	  program_invocation_name, file, line, func, expr);
 
-  void *trace [128];
+  void *trace[128];
   int levels = IgHookTrace::stacktrace(trace, 128);
   for (int i = 2; i < levels; ++i)
   {
@@ -624,9 +627,9 @@ threadWrapper(void *arg)
   if (s_igprof_activated)
   {
     __extension__
-    igprof_debug("captured thread id 0x%lx for profiling (%p(%p))\n",
-                 (unsigned long) pthread_self(),
-                 (void *)(start_routine), start_arg);
+      igprof_debug("captured thread id 0x%lx for profiling (%p(%p))\n",
+		   (unsigned long) pthread_self(),
+		   (void *)(start_routine), start_arg);
 
     /* Setup thread for use in profiling. */
     pthread_setspecific(s_igprof_bufkey, makeTraceBuffer());
@@ -648,9 +651,9 @@ threadWrapper(void *arg)
   if (s_igprof_activated)
   {
     __extension__
-    igprof_debug("leaving thread id 0x%lx from profiling (%p(%p))\n",
-                 (unsigned long) pthread_self(),
-                 (void *) start_routine, start_arg);
+      igprof_debug("leaving thread id 0x%lx from profiling (%p(%p))\n",
+		   (unsigned long) pthread_self(),
+		   (void *) start_routine, start_arg);
 
     itimerval stopped = { { 0, 0 }, { 0, 0 } };
     setitimer(ITIMER_PROF, &stopped, 0);
@@ -701,7 +704,7 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   pthread_t thread = pthread_self();
   igprof_debug("%s(%d) called in thread 0x%lx\n",
                hook.function, code, (unsigned long) thread);
-  hook.chain (code);
+  hook.chain(code);
 }
 
 /** Trapped calls to kill().  Dump out profiler data if the signal
@@ -727,5 +730,5 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
     }
     igprof_enable();
   }
-  return hook.chain (pid, sig);
+  return hook.chain(pid, sig);
 }
