@@ -9,12 +9,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-class IgTraceThrow
-{
-public:
-    static void initialize (void);
-};
-
 // Traps for this profiler module
 HOOK(3, void, dothrow, _main,
      (void *exception, std::type_info *tinfo, void (*dest) (void *)),
@@ -30,8 +24,8 @@ static pthread_mutex_t  s_demanglelock = PTHREAD_MUTEX_INITIALIZER;
 
 /** Initialise memory profiling.  Traps various system calls to keep track
     of memory usage, and if requested, leaks.  */
-void
-IgTraceThrow::initialize (void)
+static void
+initialize (void)
 {
     if (s_initialized) return;
     s_initialized = true;
@@ -177,4 +171,4 @@ dothrow (IgHook::SafeData<igprof_dothrow_t> &hook,
 }
 
 //////////////////////////////////////////////////////////////////////
-static bool autoboot = (IgTraceThrow::initialize (), true);
+static bool autoboot = (initialize (), true);

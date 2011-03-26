@@ -7,12 +7,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-class IgTraceMem
-{
-public:
-    static void initialize (void);
-};
-
 // Traps for this profiler module
 DUAL_HOOK(1, void *, domalloc, _main, _libc,
           (size_t n), (n),
@@ -22,8 +16,8 @@ DUAL_HOOK(1, void *, domalloc, _main, _libc,
 static bool s_initialized = false;
 
 /** Initialise memory tracing.  */
-void
-IgTraceMem::initialize (void)
+static void
+initialize (void)
 {
     if (s_initialized) return;
     s_initialized = true;
@@ -93,4 +87,4 @@ domalloc (IgHook::SafeData<igprof_domalloc_t> &hook, size_t size)
 }
 
 //////////////////////////////////////////////////////////////////////
-static bool autoboot = (IgTraceMem::initialize (), true);
+static bool autoboot = (initialize (), true);
