@@ -50,12 +50,16 @@ static bool                     s_initialized   = false;
 static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
-  uint64_t tstart, tend;
+  IgProfTrace::Record entries [3];
+  void *addresses[IgProfTrace::MAX_DEPTH];
   IgProfTrace *buf = igprof_buffer();
-  if (! buf)
+  uint64_t tstart, tend;
+  int depth;
+
+  if (UNLIKELY(! buf))
     return;
 
-  if (s_overhead != OVERHEAD_NONE)
+  if (UNLIKELY(s_overhead != OVERHEAD_NONE))
   {
     size_t actual = malloc_usable_size(ptr);
     if (s_overhead == OVERHEAD_DELTA)
@@ -68,11 +72,7 @@ add(void *ptr, size_t size)
   }
 
   RDTSC(tstart);
-
-  void                  *addresses [IgProfTrace::MAX_DEPTH];
-  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-  IgProfTrace::Record   entries [3];
-
+  depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
 
   entries[0].type = IgProfTrace::COUNT;
@@ -102,10 +102,10 @@ add(void *ptr, size_t size)
 static void
 remove (void *ptr)
 {
-  if (ptr)
+  if (LIKELY(ptr))
   {
     IgProfTrace *buf = igprof_buffer();
-    if (! buf)
+    if (UNLIKELY(! buf))
       return;
 
     IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
@@ -170,7 +170,7 @@ initialize(void)
   if (! igprof_init("memory profiler", 0, false))
     return;
 
-  igprof_disable(true);
+  igprof_disable_globally();
   igprof_debug("Memory: reporting %sallocation overhead%s\n",
                (s_overhead == OVERHEAD_NONE ? "memory use without "
                 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
@@ -191,7 +191,7 @@ initialize(void)
   if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
 #endif
   igprof_debug("Memory profiler enabled\n");
-  igprof_enable(true);
+  igprof_enable_globally();
 }
 
 // -------------------------------------------------------------------
@@ -199,68 +199,68 @@ initialize(void)
 static void *
 domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   void *result = (*hook.chain)(n);
 
-  if (enabled && result)
+  if (LIKELY(enabled && result))
     add(result, n);
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static void *
 docalloc(IgHook::SafeData<igprof_docalloc_t> &hook, size_t n, size_t m)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   void *result = (*hook.chain)(n, m);
 
-  if (enabled && result)
+  if (LIKELY(enabled && result))
     add(result, n * m);
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static void *
 dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   void *result = (*hook.chain)(ptr, n);
 
-  if (result)
+  if (LIKELY(result))
   {
-    if (ptr) remove(ptr);
-    if (enabled && result) add(result, n);
+    if (LIKELY(ptr)) remove(ptr);
+    if (LIKELY(enabled && result)) add(result, n);
   }
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static void *
 domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t size)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   void *result = (*hook.chain)(alignment, size);
 
-  if (enabled && result)
+  if (LIKELY(enabled && result))
     add(result, size);
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static void *
 dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   void *result = (*hook.chain)(size);
 
-  if (enabled && result)
+  if (LIKELY(enabled && result))
     add(result, size);
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
@@ -268,23 +268,23 @@ static int
 dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
             void **ptr, size_t alignment, size_t size)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(ptr, alignment, size);
 
-  if (enabled && ptr && *ptr)
+  if (LIKELY(enabled && ptr && *ptr))
     add(*ptr, size);
 
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static void
 dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
 {
-  igprof_disable(false);
+  igprof_disable();
   remove(ptr);
   (*hook.chain)(ptr);
-  igprof_enable(false);
+  igprof_enable();
 }
 
 // -------------------------------------------------------------------

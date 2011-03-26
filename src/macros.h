@@ -1,9 +1,11 @@
 #ifndef MACROS_H
 # define MACROS_H
 
-#define UNUSED  __attribute__((unused))
-#define HIDDEN  __attribute__((visibility("hidden")))
-#define VISIBLE __attribute__((visibility("default")))
+#define UNUSED       __attribute__((unused))
+#define HIDDEN       __attribute__((visibility("hidden")))
+#define VISIBLE      __attribute__((visibility("default")))
+#define LIKELY(x)    __builtin_expect(bool(x), true)
+#define UNLIKELY(x)  __builtin_expect(bool(x), false)
 
 #define MERGE2(a,b)              a##b
 #define MERGE3(a,b,c)            a##b##c

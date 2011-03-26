@@ -18,7 +18,6 @@
 #include <sys/signal.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <dlfcn.h>
 #include <cxxabi.h>
 
@@ -26,6 +25,12 @@
 # include <crt_externs.h>
 # define program_invocation_name **_NSGetArgv()
 #endif
+
+// Global variables initialised once here.
+HIDDEN bool             s_igprof_activated     = false;
+HIDDEN IgProfAtomic     s_igprof_enabled       = 0;
+HIDDEN pthread_key_t    s_igprof_bufkey;
+HIDDEN pthread_key_t    s_igprof_flagkey;
 
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
@@ -70,9 +75,7 @@ LIBHOOK(4, int, dopthread_create, _pthread21,
 
 // Data for this profiler module
 static const int        MAX_FNAME       = 1024;
-static IgProfAtomic     s_enabled       = 0;
 static const char       *s_initialized  = 0;
-static bool             s_activated     = false;
 static bool             s_perthread     = false;
 static volatile int     s_quitting      = 0;
 static double           s_clockres      = 0;
@@ -84,8 +87,6 @@ static const char       *s_options      = 0;
 static char             s_masterbufdata[sizeof(IgProfTrace)];
 static pthread_t        s_mainthread;
 static pthread_t        s_dumpthread;
-static pthread_key_t    s_bufkey;
-static pthread_key_t    s_flagkey;
 static char             s_outname[MAX_FNAME];
 static char             s_dumpflag[MAX_FNAME];
 
@@ -369,14 +370,14 @@ igprof_dump_now(const char *tofile)
 static void
 exitDump(void *)
 {
-  if (! s_activated) return;
+  if (! s_igprof_activated) return;
   igprof_debug("final exit in thread 0x%lx, saving profile data\n",
                (unsigned long) pthread_self());
 
   // Deactivate.
-  igprof_disable(true);
-  s_activated = false;
-  s_enabled = 0;
+  igprof_disable_globally();
+  s_igprof_activated = false;
+  s_igprof_enabled = 0;
   s_quitting = 1;
   itimerval stopped = { { 0, 0 }, { 0, 0 } };
   setitimer(ITIMER_PROF, &stopped, 0);
@@ -419,7 +420,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
     igprof_debug("Current process not selected for profiling:"
                  " process '%s' does not match '%s'\n",
                  program_invocation_name, target);
-    return s_activated = false;
+    return s_igprof_activated = false;
   }
 
   // Check profiling options.
@@ -428,7 +429,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   {
     igprof_debug("$IGPROF not set, not profiling this process (%s)\n",
 		 program_invocation_name);
-    return s_activated = false;
+    return s_igprof_activated = false;
   }
 
   for (const char *opts = options; *opts; )
@@ -484,11 +485,11 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   }
 
   // Initialise per thread stuff.
-  pthread_key_create(&s_flagkey, &freeThreadFlag);
-  pthread_setspecific(s_flagkey, new IgProfAtomic(0));
+  pthread_key_create(&s_igprof_flagkey, &freeThreadFlag);
+  pthread_setspecific(s_igprof_flagkey, new IgProfAtomic(0));
 
-  pthread_key_create(&s_bufkey, &freeTraceBuffer);
-  pthread_setspecific(s_bufkey, s_tracebuf);
+  pthread_key_create(&s_igprof_bufkey, &freeTraceBuffer);
+  pthread_setspecific(s_igprof_bufkey, s_tracebuf);
 
   // Start dump thread if we watch for a file.
   if (s_dumpflag[0])
@@ -508,55 +509,10 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
 #endif
 
   // Activate.
-  s_enabled = 1;
-  s_activated = true;
-  igprof_enable(false);
+  s_igprof_enabled = 1;
+  s_igprof_activated = true;
+  igprof_enable();
   return true;
-}
-
-/** Return a profile buffer for a profiler in the current thread.  It
-    is safe to call this function from any thread and in asynchronous
-    signal handlers at any time.  Returns the buffer to use or a null
-    to indicate no data should be gathered in the calling context, for
-    example if the profile core itself has already been destroyed.  */
-IgProfTrace *
-igprof_buffer(void)
-{
-  return s_activated ? (IgProfTrace *) pthread_getspecific(s_bufkey) : 0;
-}
-
-/** Enable the profiler in this thread. Safe to call from anywhere.
-    Returns @c true if the profiler is enabled after the call. */
-bool
-igprof_enable(bool globally)
-{
-  if (! globally)
-  {
-    IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
-    return IgProfAtomicInc(flag) > 0 && s_enabled > 0;
-  }
-  else
-  {
-    IgProfAtomic newval = IgProfAtomicInc(&s_enabled);
-    return newval > 0;
-  }
-}
-
-/** Disable the profiler in this thread. Safe to call from anywhere.
-    Returns @c true if the profiler was enabled before the call.  */
-bool
-igprof_disable(bool globally)
-{
-  if (! globally)
-  {
-    IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_flagkey);
-    return IgProfAtomicDec(flag) >= 0 && s_enabled > 0;
-  }
-  else
-  {
-    IgProfAtomic newval = IgProfAtomicDec(&s_enabled);
-    return newval >= 0;
-  }
 }
 
 /** Get user-provided profiling options.  */
@@ -572,7 +528,7 @@ igprof_options(void)
 int
 igprof_panic(const char *file, int line, const char *func, const char *expr)
 {
-  igprof_disable(true);
+  igprof_disable_globally();
 
   fprintf (stderr, "%s: %s:%d: %s: assertion failure: %s\n",
            program_invocation_name, file, line, func, expr);
@@ -630,7 +586,7 @@ threadWrapper(void *arg)
   delete wrapped;
 
   // Report the thread and enable per-thread profiling pools.
-  if (s_activated)
+  if (s_igprof_activated)
   {
     __extension__
     igprof_debug("captured thread id 0x%lx for profiling (%p(%p))\n",
@@ -638,8 +594,8 @@ threadWrapper(void *arg)
                  (void *)(start_routine), start_arg);
 
     /* Setup thread for use in profiling. */
-    pthread_setspecific(s_bufkey, makeTraceBuffer());
-    pthread_setspecific(s_flagkey, new IgProfAtomic(1));
+    pthread_setspecific(s_igprof_bufkey, makeTraceBuffer());
+    pthread_setspecific(s_igprof_flagkey, new IgProfAtomic(1));
   }
 
   // Make sure we've called stack trace code at least once in
@@ -647,14 +603,14 @@ threadWrapper(void *arg)
   void *dummy = 0; IgHookTrace::stacktrace(&dummy, 1);
 
   // Run per-profiler initialisation.
-  if (s_activated && s_threadinit)
+  if (s_igprof_activated && s_threadinit)
     (*s_threadinit)();
 
   // Run the user thread.
   void *ret = (*start_routine)(start_arg);
 
   // Report thread exits. Profile result is harvested by key destructor.
-  if (s_activated)
+  if (s_igprof_activated)
   {
     __extension__
     igprof_debug("leaving thread id 0x%lx from profiling (%p(%p))\n",
@@ -692,11 +648,11 @@ dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
     // Pass the actual arguments to our wrapper in a temporary memory
     // structure.  We need to hide the creation from memory profiler
     // in case it's running concurrently with this profiler.
-    igprof_disable(false);
+    igprof_disable();
     IgProfWrappedArg *wrapped = new IgProfWrappedArg;
     wrapped->start_routine = start_routine;
     wrapped->arg = arg;
-    igprof_enable(false);
+    igprof_enable();
     return hook.chain(thread, attr, &threadWrapper, wrapped);
   }
 }
@@ -725,15 +681,16 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
           || sig == SIGALRM || sig == SIGTERM || sig == SIGUSR1
           || sig == SIGUSR2 || sig == SIGBUS || sig == SIGIOT))
   {
-    bool enabled = igprof_disable(true);
-    if (enabled)
+    if (igprof_disable())
     {
+      igprof_disable_globally();
       igprof_debug("kill(%d,%d) called, dumping state\n", (int) pid, sig);
       IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
                               { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
+      igprof_enable_globally();
     }
-    igprof_enable(true);
+    igprof_enable();
   }
   return hook.chain (pid, sig);
 }

@@ -42,17 +42,17 @@ static bool                     s_initialized   = false;
 static void __attribute__((noinline))
 add (int fd)
 {
-  uint64_t tstart, tend;
+  IgProfTrace::Record entries [2];
+  void *addresses[IgProfTrace::MAX_DEPTH];
   IgProfTrace *buf = igprof_buffer();
-  if (! buf)
+  uint64_t tstart, tend;
+  int depth;
+
+  if (UNLIKELY(! buf))
     return;
 
   RDTSC(tstart);
-
-  void                  *addresses[IgProfTrace::MAX_DEPTH];
-  int                   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-  IgProfTrace::Record   entries [2];
-
+  depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
 
   entries[0].type = IgProfTrace::COUNT;
@@ -78,7 +78,7 @@ static void
 remove (int fd)
 {
   IgProfTrace *buf = igprof_buffer();
-  if (! buf)
+  if (UNLIKELY(! buf))
     return;
 
   IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
@@ -122,7 +122,7 @@ initialize(void)
   if (! igprof_init("file descriptor profiler", 0, false))
     return;
 
-  igprof_disable(true);
+  igprof_disable_globally();
   IgHook::hook(doopen_hook_main.raw);
   IgHook::hook(doopen64_hook_main.raw);
   IgHook::hook(doclose_hook_main.raw);
@@ -140,7 +140,7 @@ initialize(void)
   if (doaccept_hook_main.raw.chain) IgHook::hook(doaccept_hook_libc.raw);
 #endif
   igprof_debug("File descriptor profiler enabled\n");
-  igprof_enable(true);
+  igprof_enable_globally();
 }
 
 // -------------------------------------------------------------------
@@ -148,7 +148,7 @@ initialize(void)
 static int
 doopen(IgHook::SafeData<igprof_doopen_t> &hook, const char *fn, int flags, int mode)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(fn, flags, mode);
   int err = errno;
 
@@ -156,14 +156,14 @@ doopen(IgHook::SafeData<igprof_doopen_t> &hook, const char *fn, int flags, int m
     add(result);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static int
 doopen64(IgHook::SafeData<igprof_doopen64_t> &hook, const char *fn, int flags, int mode)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(fn, flags, mode);
   int err = errno;
 
@@ -171,14 +171,14 @@ doopen64(IgHook::SafeData<igprof_doopen64_t> &hook, const char *fn, int flags, i
     add(result);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static int
 doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
 {
-  igprof_disable(false);
+  igprof_disable();
   int result = (*hook.chain)(fd);
   int err = errno;
 
@@ -186,7 +186,7 @@ doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
     remove(fd);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
@@ -194,7 +194,7 @@ doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
 static int
 dodup(IgHook::SafeData<igprof_dodup_t> &hook, int fd)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(fd);
   int err = errno;
 
@@ -202,14 +202,14 @@ dodup(IgHook::SafeData<igprof_dodup_t> &hook, int fd)
     add(result);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static int
 dodup2(IgHook::SafeData<igprof_dodup2_t> &hook, int fd, int newfd)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(fd, newfd);
   int err = errno;
 
@@ -221,14 +221,14 @@ dodup2(IgHook::SafeData<igprof_dodup2_t> &hook, int fd, int newfd)
   }
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
 static int
 dosocket(IgHook::SafeData<igprof_dosocket_t> &hook, int domain, int type, int proto)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(domain, type, proto);
   int err = errno;
 
@@ -236,7 +236,7 @@ dosocket(IgHook::SafeData<igprof_dosocket_t> &hook, int domain, int type, int pr
     add(result);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 
@@ -244,7 +244,7 @@ static int
 doaccept(IgHook::SafeData<igprof_doaccept_t> &hook,
          int fd, struct sockaddr *addr, socklen_t *len)
 {
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   int result = (*hook.chain)(fd, addr, len);
   int err = errno;
 
@@ -252,7 +252,7 @@ doaccept(IgHook::SafeData<igprof_doaccept_t> &hook,
     add(result);
 
   errno = err;
-  igprof_enable(false);
+  igprof_enable();
   return result;
 }
 

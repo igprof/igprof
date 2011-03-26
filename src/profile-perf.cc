@@ -43,17 +43,17 @@ static void
 profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
 {
   void *addresses [IgProfTrace::MAX_DEPTH];
-  bool enabled = igprof_disable(false);
-  if (enabled)
+  if (LIKELY(igprof_disable()))
   {
-    if (IgProfTrace *buf = igprof_buffer())
+    IgProfTrace *buf = igprof_buffer();
+    if (LIKELY(buf))
     {
-      uint64_t tstart, tend;
-      RDTSC(tstart);
-
-      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
+      uint64_t tstart, tend;
+      int depth;
 
+      RDTSC(tstart);
+      depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       RDTSC(tend);
 
       // Drop two bottom frames, three top ones (stacktrace, me, signal frame).
@@ -61,7 +61,7 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
 		IgProfTrace::statFrom(depth, tstart, tend));
     }
   }
-  igprof_enable(false);
+  igprof_enable();
 }
 
 /** Enable profiling timer.  You should have called
@@ -166,7 +166,7 @@ initialize(void)
   if (! igprof_init("performance profiler", &threadInit, true, clockres))
     return;
 
-  igprof_disable(true);
+  igprof_disable_globally();
   if (s_itimer == ITIMER_REAL)
     igprof_debug("Perf: measuring real time\n");
   else if (s_itimer == ITIMER_VIRTUAL)
@@ -183,7 +183,7 @@ initialize(void)
 
   enableSignalHandler();
   enableTimer();
-  igprof_enable(true);
+  igprof_enable_globally();
 }
 
 // -------------------------------------------------------------------
@@ -249,7 +249,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   // enough to complete fork() under any circumstances.
   double dt = 0;
   int nticks = 0;
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
@@ -271,13 +271,14 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     nticks = int(dt / tv2sec(left.it_interval) + 0.5);
     if (enabled && nticks && buf)
     {
-      uint64_t tstart, tend;
-      RDTSC(tstart);
-
-      void *addresses [IgProfTrace::MAX_DEPTH];
-      int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-      if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
+      void *addresses [IgProfTrace::MAX_DEPTH];
+      uint64_t tstart, tend;
+      int depth;
+
+      RDTSC(tstart);
+      depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
+      if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       RDTSC(tend);
 
       buf->push(addresses+1, depth-1, &entry, 1,
@@ -287,7 +288,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
 		 " %.3fms, %d ticks\n", dt*1000, nticks);
   }
 
-  igprof_enable(false);
+  igprof_enable();
   return ret;
 }
 
@@ -301,7 +302,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   // See fork() for the implementation details.
   int nticks = 0;
   double dt = 0;
-  bool enabled = igprof_disable(false);
+  bool enabled = igprof_disable();
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
@@ -317,13 +318,14 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   nticks = int(dt / tv2sec(left.it_interval) + 0.5);
   if (enabled && nticks && buf)
   {
-    uint64_t tstart, tend;
-    RDTSC(tstart);
-
-    void *addresses [IgProfTrace::MAX_DEPTH];
-    int depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-    if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
+    void *addresses [IgProfTrace::MAX_DEPTH];
+    uint64_t tstart, tend;
+    int depth;
+
+    RDTSC(tstart);
+    depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
+    if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     RDTSC(tend);
 
     buf->push(addresses+1, depth-1, &entry, 1,
@@ -332,7 +334,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 
   igprof_debug("resuming profiling after blinking for system() for"
 	       " %.3fms, %d ticks\n", dt*1000, nticks);
-  igprof_enable(false);
+  igprof_enable();
   return ret;
 }
 
