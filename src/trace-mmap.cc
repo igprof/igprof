@@ -82,7 +82,7 @@ initialize(void)
   IgHook::hook(domunmap_hook_main.raw);
   IgHook::hook(dommap32_hook_main.raw);
   IgHook::hook(dommap64_hook_main.raw);
-  IgProf::debug("Tracing memory mappings\n");
+  igprof_debug("Tracing memory mappings\n");
   s_initialized = true;
   IgTrace::enable();
   return true;

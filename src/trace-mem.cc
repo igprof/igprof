@@ -54,7 +54,7 @@ initialize (void)
     if (domalloc_hook_main.raw.chain) IgHook::hook (domalloc_hook_libc.raw);
 #endif
 
-    IgProf::debug ("Tracing memory allocations\n");
+    igprof_debug("Tracing memory allocations\n");
     IgTrace::enable ();
 }
 

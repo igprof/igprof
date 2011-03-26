@@ -47,7 +47,7 @@ IgTrace::initialize (void)
         const char *options = IgTrace::options ();
         if (! options || ! *options)
         {
-            IgProf::debug ("$IGPROF not set, not tracing this process\n");
+            igprof_debug ("$IGPROF not set, not tracing this process\n");
             return s_activated = false;
         }
         while (options && *options)
@@ -103,14 +103,14 @@ IgTrace::initialize (void)
         const char *target = getenv ("IGPROF_TARGET");
         if (target && ! strstr (program_invocation_name, target))
         {
-            IgProf::debug ("Current process not selected for tracing:"
-                           " process '%s' does not match '%s'\n",
-                           program_invocation_name, target);
+            igprof_debug ("Current process not selected for tracing:"
+                          " process '%s' does not match '%s'\n",
+                          program_invocation_name, target);
             return s_activated = false;
         }
 
-        IgProf::debug ("Activated in %s\n", program_invocation_name);
-        IgProf::debug ("Options: %s\n", IgTrace::options ());
+        igprof_debug ("Activated in %s\n", program_invocation_name);
+        igprof_debug ("Options: %s\n", IgTrace::options ());
         s_activated = true;
         s_enabled = 1;
     }

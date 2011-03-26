@@ -46,14 +46,14 @@
 
 #if DEBUG
 # define ASSERT(expr) \
-    ((void)((expr) ? 1 : IgProf::panic(__FILE__,__LINE__,__PRETTY_FUNCTION__,#expr)))
+    ((void)((expr) ? 1 : igprof_panic(__FILE__,__LINE__,__PRETTY_FUNCTION__,#expr)))
 #else
 # define ASSERT(expr)
 #endif
 
 // #define VERBOSE 1
 #if VERBOSE
-# define TRACE(expr) do { IgProf::debug expr; } while (0)
+# define TRACE(expr) do { igprof_debug expr; } while (0)
 #else
 # define TRACE(expr) do { ; } while (0)
 #endif

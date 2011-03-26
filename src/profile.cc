@@ -230,13 +230,13 @@ dumpAllProfiles(void *arg)
     tofile = outname;
   }
 
-  IgProf::debug("dumping state to %s\n", tofile);
+  igprof_debug("dumping state to %s\n", tofile);
   info->output = (tofile[0] == '|'
                   ? (unsetenv("LD_PRELOAD"), popen(tofile+1, "w"))
                   : fopen (tofile, "w+"));
   if (! info->output)
-    IgProf::debug("can't write to output %s: %s (error %d)\n",
-                  tofile, strerror(errno), errno);
+    igprof_debug("can't write to output %s: %s (error %d)\n",
+                 tofile, strerror(errno), errno);
   else
   {
     fprintf(info->output, "P=(ID=%lu N=(%s) T=%f)\n",
@@ -282,14 +282,14 @@ dumpAllProfiles(void *arg)
   double depthAvg = (1. * perf.sumDepth) / perf.ntraces;
   double ticksAvg = (1. * perf.sumTicks) / perf.ntraces;
   double tperdAvg = (1./16 * perf.sumTPerD) / perf.ntraces;
-  IgProf::debug("trace perf: ntraces=%.0f"
-		" depth=[av %.1f, rms %.1f]"
-		" ticks=[av %.1f, rms %.1f]"
-		" ticks-per-depth=[av %.1f, rms %.1f]\n",
-                1. * perf.ntraces,
-		depthAvg, sqrt((1. * perf.sum2Depth) / perf.ntraces - depthAvg * depthAvg),
-		ticksAvg, sqrt((1. * perf.sum2Ticks) / perf.ntraces - ticksAvg * ticksAvg),
-		tperdAvg, sqrt((1./16/16 * perf.sum2TPerD) / perf.ntraces - tperdAvg * tperdAvg));
+  igprof_debug("trace perf: ntraces=%.0f"
+	       " depth=[av %.1f, rms %.1f]"
+	       " ticks=[av %.1f, rms %.1f]"
+	       " ticks-per-depth=[av %.1f, rms %.1f]\n",
+               1. * perf.ntraces,
+	       depthAvg, sqrt((1. * perf.sum2Depth) / perf.ntraces - depthAvg * depthAvg),
+	       ticksAvg, sqrt((1. * perf.sum2Ticks) / perf.ntraces - ticksAvg * ticksAvg),
+	       tperdAvg, sqrt((1./16/16 * perf.sum2TPerD) / perf.ntraces - tperdAvg * tperdAvg));
   return 0;
 }
 
@@ -327,7 +327,7 @@ asyncDumpThread(void *)
   return 0;
 }
 
-extern "C" void
+extern "C" VISIBLE void
 igprof_dump_now(const char *tofile)
 {
   pthread_t tid;
@@ -346,16 +346,16 @@ igprof_dump_now(const char *tofile)
 
     Returns @c true if profiling is activated in this process.  */
 bool
-IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, double clockres)
+igprof_init(int *moduleid, void (*threadinit)(void), bool perthread, double clockres)
 {
   if (! s_initialized)
   {
     s_initialized = true;
 
-    const char *options = IgProf::options();
+    const char *options = igprof_options();
     if (! options || ! *options)
     {
-      IgProf::debug("$IGPROF not set, not profiling this process\n");
+      igprof_debug("$IGPROF not set, not profiling this process\n");
       return s_activated = false;
     }
 
@@ -405,17 +405,17 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, doub
     s_mainthread = pthread_self();
     if (target && ! strstr(program_invocation_name, target))
     {
-      IgProf::debug("Current process not selected for profiling:"
-                    " process '%s' does not match '%s'\n",
-                    program_invocation_name, target);
+      igprof_debug("Current process not selected for profiling:"
+                   " process '%s' does not match '%s'\n",
+                   program_invocation_name, target);
       return s_activated = false;
     }
 
-    IgProf::debug("Activated in %s, %s, main thread id 0x%lx\n",
-                  program_invocation_name,
-                  s_pthreads ? "multi-threaded" : "no threads",
-                  s_mainthread);
-    IgProf::debug("Options: %s\n", options);
+    igprof_debug("Activated in %s, %s, main thread id 0x%lx\n",
+                 program_invocation_name,
+                 s_pthreads ? "multi-threaded" : "no threads",
+                 s_mainthread);
+    igprof_debug("Options: %s\n", options);
 
     IgHook::hook(doexit_hook_main.raw);
     IgHook::hook(doexit_hook_main2.raw);
@@ -446,11 +446,11 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, doub
   if (! moduleid)
     return true;
 
-  IgProf::disable(true);
+  igprof_disable(true);
 
   if (clockres > 0)
   {
-    IgProf::debug("Timing resolution set to %f\n", clockres);
+    igprof_debug("Timing resolution set to %f\n", clockres);
     s_clockres = clockres;
   }
 
@@ -468,7 +468,7 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, doub
 
   if (modid == N_MODULES)
   {
-    IgProf::debug("Too many profilers enabled (%d), please"
+    igprof_debug("Too many profilers enabled (%d), please"
                   " rebuild IgProf with larger N_MODULES\n",
                   N_MODULES);
     abort ();
@@ -477,19 +477,19 @@ IgProf::initialize(int *moduleid, void (*threadinit)(void), bool perthread, doub
   if (threadinit)
     threadinits().push_back(threadinit);
 
-  IgProf::enable(true);
+  igprof_enable(true);
   return true;
 }
 
 /** Return @c true if the process was linked against threading package.  */
 bool
-IgProf::isMultiThreaded(void)
+igprof_is_multi_threaded(void)
 { return s_pthreads; }
 
 /** Setup a thread so it can be used in profiling.  This should be
     called for every thread that will participate in profiling.  */
-void
-IgProf::initThread(void)
+static void
+igprof_init_thread(void)
 {
   IgProfTraceAlloc *bufs = new IgProfTraceAlloc[N_MODULES];
   memset(bufs, 0, N_MODULES * sizeof(*bufs));
@@ -508,8 +508,8 @@ IgProf::initThread(void)
 }
 
 /** Finalise a thread.  */
-void
-IgProf::exitThread(bool final)
+static void
+igprof_exit_thread(bool final)
 {
   if (! s_pthreads && ! final)
     return;
@@ -556,7 +556,7 @@ IgProf::exitThread(bool final)
     to indicate no data should be gathered in the calling context, for
     example if the profile core itself has already been destroyed.  */
 IgProfTrace *
-IgProf::buffer(int moduleid)
+igprof_buffer(int moduleid)
 {
   // Check which pool to return.  We return the one from s_bufs in
   // non-threaded applications and always in the main thread.  In
@@ -578,7 +578,7 @@ IgProf::buffer(int moduleid)
     the value of the flag has little useful value, but to make sure
     no data is gathered after the system has started to close down.  */
 bool
-IgProf::enabled(bool globally)
+igprof_is_enabled(bool globally)
 {
   if (! globally && s_pthreads)
   {
@@ -593,7 +593,7 @@ IgProf::enabled(bool globally)
     thread.  This is safe to call from anywhere.  Returns @c true if
     the profiler is enabled after the call. */
 bool
-IgProf::enable(bool globally)
+igprof_enable(bool globally)
 {
   if (! globally && s_pthreads)
   {
@@ -611,7 +611,7 @@ IgProf::enable(bool globally)
     thread.  This is safe to call from anywhere.  Returns @c true if
     the profiler was enabled before the call.  */
 bool
-IgProf::disable(bool globally)
+igprof_disable(bool globally)
 {
   if (! globally && s_pthreads)
   {
@@ -627,7 +627,7 @@ IgProf::disable(bool globally)
 
 /** Get user-provided profiling options.  */
 const char *
-IgProf::options(void)
+igprof_options(void)
 {
   if (! s_options)
     s_options = getenv("IGPROF");
@@ -636,9 +636,9 @@ IgProf::options(void)
 
 /** Internal assertion helper routine.  */
 int
-IgProf::panic(const char *file, int line, const char *func, const char *expr)
+igprof_panic(const char *file, int line, const char *func, const char *expr)
 {
-  IgProf::disable(true);
+  igprof_disable(true);
 
   fprintf (stderr, "%s: %s:%d: %s: assertion failure: %s\n",
            program_invocation_name, file, line, func, expr);
@@ -666,7 +666,7 @@ IgProf::panic(const char *file, int line, const char *func, const char *expr)
 /** Internal printf()-like debugging utility.  Produces output if
     $IGPROF_DEBUGGING environment variable is set to any value.  */
 void
-IgProf::debug(const char *format, ...)
+igprof_debug(const char *format, ...)
 {
   static const char *debugging = getenv("IGPROF_DEBUGGING");
   if (debugging)
@@ -708,12 +708,12 @@ threadWrapper(void *arg)
     // actually be "Conditionally-Supported Behavior" in some
     // future C++ standard I simply silence the warning.
     __extension__
-    IgProf::debug("captured thread id 0x%lx for profiling (%p, %p)\n",
-                  (unsigned long) pthread_self(),
-                  (void *)(start_routine),
-                  start_arg);
+    igprof_debug("captured thread id 0x%lx for profiling (%p, %p)\n",
+                 (unsigned long) pthread_self(),
+                 (void *)(start_routine),
+                 start_arg);
 
-    IgProf::initThread();
+    igprof_init_thread();
   }
 
   // Make sure we've called stack trace code at least once in
@@ -746,11 +746,10 @@ threadWrapper(void *arg)
     // actually be "Conditionally-Supported Behavior" in some
     // future C++ standard I simply silence the warning.
     __extension__
-    IgProf::debug("leaving thread id 0x%lx from profiling (%p, %p)\n",
-                  (unsigned long) pthread_self(),
-                  (void *) start_routine,
-                  start_arg);
-    IgProf::exitThread(false);
+    igprof_debug("leaving thread id 0x%lx from profiling (%p, %p)\n",
+                 (unsigned long) pthread_self(),
+                 (void *) start_routine, start_arg);
+    igprof_exit_thread(false);
   }
   return ret;
 }
@@ -766,8 +765,8 @@ dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
   size_t stack = 0;
   if (attr && pthread_attr_getstacksize(attr, &stack) == 0 && stack < 64*1024)
   {
-    IgProf::debug("pthread_create requests too small stack %lu -> use 64kB\n",
-		  (unsigned long) stack);
+    igprof_debug("pthread_create requests too small stack %lu -> use 64kB\n",
+		 (unsigned long) stack);
     pthread_attr_setstacksize((pthread_attr_t *) attr, 64*1024);
   }
 
@@ -778,11 +777,11 @@ dopthread_create(IgHook::SafeData<igprof_dopthread_create_t> &hook,
     // Pass the actual arguments to our wrapper in a temporary memory
     // structure.  We need to hide the creation from memory profiler
     // in case it's running concurrently with this profiler.
-    IgProf::disable(false);
+    igprof_disable(false);
     IgProfWrappedArg *wrapped = new IgProfWrappedArg;
     wrapped->start_routine = start_routine;
     wrapped->arg = arg;
-    IgProf::enable(false);
+    igprof_enable(false);
     return hook.chain(thread, attr, &threadWrapper, wrapped);
   }
 }
@@ -796,11 +795,11 @@ doexit(IgHook::SafeData<igprof_doexit_t> &hook, int code)
   pthread_t thread = pthread_self();
   if (s_pthreads && thread != s_mainthread)
   {
-    IgProf::debug("merging thread id 0x%lx profile on %s(%d)\n",
-                  (unsigned long) thread, hook.function, code);
-    IgProf::disable(true);
-    IgProf::exitThread(false);
-    IgProf::enable(true);
+    igprof_debug("merging thread id 0x%lx profile on %s(%d)\n",
+                 (unsigned long) thread, hook.function, code);
+    igprof_disable(true);
+    igprof_exit_thread(false);
+    igprof_enable(true);
   }
   hook.chain (code);
 }
@@ -817,15 +816,15 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
           || sig == SIGALRM || sig == SIGTERM || sig == SIGUSR1
           || sig == SIGUSR2 || sig == SIGBUS || sig == SIGIOT))
   {
-    bool enabled = IgProf::disable(true);
+    bool enabled = igprof_disable(true);
     if (enabled)
     {
-      IgProf::debug("kill(%d,%d) called, dumping state\n", (int) pid, sig);
+      igprof_debug("kill(%d,%d) called, dumping state\n", (int) pid, sig);
       IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
                               { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
     }
-    IgProf::enable(true);
+    igprof_enable(true);
   }
   return hook.chain (pid, sig);
 }
@@ -835,21 +834,21 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
 IgProfExitDump::~IgProfExitDump (void)
 {
   if (! s_activated) return;
-  IgProf::debug("merging thread id 0x%lx profile on final exit\n",
-                (unsigned long) pthread_self());
-  IgProf::disable(true);
+  igprof_debug("merging thread id 0x%lx profile on final exit\n",
+               (unsigned long) pthread_self());
+  igprof_disable(true);
   s_activated = false;
   s_enabled = 0;
   s_quitting = 1;
-  IgProf::exitThread(true);
+  igprof_exit_thread(true);
   IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
                           { 0, 0, 0, 0, 0, 0, 0 } };
   dumpAllProfiles(&info);
-  IgProf::debug("igprof quitting\n");
+  igprof_debug("igprof quitting\n");
   s_initialized = false; // signal local data is unsafe to use
   s_pthreads = false; // make sure we no longer use threads stuff
 }
 
 // -------------------------------------------------------------------
-static bool autoboot = IgProf::initialize(0, 0, false);
+static bool autoboot = igprof_init(0, 0, false);
 static IgProfExitDump exitdump;

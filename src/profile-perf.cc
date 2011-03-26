@@ -44,10 +44,10 @@ static void
 profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
 {
   void *addresses [IgProfTrace::MAX_DEPTH];
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   if (enabled)
   {
-    if (IgProfTrace *buf = IgProf::buffer(s_moduleid))
+    if (IgProfTrace *buf = igprof_buffer(s_moduleid))
     {
       uint64_t tstart, tend;
       RDTSC(tstart);
@@ -62,7 +62,7 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
 		IgProfTrace::statFrom(depth, tstart, tend));
     }
   }
-  IgProf::enable(false);
+  igprof_enable(false);
 }
 
 /** Enable profiling timer.  You should have called
@@ -82,7 +82,7 @@ enableSignalHandler(void)
   sigset_t profset;
   sigemptyset(&profset);
   sigaddset(&profset, s_signal);
-  if (IgProf::isMultiThreaded())
+  if (igprof_is_multi_threaded())
     pthread_sigmask(SIG_UNBLOCK, &profset, 0);
   else
     sigprocmask(SIG_UNBLOCK, &profset, 0);
@@ -111,7 +111,7 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
-  const char    *options = IgProf::options();
+  const char    *options = igprof_options();
   bool          enable = false;
 
   while (options && *options)
@@ -167,27 +167,27 @@ initialize(void)
   clockres = precision.it_interval.tv_sec
              + 1e-6 * precision.it_interval.tv_usec;
 
-  if (! IgProf::initialize(&s_moduleid, &threadInit, true, clockres))
+  if (! igprof_init(&s_moduleid, &threadInit, true, clockres))
     return;
 
-  IgProf::disable(true);
+  igprof_disable(true);
   if (s_itimer == ITIMER_REAL)
-    IgProf::debug("Perf: measuring real time\n");
+    igprof_debug("Perf: measuring real time\n");
   else if (s_itimer == ITIMER_VIRTUAL)
-    IgProf::debug("Perf: profiling user time\n");
+    igprof_debug("Perf: profiling user time\n");
   else if (s_itimer == ITIMER_PROF)
-    IgProf::debug("Perf: profiling process time\n");
+    igprof_debug("Perf: profiling process time\n");
 
   // Enable profiler.
   IgHook::hook(dofork_hook_main.raw);
   IgHook::hook(dosystem_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
-  IgProf::debug("Performance profiler enabled\n");
+  igprof_debug("Performance profiler enabled\n");
 
   enableSignalHandler();
   enableTimer();
-  IgProf::enable(true);
+  igprof_enable(true);
 }
 
 // -------------------------------------------------------------------
@@ -206,13 +206,13 @@ dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
       && getitimer(s_itimer, &curtimer) == 0
       && (curtimer.it_interval.tv_sec || curtimer.it_interval.tv_usec))
   {
-    IgProf::debug("pthread_sigmask(): prevented profiling signal"
-                  " %d from being blocked in thread 0x%lx"
-                  " [handler 0x%lx, interval %.0f us]\n",
-                  s_signal, (unsigned long) pthread_self(),
-                  (unsigned long) cursig.sa_handler,
-                  1e6 * curtimer.it_interval.tv_sec
-                   + curtimer.it_interval.tv_usec);
+    igprof_debug("pthread_sigmask(): prevented profiling signal"
+                 " %d from being blocked in thread 0x%lx"
+                 " [handler 0x%lx, interval %.0f us]\n",
+                 s_signal, (unsigned long) pthread_self(),
+                 (unsigned long) cursig.sa_handler,
+                 1e6 * curtimer.it_interval.tv_sec
+                 + curtimer.it_interval.tv_usec);
     sigdelset(newmask, s_signal);
   }
 
@@ -229,9 +229,9 @@ dosigaction(IgHook::SafeData<igprof_dosigaction_t> &hook,
       && act
       && act->sa_handler != (sighandler_t) &profileSignalHandler)
   {
-    IgProf::debug("sigaction(): prevented profiling signal"
-                  " %d from being overridden in thread 0x%lx\n",
-                  s_signal, (unsigned long) pthread_self());
+    igprof_debug("sigaction(): prevented profiling signal"
+                 " %d from being overridden in thread 0x%lx\n",
+                 s_signal, (unsigned long) pthread_self());
     sigemptyset(&sa.sa_mask);
     sa.sa_handler = (sighandler_t) &profileSignalHandler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
@@ -253,7 +253,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   // enough to complete fork() under any circumstances.
   double dt = 0;
   int nticks = 0;
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
@@ -270,7 +270,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   {
     setitimer(s_itimer, &fast, &slow);
     getitimer(s_itimer, &left);
-    IgProfTrace *buf = IgProf::buffer(s_moduleid);
+    IgProfTrace *buf = igprof_buffer(s_moduleid);
     dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
     nticks = int(dt / tv2sec(left.it_interval) + 0.5);
     if (enabled && nticks && buf)
@@ -287,11 +287,11 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
       buf->push(addresses+1, depth-1, &entry, 1,
 		IgProfTrace::statFrom(depth, tstart, tend));
     }
-    IgProf::debug("resuming profiling after blinking for fork() for"
-		  " %.3fms, %d ticks\n", dt*1000, nticks);
+    igprof_debug("resuming profiling after blinking for fork() for"
+		 " %.3fms, %d ticks\n", dt*1000, nticks);
   }
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return ret;
 }
 
@@ -305,7 +305,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   // See fork() for the implementation details.
   int nticks = 0;
   double dt = 0;
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   itimerval slow = { { 10, 0 }, { 10, 0 } };
   itimerval fast = { { 0, 5000 }, { 0, 5000 } };
   itimerval left = { { 0, 0 }, { 0, 0 } };
@@ -316,7 +316,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 
   setitimer(s_itimer, &fast, &slow);
   getitimer(s_itimer, &left);
-  IgProfTrace *buf = IgProf::buffer(s_moduleid);
+  IgProfTrace *buf = igprof_buffer(s_moduleid);
   dt += tv2sec(slow.it_interval) - tv2sec(slow.it_value);
   nticks = int(dt / tv2sec(left.it_interval) + 0.5);
   if (enabled && nticks && buf)
@@ -334,9 +334,9 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 	      IgProfTrace::statFrom(depth, tstart, tend));
   }
 
-  IgProf::debug("resuming profiling after blinking for system() for"
-		" %.3fms, %d ticks\n", dt*1000, nticks);
-  IgProf::enable(false);
+  igprof_debug("resuming profiling after blinking for system() for"
+	       " %.3fms, %d ticks\n", dt*1000, nticks);
+  igprof_enable(false);
   return ret;
 }
 

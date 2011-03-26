@@ -176,16 +176,16 @@ protect (void *address, bool writable)
     }
     if (retcode != KERN_SUCCESS)
     {
-	IgProf::debug ("vm_protect(%p, %d, %d): %d\n",
-                       address, pagesize, protection, retcode);
+	igprof_debug("vm_protect(%p, %d, %d): %d\n",
+                     address, pagesize, protection, retcode);
         return IgHook::ErrMemoryProtection;
     }
 #else
     int protection = PROT_READ | PROT_EXEC | (writable ? PROT_WRITE : 0);
     if (mprotect (address, pagesize, protection))
     {
-	IgProf::debug ("mprotect(%p, %d, %d): %d\n",
-                       address, pagesize, protection, errno);
+	igprof_debug("mprotect(%p, %d, %d): %d\n",
+                     address, pagesize, protection, errno);
         return IgHook::ErrMemoryProtection;
     }
 #endif
@@ -224,14 +224,14 @@ lookup (const char *fn, const char *v, const char *lib, void *&sym)
         void *handle = dlopen (lib, RTLD_LAZY | RTLD_GLOBAL);
         if (! handle)
         {
-	    IgProf::debug ("dlopen('%s'): %s\n", lib, dlerror ());
+	    igprof_debug("dlopen('%s'): %s\n", lib, dlerror ());
             return IgHook::ErrLibraryNotFound;
         }
 
         sym = v ? dlvsym (handle, fn, v) : dlsym (handle, fn);
         if (! sym)
         {
-	    IgProf::debug ("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
+	    igprof_debug("dlsym('%s', '%s'): %s\n", lib, fn, dlerror ());
             return IgHook::ErrSymbolNotFoundInLibrary;
         }
     }
@@ -243,7 +243,7 @@ lookup (const char *fn, const char *v, const char *lib, void *&sym)
         if (! sym) sym = v ? dlvsym (program, fn, v) : dlsym (RTLD_NEXT, fn);
         if (! sym)
         {
-	    IgProf::debug ("dlsym(self, '%s'): %s\n", fn, dlerror ());
+	    igprof_debug("dlsym(self, '%s'): %s\n", fn, dlerror ());
             return IgHook::ErrSymbolNotFoundInSelf;
         }
     }
@@ -264,8 +264,8 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned char *insns = (unsigned char *) address;
     if (insns [0] == 0xe9)
     {
-	IgProf::debug ("%s (%p): hook trampoline already installed, ignoring\n",
-                       func, address);
+	igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                     func, address);
         return -1;
     }
 
@@ -306,8 +306,8 @@ parse (const char *func, void *address, unsigned *patches)
 
         else
         {
-	    IgProf::debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
-                           func, address, insns - (unsigned char *) address, *insns);
+	    igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
+                         func, address, insns - (unsigned char *) address, *insns);
             return -1;
         }
     }
@@ -318,13 +318,13 @@ parse (const char *func, void *address, unsigned *patches)
 	unsigned long target = (unsigned long) insns + *(int *)(insns+1) + 5;
 	if ((target & 0xfff) == 0x004)
 	{
-	    IgProf::debug ("%s (%p): hook trampoline already installed, ignoring\n",
-                           func, address);
+	    igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                         func, address);
             return -1;
 	}
 	else
-            IgProf::debug ("%s (%p): jump instruction found, but not a hook target\n",
-                           func, address);
+            igprof_debug("%s (%p): jump instruction found, but not a hook target\n",
+                         func, address);
     }
 
     while (n < 5)
@@ -400,9 +400,9 @@ parse (const char *func, void *address, unsigned *patches)
 
         else
         {
-	    IgProf::debug ("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
-                           func, address, insns - (unsigned char *) address,
-                           insns[0], insns[1], insns[2], insns[3]);
+	    igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
+                         func, address, insns - (unsigned char *) address,
+                         insns[0], insns[1], insns[2], insns[3]);
             return -1;
         }
     }
@@ -413,7 +413,7 @@ parse (const char *func, void *address, unsigned *patches)
     unsigned int instr = *insns;
     if ((instr & 0xfc1fffff) == 0x7c0903a6) // check it's not mfctr
     {
-	IgProf::debug ("%s (%p): mfctr can't be instrumented\n", func, address);
+	igprof_debug("%s (%p): mfctr can't be instrumented\n", func, address);
         return -1;
     }
 
@@ -717,11 +717,11 @@ IgHook::hook (const char *function,
         *trampoline = tramp;
 
     if (version)
-        IgProf::debug ("%s/%s (%p): instrumenting %d bytes into %p\n",
-                       function, version, sym, prologue, tramp);
+        igprof_debug("%s/%s (%p): instrumenting %d bytes into %p\n",
+                     function, version, sym, prologue, tramp);
     else
-        IgProf::debug ("%s (%p): instrumenting %d bytes into %p\n",
-                       function, sym, prologue, tramp);
+        igprof_debug("%s (%p): instrumenting %d bytes into %p\n",
+                     function, sym, prologue, tramp);
 
     prepare (tramp, replacement, chain, sym, prologue, patches);
 

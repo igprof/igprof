@@ -6,29 +6,32 @@
 
 class IgProfTrace;
 
-/** Core profiling implementation.  Implements utilities needed
-    to implement actual profiler modules as well as final dumps. */
-class HIDDEN IgProf
-{
-public:
-  static int            panic(const char *file, int line,
-                              const char *func, const char *expr);
-  static void           debug(const char *format, ...);
-  static const char *   options(void);
+HIDDEN int
+igprof_panic(const char *file, int line, const char *func, const char *expr);
 
-  static bool           initialize(int *moduleid,
-                                   void (*threadinit)(void),
-                                   bool perthread,
-				   double clockres = 0.);
+HIDDEN void
+igprof_debug(const char *format, ...);
 
-  static void           initThread(void);
-  static void           exitThread(bool final);
-  static bool           isMultiThreaded(void);
+HIDDEN const char *
+igprof_options(void);
 
-  static bool           enabled(bool globally);
-  static bool           enable(bool globally);
-  static bool           disable(bool globally);
-  static IgProfTrace *  buffer(int moduleid);
-};
+HIDDEN bool
+igprof_init(int *moduleid, void (*threadinit)(void),
+	    bool perthread, double clockres = 0.);
+
+HIDDEN bool
+igprof_is_multi_threaded(void);
+
+HIDDEN bool
+igprof_is_enabled(bool globally);
+
+HIDDEN bool
+igprof_enable(bool globally);
+
+HIDDEN bool
+igprof_disable(bool globally);
+
+HIDDEN IgProfTrace *
+igprof_buffer(int moduleid);
 
 #endif // PROFILE_H

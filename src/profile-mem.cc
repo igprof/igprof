@@ -55,7 +55,7 @@ static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
   uint64_t tstart, tend;
-  IgProfTrace *buf = IgProf::buffer(s_moduleid);
+  IgProfTrace *buf = igprof_buffer(s_moduleid);
   if (! buf)
     return;
 
@@ -121,7 +121,7 @@ remove (void *ptr)
 {
   if (s_count_live && ptr)
   {
-    IgProfTrace *buf = IgProf::buffer(s_moduleid);
+    IgProfTrace *buf = igprof_buffer(s_moduleid);
     if (! buf)
       return;
 
@@ -141,7 +141,7 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
-  const char    *options = IgProf::options();
+  const char    *options = igprof_options();
   bool          enable = false;
   bool          opts = false;
 
@@ -211,28 +211,28 @@ initialize(void)
   if (! enable)
     return;
 
-  if (! IgProf::initialize(&s_moduleid, 0, false))
+  if (! igprof_init(&s_moduleid, 0, false))
     return;
 
-  IgProf::disable(true);
+  igprof_disable(true);
   if (! opts)
   {
-    IgProf::debug("Memory: defaulting to total memory counting\n");
+    igprof_debug("Memory: defaulting to total memory counting\n");
     s_count_total = 1;
   }
   else
   {
     if (s_count_total)
-      IgProf::debug("Memory: enabling total counting\n");
+      igprof_debug("Memory: enabling total counting\n");
     if (s_count_largest)
-      IgProf::debug("Memory: enabling max counting\n");
+      igprof_debug("Memory: enabling max counting\n");
     if (s_count_live)
-      IgProf::debug("Memory: enabling live counting\n");
+      igprof_debug("Memory: enabling live counting\n");
   }
-  IgProf::debug("Memory: reporting %sallocation overhead%s\n",
-                (s_overhead == OVERHEAD_NONE ? "memory use without "
-                 : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
-                (s_overhead == OVERHEAD_DELTA ? " only" : ""));
+  igprof_debug("Memory: reporting %sallocation overhead%s\n",
+               (s_overhead == OVERHEAD_NONE ? "memory use without "
+                : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
+               (s_overhead == OVERHEAD_DELTA ? " only" : ""));
 
   IgHook::hook(domalloc_hook_main.raw);
   IgHook::hook(docalloc_hook_main.raw);
@@ -248,8 +248,8 @@ initialize(void)
   if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
 #endif
-  IgProf::debug("Memory profiler enabled\n");
-  IgProf::enable(true);
+  igprof_debug("Memory profiler enabled\n");
+  igprof_enable(true);
 }
 
 // -------------------------------------------------------------------
@@ -257,33 +257,33 @@ initialize(void)
 static void *
 domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   void *result = (*hook.chain)(n);
 
   if (enabled && result)
     add(result, n);
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
 static void *
 docalloc(IgHook::SafeData<igprof_docalloc_t> &hook, size_t n, size_t m)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   void *result = (*hook.chain)(n, m);
 
   if (enabled && result)
     add(result, n * m);
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
 static void *
 dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   void *result = (*hook.chain)(ptr, n);
 
   if (result)
@@ -292,33 +292,33 @@ dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
     if (enabled && result) add(result, n);
   }
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
 static void *
 domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t size)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   void *result = (*hook.chain)(alignment, size);
 
   if (enabled && result)
     add(result, size);
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
 static void *
 dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   void *result = (*hook.chain)(size);
 
   if (enabled && result)
     add(result, size);
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
@@ -326,23 +326,23 @@ static int
 dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
             void **ptr, size_t alignment, size_t size)
 {
-  bool enabled = IgProf::disable(false);
+  bool enabled = igprof_disable(false);
   int result = (*hook.chain)(ptr, alignment, size);
 
   if (enabled && ptr && *ptr)
     add(*ptr, size);
 
-  IgProf::enable(false);
+  igprof_enable(false);
   return result;
 }
 
 static void
 dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
 {
-  IgProf::disable(false);
+  igprof_disable(false);
   remove(ptr);
   (*hook.chain)(ptr);
-  IgProf::enable(false);
+  igprof_enable(false);
 }
 
 // -------------------------------------------------------------------

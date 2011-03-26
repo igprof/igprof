@@ -187,8 +187,8 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
   Resource  *res = 0;
   if (findResource(rec, rlink, res, ctr->def))
   {
-    IgProf::debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
-                  ctr->def->name, rec.resource, res->size, (void *)this);
+    igprof_debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
+                 ctr->def->name, rec.resource, res->size, (void *)this);
 #if DEBUG
     int depth = 0;
     for (Stack *s = ctr->frame; s; s = s->parent)
@@ -199,8 +199,8 @@ IgProfTrace::acquireResource(Record &rec, Counter *ctr)
       long        liboffset = 0;
 
       IgHookTrace::symbol(s->address, sym, lib, offset, liboffset);
-      IgProf::debug ("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,
-                     sym ? sym : "?", offset, lib ? lib : "?", liboffset);
+      igprof_debug("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,
+                   sym ? sym : "?", offset, lib ? lib : "?", liboffset);
     }
 #endif
 

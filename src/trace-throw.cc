@@ -67,7 +67,7 @@ initialize (void)
 
     IgTrace::disable ();
     IgHook::hook (dothrow_hook_main.raw);
-    IgProf::debug ("Tracing exceptions thrown\n");
+    igprof_debug ("Tracing exceptions thrown\n");
     IgTrace::enable ();
 }
 

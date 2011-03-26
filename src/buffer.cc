@@ -52,8 +52,8 @@ IgProfBuffer::allocateRaw(size_t size)
     return data;
   else
   {
-    IgProf::debug ("Failed to allocate memory for profile buffer: %s (%d)\n",
-                   strerror (errno), errno);
+    igprof_debug("Failed to allocate memory for profile buffer: %s (%d)\n",
+                 strerror (errno), errno);
     abort ();
   }
 }
