@@ -40,7 +40,7 @@ static const int                OVERHEAD_DELTA  = 2; // Memory use malloc overhe
 
 static IgProfTrace::CounterDef  s_ct_total      = { "MEM_TOTAL",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_largest    = { "MEM_MAX",      IgProfTrace::MAX, -1 };
-static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK_PEAK, -1 };
+static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK, -1 };
 static int                      s_overhead      = OVERHEAD_NONE;
 static bool                     s_initialized   = false;
 

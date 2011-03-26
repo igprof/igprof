@@ -295,13 +295,14 @@ IgProfTrace::dopush(void **stack, int depth, Record *recs, int nrecs)
         c = initCounter(*ctr, recs[i].def, frame);
 
       // Tick the counter.
-      if (recs[i].def->type == TICK || recs[i].def->type == TICK_PEAK)
+      if (recs[i].def->type == TICK)
+      {
         c->value += recs[i].amount;
+        if (c->value > c->peak)
+          c->peak = c->value;
+      }
       else if (recs[i].def->type == MAX && c->value < recs[i].amount)
         c->value = recs[i].amount;
-
-      if (recs[i].def->type == TICK_PEAK && c->value > c->peak)
-        c->peak = c->value;
 
       c->ticks += recs[i].ticks;
     }
@@ -375,7 +376,7 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
     }
 
     // Adjust the peak counter if necessary.
-    if (c->def->type == TICK_PEAK && c->peak > c->value)
+    if (c->def->type == TICK && c->peak > c->value)
     {
       if (rec == MERGE_RECS)
       {
@@ -383,11 +384,10 @@ IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
         rec = 0;
       }
 
-      recs[rec].type = COUNT | ACQUIRE | RELEASE;
+      recs[rec].type = COUNT;
       recs[rec].def = c->def;
       recs[rec].amount = c->peak - c->value;
-      recs[rec].ticks = 1;
-      recs[rec].resource = ~((Address) 0);
+      recs[rec].ticks = 0;
       ++rec;
     }
   }

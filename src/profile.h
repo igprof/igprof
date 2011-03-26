@@ -2,6 +2,7 @@
 # define PROFILE_H
 
 # include "macros.h"
+# include "atomic.h"
 # include "hook.h"
 
 class IgProfTrace;

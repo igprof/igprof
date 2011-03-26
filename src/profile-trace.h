@@ -114,7 +114,6 @@ public:
   enum CounterType
   {
     TICK,                       //< Ticked cumulative counter.
-    TICK_PEAK,                  //< Ticked and keep also the peak value.
     MAX                         //< Maximum-value counter.
   };
 
