@@ -168,53 +168,35 @@ public:
     CounterDef  *def;           //< Cached counter definition reference.
   };
 
-  /// Bitmask of properties the record covers.
-  typedef unsigned int RecordType;
-  static const RecordType COUNT         = 1;
-  static const RecordType ACQUIRE       = 2;
-  static const RecordType RELEASE       = 4;
-
-  /// Structure used by callers to record values.
-  struct Record
-  {
-    RecordType  type;           //< Type of the record.
-    CounterDef  *def;           //< Counter to modify.
-    Value       amount;         //< The total amount to add.
-    Value       ticks;          //< The number of increments.
-    Address     resource;       //< Resource identity for #ACQUIRE and #RELEASE.
-  };
-
   IgProfTrace(void);
   ~IgProfTrace(void);
 
-  void                  push(void **stack, int depth, Record *recs, int nrecs, const PerfStat &s);
+  void                  lock(void);
+  Stack *               push(void **stack, int depth);
+  Counter *             tick(Stack *frame, CounterDef *def, Value amount, Value ticks);
+  void                  acquire(Counter *ctr, Address resource, Value size);
+  void                  release(Address resource, CounterDef *def);
+  void                  traceperf(int depth, uint64_t tstart, uint64_t tend);
   void                  mergeFrom(IgProfTrace &other);
+  void                  unlock(void);
+
   Stack *               stackRoot(void) const;
   const PerfStat &      perfStats(void) const;
-  static PerfStat       statFrom(int depth, uint64_t tstart, uint64_t tend);
-
-  void                  lock(void);
-  void                  unlock(void);
 
 private:
   Stack *               childStackNode(Stack *parent, void *address);
   Counter *             initCounter(Counter *&link, CounterDef *def, Stack *frame);
-  bool                  findResource(Record &rec,
+  bool                  findResource(Address resource,
                                      Resource **&rlink,
                                      Resource *&res,
                                      CounterDef *def);
   void                  releaseResource(Resource **rlink, Resource *res);
-  void                  releaseResource(Record &rec);
-  void                  acquireResource(Record &rec, Counter *ctr);
-  void                  dopush(void **stack, int depth, Record *recs, int nrecs);
-  void                  mergeFrom(int depth, Stack *frame, void **callstack, Record *recs);
+  void                  mergeFrom(int depth, Stack *frame, void **callstack);
 
   void                  debugDump(void);
   static void           debugDumpStack(Stack *s, int depth);
 
   pthread_mutex_t       mutex_;         //< Concurrency protection.
-  void                  **poolfirst_;   //< Pointer to first memory pool.
-  void                  **poolcur_;     //< Pointer to current memory pool.
   Resource              **restable_;    //< Start of the resources hash.
   StackCache            *callcache_;    //< Start of address cache.
   Resource              *resfree_;      //< Resource free list.
@@ -243,25 +225,34 @@ IgProfTrace::PerfStat::operator+=(const PerfStat &other)
   return *this;
 }
 
-inline IgProfTrace::PerfStat
-IgProfTrace::statFrom(int depth, uint64_t tstart, uint64_t tend)
+inline void
+IgProfTrace::traceperf(int depth, uint64_t tstart, uint64_t tend)
 {
-  PerfStat result;
-  uint64_t dep       = depth;
-  uint64_t nticks    = tend - tstart;
-  uint64_t tperd     = (nticks << 4) / dep;
-  result.ntraces   = 1;
-  result.sumDepth  = dep;
-  result.sum2Depth = dep * dep;
-  result.sumTicks  = nticks;
-  result.sum2Ticks = nticks * nticks;
-  result.sumTPerD  = tperd;
-  result.sum2TPerD = tperd * tperd;
-  return result;
+  uint64_t dep         = depth;
+  uint64_t nticks      = tend - tstart;
+  uint64_t tperd       = (nticks << 4) / dep;
+
+  perfStats_.ntraces++;
+  perfStats_.sumDepth  += dep;
+  perfStats_.sum2Depth += dep * dep;
+  perfStats_.sumTicks  += nticks;
+  perfStats_.sum2Ticks += nticks * nticks;
+  perfStats_.sumTPerD  += tperd;
+  perfStats_.sum2TPerD += tperd * tperd;
 }
 
 inline const IgProfTrace::PerfStat &
 IgProfTrace::perfStats(void) const
 { return perfStats_; }
+
+/** Lock the trace buffer. */
+inline void
+IgProfTrace::lock(void)
+{ pthread_mutex_lock(&mutex_); }
+
+/** Unlock the trace buffer. */
+inline void
+IgProfTrace::unlock(void)
+{ pthread_mutex_unlock(&mutex_); }
 
 #endif // PROFILE_TRACE_H

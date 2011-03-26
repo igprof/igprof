@@ -48,7 +48,7 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
     IgProfTrace *buf = igprof_buffer();
     if (LIKELY(buf))
     {
-      IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, 1, 0 };
+      IgProfTrace::Stack *frame;
       uint64_t tstart, tend;
       int depth;
 
@@ -56,9 +56,10 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
       depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       RDTSC(tend);
 
-      // Drop two bottom frames, three top ones (stacktrace, me, signal frame).
-      buf->push(addresses+3, depth-3, &entry, 1,
-		IgProfTrace::statFrom(depth, tstart, tend));
+      // Drop three top stackframes (stacktrace, me, signal frame).
+      frame = buf->push(addresses+3, depth-3);
+      buf->tick(frame, &s_ct_ticks, 1, 1);
+      buf->traceperf(depth, tstart, tend);
     }
   }
   igprof_enable();
@@ -271,8 +272,8 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     nticks = int(dt / tv2sec(left.it_interval) + 0.5);
     if (enabled && nticks && buf)
     {
-      IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
       void *addresses [IgProfTrace::MAX_DEPTH];
+      IgProfTrace::Stack *frame;
       uint64_t tstart, tend;
       int depth;
 
@@ -281,8 +282,9 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
       if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       RDTSC(tend);
 
-      buf->push(addresses+1, depth-1, &entry, 1,
-		IgProfTrace::statFrom(depth, tstart, tend));
+      frame = buf->push(addresses+1, depth-1);
+      buf->tick(frame, &s_ct_ticks, 1, nticks);
+      buf->traceperf(depth, tstart, tend);
     }
     igprof_debug("resuming profiling after blinking for fork() for"
 		 " %.3fms, %d ticks\n", dt*1000, nticks);
@@ -318,8 +320,8 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   nticks = int(dt / tv2sec(left.it_interval) + 0.5);
   if (enabled && nticks && buf)
   {
-    IgProfTrace::Record entry = { IgProfTrace::COUNT, &s_ct_ticks, 1, nticks, 0 };
     void *addresses [IgProfTrace::MAX_DEPTH];
+    IgProfTrace::Stack *frame;
     uint64_t tstart, tend;
     int depth;
 
@@ -328,8 +330,9 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
     if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     RDTSC(tend);
 
-    buf->push(addresses+1, depth-1, &entry, 1,
-	      IgProfTrace::statFrom(depth, tstart, tend));
+    frame = buf->push(addresses+1, depth-1);
+    buf->tick(frame, &s_ct_ticks, 1, nticks);
+    buf->traceperf(depth, tstart, tend);
   }
 
   igprof_debug("resuming profiling after blinking for system() for"

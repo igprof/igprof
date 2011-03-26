@@ -50,9 +50,10 @@ static bool                     s_initialized   = false;
 static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
-  IgProfTrace::Record entries [3];
   void *addresses[IgProfTrace::MAX_DEPTH];
   IgProfTrace *buf = igprof_buffer();
+  IgProfTrace::Stack *frame;
+  IgProfTrace::Counter *ctr;
   uint64_t tstart, tend;
   int depth;
 
@@ -75,25 +76,15 @@ add(void *ptr, size_t size)
   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
 
-  entries[0].type = IgProfTrace::COUNT;
-  entries[0].def = &s_ct_total;
-  entries[0].amount = size;
-  entries[0].ticks = 1;
-
-  entries[1].type = IgProfTrace::COUNT;
-  entries[1].def = &s_ct_largest;
-  entries[1].amount = size;
-  entries[1].ticks = 1;
-
-  entries[2].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
-  entries[2].def = &s_ct_live;
-  entries[2].amount = size;
-  entries[2].ticks = 1;
-  entries[2].resource = (IgProfTrace::Address) ptr;
-
-  // Drop three top ones (stacktrace, me, hook).
-  buf->push(addresses+3, depth-3, entries, 3,
-	    IgProfTrace::statFrom(depth, tstart, tend));
+  // Drop three top stack frames (stacktrace, me, hook).
+  buf->lock();
+  frame = buf->push(addresses+3, depth-3);
+  buf->tick(frame, &s_ct_total, size, 1);
+  buf->tick(frame, &s_ct_largest, size, 1);
+  ctr = buf->tick(frame, &s_ct_live, size, 1);
+  buf->acquire(ctr, (IgProfTrace::Address) ptr, size);
+  buf->traceperf(depth, tstart, tend);
+  buf->unlock();
 }
 
 /** Remove knowledge about allocation.  If we are tracking leaks,
@@ -108,10 +99,9 @@ remove (void *ptr)
     if (UNLIKELY(! buf))
       return;
 
-    IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
-    IgProfTrace::Record entry
-      = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, (IgProfTrace::Address) ptr };
-    buf->push(0, 0, &entry, 1, perf);
+    buf->lock();
+    buf->release((IgProfTrace::Address) ptr, &s_ct_live);
+    buf->unlock();
   }
 }
 

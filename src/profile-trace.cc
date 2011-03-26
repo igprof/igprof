@@ -6,8 +6,6 @@
 
 static IgProfTrace::Counter FREED;
 static const unsigned int RESOURCE_HASH = 1024*1024;
-static const unsigned int MEM_POOL_SIZE = 8*1024*1024;
-static const int          MERGE_RECS    = 128;
 
 /** Initialise a trace buffer.  */
 IgProfTrace::IgProfTrace(void)
@@ -96,22 +94,22 @@ IgProfTrace::initCounter(Counter *&link, CounterDef *def, Stack *frame)
 }
 
 inline bool
-IgProfTrace::findResource(Record &rec,
+IgProfTrace::findResource(Address resource,
                           Resource **&rlink,
                           Resource *&res,
                           CounterDef *def)
 {
   // Locate the resource in the hash table.
-  rlink = &restable_[hash(rec.resource) & (RESOURCE_HASH-1)];
+  rlink = &restable_[hash(address) & (RESOURCE_HASH-1)];
 
   while (Resource *r = *rlink)
   {
-    if (r->resource == rec.resource && r->def == def)
+    if (r->resource == resource && r->def == def)
     {
       res = r;
       return true;
     }
-    if (r->resource > rec.resource)
+    if (r->resource > resource)
       return false;
     rlink = &r->nexthash;
   }
@@ -163,91 +161,9 @@ IgProfTrace::releaseResource(Resource **rlink, Resource *res)
   resfree_ = res;
 }
 
-void
-IgProfTrace::releaseResource(Record &rec)
-{
-  // Locate the resource in the hash table.
-  Resource  **rlink;
-  Resource  *res = 0;
-  if (! findResource(rec, rlink, res, rec.def))
-    // Not found, we missed the allocation, ignore this release.
-    return;
-  else
-    // Found, actually release it.
-    releaseResource(rlink, res);
-}
-
-void
-IgProfTrace::acquireResource(Record &rec, Counter *ctr)
-{
-  ASSERT(ctr);
-
-  // Locate the resource in the hash table.
-  Resource  **rlink;
-  Resource  *res = 0;
-  if (findResource(rec, rlink, res, ctr->def))
-  {
-    igprof_debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
-                 ctr->def->name, rec.resource, res->size, (void *)this);
-#if DEBUG
-    int depth = 0;
-    for (Stack *s = ctr->frame; s; s = s->parent)
-    {
-      const char  *sym = 0;
-      const char  *lib = 0;
-      long        offset = 0;
-      long        liboffset = 0;
-
-      IgHookTrace::symbol(s->address, sym, lib, offset, liboffset);
-      igprof_debug("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,
-                   sym ? sym : "?", offset, lib ? lib : "?", liboffset);
-    }
-#endif
-
-    // Release the resource, then proceed as if we hadn't found it.
-    releaseResource(rlink, res);
-  }
-
-  // It wasn't found, insert into the lists as per class documentation.
-  if ((res = resfree_))
-    resfree_ = res->nextlive;
-  else
-    res = allocate<Resource>();
-  res->resource = rec.resource;
-  res->size = rec.amount;
-  res->nexthash = *rlink;
-  res->prevlive = 0;
-  res->nextlive = ctr->resources;
-  res->counter = ctr;
-  res->def = rec.def;
-  ctr->resources = *rlink = res;
-  if (res->nextlive)
-    res->nextlive->prevlive = res;
-}
-
-/** Lock the trace buffer.  This is _only_ for dumping.  */
-void
-IgProfTrace::lock(void)
-{ pthread_mutex_lock(&mutex_); }
-
-/** Unlock the trace buffer.  This is _only_ for dumping.  */
-void
-IgProfTrace::unlock(void)
-{ pthread_mutex_unlock(&mutex_); }
-
-/** Push a call frame and its records into the buffer. */
-void
-IgProfTrace::push(void **stack, int depth, Record *recs, int nrecs, const PerfStat &perf)
-{
-  pthread_mutex_lock(&mutex_);
-  dopush(stack, depth, recs, nrecs);
-  perfStats_ += perf;
-  pthread_mutex_unlock(&mutex_);
-}
-
-/** Actually push a call frame and its records into the buffer. */
-void
-IgProfTrace::dopush(void **stack, int depth, Record *recs, int nrecs)
+/** Locate stack frame record for a call tree. */
+IgProfTrace::Stack *
+IgProfTrace::push(void **stack, int depth)
 {
   // Make sure we operate on non-negative depth.  This allows callers
   // to do strip off call tree layers without checking for sufficient
@@ -274,47 +190,104 @@ IgProfTrace::dopush(void **stack, int depth, Record *recs, int nrecs)
     }
   }
 
-  // OK, we now have our final call stack node.  Update its counters
-  // and the resource allocations as defined by "recs".
-  for (int i = 0; i < nrecs; ++i)
+  return frame;
+}
+
+IgProfTrace::Counter *
+IgProfTrace::tick(Stack *frame, CounterDef *def, Value amount, Value ticks)
+{
+  ASSERT(frame);
+  ASSERT(def);
+
+  // Locate and possibly initialise the counter.
+  Counter **ctr = 0;
+  Counter *c = 0;
+  ctr = &frame->counters;
+  while (*ctr && (*ctr)->def != def)
+    ctr = &(*ctr)->next;
+
+  // If not found, add it.
+  c = *ctr;
+  if (! c || c->def != def)
+    c = initCounter(*ctr, def, frame);
+
+  // Tick the counter.
+  if (def->type == TICK)
   {
-    Counter **ctr = 0;
-    Counter *c = 0;
-
-    // If it's a release acquisition or normal tick, update counter.
-    if (recs[i].type & (COUNT | ACQUIRE))
-    {
-      // Locate the counter.
-      ctr = &frame->counters;
-      while (*ctr && (*ctr)->def != recs[i].def)
-        ctr = &(*ctr)->next;
-
-      // If not found, add it.
-      c = *ctr;
-      if (! c || c->def != recs[i].def)
-        c = initCounter(*ctr, recs[i].def, frame);
-
-      // Tick the counter.
-      if (recs[i].def->type == TICK)
-      {
-        c->value += recs[i].amount;
-        if (c->value > c->peak)
-          c->peak = c->value;
-      }
-      else if (recs[i].def->type == MAX && c->value < recs[i].amount)
-        c->value = recs[i].amount;
-
-      c->ticks += recs[i].ticks;
-    }
-
-    // Handle resource record for acquisition.
-    if (recs[i].type & ACQUIRE)
-      acquireResource(recs[i], c);
-
-    // Handle resource record for release.  Call stack is empty here.
-    if (recs[i].type & RELEASE)
-      releaseResource(recs[i]);
+    c->value += amount;
+    if (c->value > c->peak)
+      c->peak = c->value;
   }
+  else if (def->type == MAX && c->value < amount)
+    c->value = amount;
+
+  c->ticks += ticks;
+
+  // Return the counter for acquire() calls.
+  return c;
+}
+
+void
+IgProfTrace::acquire(Counter *ctr, Address resource, Value size)
+{
+  ASSERT(ctr);
+
+  // Locate the resource in the hash table.
+  Resource  **rlink;
+  Resource  *res = 0;
+  if (findResource(resource, rlink, res, ctr->def))
+  {
+    igprof_debug("New %s resource 0x%lx of %ju bytes was never freed in %p\n",
+                 ctr->def->name, resource, res->size, (void *)this);
+#if DEBUG
+    int depth = 0;
+    for (Stack *s = ctr->frame; s; s = s->parent)
+    {
+      const char  *sym = 0;
+      const char  *lib = 0;
+      long        offset = 0;
+      long        liboffset = 0;
+
+      IgHookTrace::symbol(s->address, sym, lib, offset, liboffset);
+      igprof_debug("  [%u] %10p %s + %d [%s + %d]\n", ++depth, s->address,
+                   sym ? sym : "?", offset, lib ? lib : "?", liboffset);
+    }
+#endif
+
+    // Release the resource, then proceed as if we hadn't found it.
+    releaseResource(rlink, res);
+  }
+
+  // It wasn't found, insert into the lists as per class documentation.
+  if ((res = resfree_))
+    resfree_ = res->nextlive;
+  else
+    res = allocate<Resource>();
+  res->resource = resource;
+  res->size = amount;
+  res->nexthash = *rlink;
+  res->prevlive = 0;
+  res->nextlive = ctr->resources;
+  res->counter = ctr;
+  res->def = ctr->def;
+  ctr->resources = *rlink = res;
+  if (res->nextlive)
+    res->nextlive->prevlive = res;
+}
+
+// Handle resource release.  There is no call stack involved here.
+void
+IgProfTrace::release(Address resource, CounterDef *def)
+{
+  // Locate the resource in the hash table.
+  Resource  **rlink;
+  Resource  *res = 0;
+  if (! findResource(resource, rlink, res, def))
+    // Not found, we missed the allocation, ignore this release.
+    return;
+  else
+    // Found, actually release it.
+    releaseResource(rlink, res);
 }
 
 void
@@ -324,11 +297,9 @@ IgProfTrace::mergeFrom(IgProfTrace &other)
   pthread_mutex_lock(&other.mutex_);
 
   // Scan stack tree and insert each call stack, including resources.
-  Record recs[MERGE_RECS];
-  void   *callstack[MAX_DEPTH+1];
-
+  void *callstack[MAX_DEPTH+1];
   callstack[MAX_DEPTH] = stack_->address; // null really
-  mergeFrom(0, other.stack_, &callstack[MAX_DEPTH], recs);
+  mergeFrom(0, other.stack_, &callstack[MAX_DEPTH]);
   perfStats_ += other.perfStats_;
 
   pthread_mutex_unlock(&other.mutex_);
@@ -336,71 +307,32 @@ IgProfTrace::mergeFrom(IgProfTrace &other)
 }
 
 void
-IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack, Record *recs)
+IgProfTrace::mergeFrom(int depth, Stack *frame, void **callstack)
 {
   // Process counters at this call stack level.
-  int rec = 0;
+  Stack *myframe = push(callstack, depth);
   for (Counter *c = frame->counters; c; c = c->next)
   {
     if (c->ticks && ! c->resources)
-    {
-      if (rec == MERGE_RECS)
-      {
-        dopush(callstack, depth, recs, rec);
-        rec = 0;
-      }
-
-      recs[rec].type = COUNT;
-      recs[rec].def = c->def;
-      recs[rec].amount = c->value;
-      recs[rec].ticks = c->ticks;
-      ++rec;
-    }
+      tick(myframe, c->def, c->value, c->ticks);
     else if (c->ticks)
-    {
       for (Resource *r = c->resources; r; r = r->nextlive)
       {
-        if (rec == MERGE_RECS)
-        {
-          dopush(callstack, depth, recs, rec);
-          rec = 0;
-        }
-
-        recs[rec].type = COUNT | ACQUIRE;
-        recs[rec].def = c->def;
-        recs[rec].amount = r->size;
-        recs[rec].ticks = 1;
-        recs[rec].resource = r->resource;
-        ++rec;
+        Counter *ctr = tick(myframe, c->def, r->size, 1);
+	acquire(ctr, r->resource, r->size);
       }
-    }
 
     // Adjust the peak counter if necessary.
     if (c->def->type == TICK && c->peak > c->value)
-    {
-      if (rec == MERGE_RECS)
-      {
-        dopush(callstack, depth, recs, rec);
-        rec = 0;
-      }
-
-      recs[rec].type = COUNT;
-      recs[rec].def = c->def;
-      recs[rec].amount = c->peak - c->value;
-      recs[rec].ticks = 0;
-      ++rec;
-    }
+      tick(myframe, c->def, c->peak - c->value, 0);
   }
-
-  if (rec)
-    dopush(callstack, depth, recs, rec);
 
   // Merge the children.
   for (frame = frame->children; frame; frame = frame->sibling)
   {
     ASSERT(depth < MAX_DEPTH);
     callstack[-1] = frame->address;
-    mergeFrom(depth+1, frame, &callstack[-1], recs);
+    mergeFrom(depth+1, frame, &callstack[-1]);
   }
 }
 

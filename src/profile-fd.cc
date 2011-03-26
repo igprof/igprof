@@ -42,9 +42,10 @@ static bool                     s_initialized   = false;
 static void __attribute__((noinline))
 add (int fd)
 {
-  IgProfTrace::Record entries [2];
   void *addresses[IgProfTrace::MAX_DEPTH];
   IgProfTrace *buf = igprof_buffer();
+  IgProfTrace::Stack *frame;
+  IgProfTrace::Counter *ctr;
   uint64_t tstart, tend;
   int depth;
 
@@ -55,20 +56,14 @@ add (int fd)
   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
 
-  entries[0].type = IgProfTrace::COUNT;
-  entries[0].def = &s_ct_used;
-  entries[0].amount = 1;
-  entries[0].ticks = 1;
-
-  entries[1].type = IgProfTrace::COUNT | IgProfTrace::ACQUIRE;
-  entries[1].def = &s_ct_live;
-  entries[1].amount = 1;
-  entries[1].ticks = 1;
-  entries[1].resource = fd;
-
-  // Drop two bottom frames, four top ones (stacktrace, me, two for hook).
-  buf->push(addresses+4, depth-4, entries, 2,
-	    IgProfTrace::statFrom(depth, tstart, tend));
+  // Drop four top stack frames (stacktrace, me, two for hook).
+  buf->lock();
+  frame = buf->push(addresses+4, depth-4);
+  buf->tick(frame, &s_ct_used, 1, 1);
+  ctr = buf->tick(frame, &s_ct_live, 1, 1);
+  buf->acquire(ctr, fd, 1);
+  buf->traceperf(depth, tstart, tend);
+  buf->unlock();
 }
 
 /** Remove knowledge about the file descriptor.  If we are tracking
@@ -81,10 +76,9 @@ remove (int fd)
   if (UNLIKELY(! buf))
     return;
 
-  IgProfTrace::PerfStat perf = { 0, 0, 0, 0, 0, 0, 0 };
-  IgProfTrace::Record entry
-    = { IgProfTrace::RELEASE, &s_ct_live, 0, 0, fd };
-  buf->push(0, 0, &entry, 1, perf);
+  buf->lock();
+  buf->release(fd, &s_ct_live);
+  buf->unlock();
 }
 
 // -------------------------------------------------------------------
