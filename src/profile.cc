@@ -2,6 +2,7 @@
 #include "profile-trace.h"
 #include "sym-cache.h"
 #include "atomic.h"
+#include "fastio.h"
 #include "hook.h"
 #include "walk-syms.h"
 #include <algorithm>
@@ -35,6 +36,11 @@ HIDDEN IgProfAtomic     s_igprof_enabled = 0;
 HIDDEN pthread_key_t    s_igprof_bufkey;
 HIDDEN pthread_key_t    s_igprof_flagkey;
 
+const char FastIO::DIGITS[16] = {
+  '0', '1', '2', '3', '4', '5', '6', '7',
+  '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+};
+
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
 struct HIDDEN IgProfWrappedArg
@@ -42,7 +48,7 @@ struct HIDDEN IgProfWrappedArg
 
 struct HIDDEN IgProfDumpInfo
 { int depth; int nsyms; int nlibs; int nctrs;
-  const char *tofile; FILE *output;
+  const char *tofile; FILE *output; FastIO io;
   IgProfSymCache *symcache; int blocksig;
   IgProfTrace::PerfStat perf; };
 
@@ -157,30 +163,46 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
   {
     IgProfSymCache::Symbol *sym = info.symcache->get(frame->address);
 
-    if (sym->id >= 0)
-      fprintf(info.output, "C%d FN%d+%ld", info.depth, sym->id, sym->symoffset);
+    if (LIKELY(sym->id >= 0))
+      info.io.put("C").put(info.depth)
+	     .put(" FN").put(sym->id)
+	     .put("+").put(sym->symoffset);
     else
     {
-      const char        *symname = sym->name;
-      char              symgen[32];
+      const char *symname = sym->name;
+      char       symgen[32];
+      size_t     symlen = 0;
 
       sym->id = info.nsyms++;
 
-      if (! symname || ! *symname)
+      if (UNLIKELY(! symname || ! *symname))
       {
-        sprintf(symgen, "@?%p", sym->address);
+        symlen = sprintf(symgen, "@?%p", sym->address);
         symname = symgen;
+	ASSERT(symlen <= sizeof(symgen));
       }
-
-      if (sym->binary->id >= 0)
-        fprintf(info.output, "C%d FN%d=(F%d+%ld N=(%s))+%ld",
-                info.depth, sym->id, sym->binary->id, sym->binoffset,
-                symname, sym->symoffset);
       else
-        fprintf(info.output, "C%d FN%d=(F%d=(%s)+%ld N=(%s))+%ld",
-                info.depth, sym->id, (sym->binary->id = info.nlibs++),
-                sym->binary->name ? sym->binary->name : "",
-                sym->binoffset, symname, sym->symoffset);
+	symlen = strlen(symname);
+
+      if (LIKELY(sym->binary->id >= 0))
+	info.io.put("C").put(info.depth)
+	       .put(" FN").put(sym->id)
+	       .put("=(F").put(sym->binary->id)
+	       .put("+").put(sym->binoffset)
+	       .put(" N=(").put(symname, symlen)
+	       .put("))+").put(sym->symoffset);
+      else
+      {
+	const char *binname = sym->binary->name ? sym->binary->name : "";
+	size_t binlen = strlen(binname);
+	info.io.put("C").put(info.depth)
+	       .put(" FN").put(sym->id)
+	       .put("=(F").put(sym->binary->id = info.nlibs++)
+	       .put("=(").put(binname, binlen)
+	       .put(")+").put(sym->binoffset)
+	       .put(" N=(").put(symname, symlen)
+	       .put("))+").put(sym->symoffset);
+      }
     }
 
     IgProfTrace::Counter **ctr = &frame->counters[0];
@@ -189,22 +211,27 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
       IgProfTrace::Counter *c = *ctr;
       if (c->ticks || c->peak)
       {
-        if (c->def->id >= 0)
-          __extension__
-	    fprintf(info.output, " V%d:(%ju,%ju,%ju)",
-		    c->def->id, c->ticks, c->value, c->peak);
+        if (LIKELY(c->def->id >= 0))
+	  info.io.put(" V").put(c->def->id)
+		 .put(":(").put(c->ticks)
+		 .put(",").put(c->value)
+		 .put(",").put(c->peak)
+		 .put(")");
         else
-          __extension__
-	    fprintf(info.output, " V%d=(%s):(%ju,%ju,%ju)",
-		    (c->def->id = info.nctrs++), c->def->name,
-		    c->ticks, c->value, c->peak);
+	  info.io.put(" V").put(c->def->id = info.nctrs++)
+		 .put("=(").put(c->def->name, strlen(c->def->name))
+		 .put("):(").put(c->ticks)
+		 .put(",").put(c->value)
+                 .put(",").put(c->peak)
+	         .put(")");
 
         for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
-          __extension__
-	    fprintf(info.output, ";LK=(%p,%ju)", (void *) res->hashslot->resource, res->size);
+	  info.io.put(";LK=(").put((void *) res->hashslot->resource)
+		 .put(",").put(res->size)
+		 .put(")");
       }
     }
-    fputc('\n', info.output);
+    info.io.put("\n");
   }
 
   info.depth++;
@@ -275,8 +302,14 @@ dumpAllProfiles(void *arg)
                  tofile, strerror(errno), errno);
   else
   {
-    fprintf(info->output, "P=(ID=%lu N=(%s) T=%f)\n",
-            (unsigned long) getpid(), program_invocation_name, s_clockres);
+    char clockres[32];
+    size_t clockreslen = sprintf(clockres, "%f", s_clockres);
+    size_t prognamelen = strlen(program_invocation_name);
+    info->io.attach(fileno(info->output));
+    info->io.put("P=(ID=").put(getpid())
+	    .put(" N=(").put(program_invocation_name, prognamelen)
+	    .put(") T=").put(clockres, clockreslen)
+	    .put(")\n");
 
     pthread_mutex_lock(&s_buflock);
     IgProfSymCache symcache;
@@ -299,6 +332,7 @@ dumpAllProfiles(void *arg)
     perf += s_masterbuf->perfStats();
     s_masterbuf->unlock();
 
+    info->io.flush();
     if (tofile[0] == '|')
       pclose(info->output);
     else
@@ -349,7 +383,7 @@ asyncDumpThread(void *)
     if (! (++dodump % 32) && ! stat(s_dumpflag, &st))
     {
       unlink(s_dumpflag);
-      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 1,
+      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, -1, 0, 1,
                               { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
       dodump = 0;
@@ -366,7 +400,7 @@ extern "C" VISIBLE void
 igprof_dump_now(const char *tofile)
 {
   pthread_t tid;
-  IgProfDumpInfo info = { 0, 0, 0, 0, tofile, 0, 0, 1,
+  IgProfDumpInfo info = { 0, 0, 0, 0, tofile, 0, -1, 0, 1,
                           { 0, 0, 0, 0, 0, 0, 0 } };
   pthread_create(&tid, 0, &dumpAllProfiles, &info);
   pthread_join(tid, 0);
@@ -391,7 +425,7 @@ exitDump(void *)
   setitimer(ITIMER_REAL, &stopped, 0);
 
   // Dump all buffers.
-  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
+  IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, -1, 0, 0,
                           { 0, 0, 0, 0, 0, 0, 0 } };
   dumpAllProfiles(&info);
   igprof_debug("igprof quitting\n");
@@ -723,7 +757,7 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
     {
       igprof_disable_globally();
       igprof_debug("kill(%d,%d) called, dumping state\n", (int) pid, sig);
-      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, 0, 0,
+      IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, -1, 0, 0,
                               { 0, 0, 0, 0, 0, 0, 0 } };
       dumpAllProfiles(&info);
       igprof_enable_globally();
