@@ -9,7 +9,6 @@ usage() {
   echo -e "-o, --output FILE          \toutput to FILE, or pipe if starts with '|'"
   echo -e "-z, --compress             \tcompress output file"
   echo -e "-d, --debug                \tenable more details from profiler"
-  echo -e "-f, --full                 \tstart all the profilers"
   echo -e "-t, --target STR           \tonly profile programs with STR in their names"
   echo -e "-D, --dump-flag FILE       \tuse FILE as a hint to dump the profile data"
   echo -e "-T, --tmpdir DIR           \tuse DIR for temporary profile data files"
@@ -19,7 +18,6 @@ usage() {
   echo -e "-pr, --real-time           \tmeasure real time in performance profiler"
   echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
-  echo -e "-cl, --check-leaks         \tenable leak tracking in activated profilers"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
 }
 
@@ -51,12 +49,8 @@ while [ "$#" != 0 ]; do
     -d | --debug )
       export IGPROF_DEBUGGING=1; shift ;;
 
-    -f | --full )
-      MEM="mem" FD="fd" PERF="perf" ALL=":all"; shift ;;
-
     -mp | --memory-profiler )
-      [ -z "$MEM" ] && MEM=mem
-      MEM="$MEM:total:largest:live"; shift;;
+      [ -z "$MEM" ] && MEM=mem; shift ;;
 
     -mo | --memory-overhead )
       [ -z "$MEM" ] && MEM=mem
@@ -69,8 +63,7 @@ while [ "$#" != 0 ]; do
       esac ;;
 
     -fd | --file-descriptor )
-      [ -z "$FD" ] && FD=fd
-      FD="$FD:used:live"; shift ;;
+      [ -z "$FD" ] && FD=fd; shift ;;
 
     -pp | --performance-profiler )
       PERF="perf"; shift ;;
@@ -78,9 +71,6 @@ while [ "$#" != 0 ]; do
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:real"; shift ;;
     -pu | --user-time )
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:user"; shift ;;
-
-    -cl | --check-leaks )
-      ALL="$ALL:leaks"; shift ;;
 
     -- )
       shift; break ;;
