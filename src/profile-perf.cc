@@ -57,9 +57,11 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
       RDTSC(tend);
 
       // Drop three top stackframes (stacktrace, me, signal frame).
+      buf->lock();
       frame = buf->push(addresses+3, depth-3);
       buf->tick(frame, &s_ct_ticks, 1, 1);
       buf->traceperf(depth, tstart, tend);
+      buf->unlock();
     }
   }
   igprof_enable();
