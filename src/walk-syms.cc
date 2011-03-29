@@ -80,7 +80,6 @@ IgHookTrace::stacktrace(void **addresses, int nmax)
   //     http://lkml.indiana.edu/hypermail/linux/kernel/0605.2/0016.html
   //
 # define PROBABLY_VSYSCALL_PAGE 0xffffe000
-HERE:
   struct frame
   {
     // Normal frame.
@@ -96,10 +95,6 @@ HERE:
   frame             *fp = ebp;
   frame             *first = fp;
   int               depth = 0;
-
-  // Add fake entry to be compatible with other methods
-  if (depth < nmax)
-    addresses[depth++] = __extension__ &&HERE;
 
   // Top-most frame ends with null pointer; check the rest is reasonable
   while (depth < nmax && fp >= esp && fp->eip)
@@ -207,10 +202,6 @@ HERE:
   frame               *fp = sp;
   char                *entry = lr;
   int                 depth = 0;
-
-  // Add fake entry to be compatible with other methods
-  if (depth < nmax)
-    addresses[depth++] = (void *) &IgHookTrace::stacktrace;
 
   while (depth < nmax && entry)
   {

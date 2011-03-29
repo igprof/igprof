@@ -54,7 +54,7 @@ ADD_LIBRARY(igprof SHARED
             src/trace-mmap.cc
             src/trace-throw.cc)
 #SET_TARGET_PROPERTIES(igprof PROPERTIES LINK_FLAGS -Wl,-z,nodefs)
-TARGET_LINK_LIBRARIES(igprof ${IGPROF_LIBS} ${UNWIND_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(igprof ${UNWIND_LIBRARY} ${IGPROF_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 ADD_EXECUTABLE(igprof-analyse src/analyse.cc)
 TARGET_LINK_LIBRARIES(igprof-analyse ${CMAKE_DL_LIBS})
 INSTALL(TARGETS igprof igprof-analyse

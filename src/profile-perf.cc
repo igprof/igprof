@@ -56,9 +56,9 @@ profileSignalHandler(int /* nsig */, siginfo_t * /* info */, void * /* ctx */)
       depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
       RDTSC(tend);
 
-      // Drop three top stackframes (stacktrace, me, signal frame).
+      // Drop top two stackframes (me, signal frame).
       buf->lock();
-      frame = buf->push(addresses+3, depth-3);
+      frame = buf->push(addresses+2, depth-2);
       buf->tick(frame, &s_ct_ticks, 1, 1);
       buf->traceperf(depth, tstart, tend);
       buf->unlock();
@@ -287,10 +287,11 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
 
       RDTSC(tstart);
       depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-      if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
       RDTSC(tend);
 
-      frame = buf->push(addresses+1, depth-1);
+      // Replace top stack frame (this hook) with the original.
+      if (depth > 0) addresses[0] = __extension__ (void *) hook.original;
+      frame = buf->push(addresses, depth);
       buf->tick(frame, &s_ct_ticks, 1, nticks);
       buf->traceperf(depth, tstart, tend);
     }
@@ -341,10 +342,11 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
 
     RDTSC(tstart);
     depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-    if (depth > 1) addresses[1] = __extension__ (void *) hook.original;
     RDTSC(tend);
 
-    frame = buf->push(addresses+1, depth-1);
+    // Replace top stack frame (this hook) with the original.
+    if (depth > 0) addresses[0] = __extension__ (void *) hook.original;
+    frame = buf->push(addresses, depth);
     buf->tick(frame, &s_ct_ticks, 1, nticks);
     buf->traceperf(depth, tstart, tend);
   }

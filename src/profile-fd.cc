@@ -56,9 +56,9 @@ add (int fd)
   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
 
-  // Drop four top stack frames (stacktrace, me, two for hook).
+  // Drop top two stack frames (me, hook).
   buf->lock();
-  frame = buf->push(addresses+4, depth-4);
+  frame = buf->push(addresses+2, depth-2);
   buf->tick(frame, &s_ct_used, 1, 1);
   ctr = buf->tick(frame, &s_ct_live, 1, 1);
   buf->acquire(ctr, fd, 1);
