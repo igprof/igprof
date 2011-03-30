@@ -9,7 +9,6 @@
 class HIDDEN FastIO
 {
   static const size_t SIZE = 64*1024;
-  static const char DIGITS[16];
   int fd_;
   size_t pos_;
   char buf_[SIZE];
@@ -117,9 +116,9 @@ public:
       do
       {
 	ASSERT(n < sizeof(buf));
-	long long quot = val / 10;
-	long long rem = val % 10;
-        buf[n++] = DIGITS[rem];
+	long long quot = val >> 4;
+	unsigned char rem = val & 0xf;
+        buf[n++] = (rem >= 10 ? 'a' + rem - 10 : '0' + rem);
 	val = quot;
       } while (val != 0);
     }
@@ -154,9 +153,9 @@ public:
       do
       {
 	ASSERT(n < sizeof(buf));
-	unsigned long long quot = val / 10;
-	unsigned long long rem = val % 10;
-        buf[n++] = DIGITS[rem];
+	unsigned long long quot = val >> 4;
+	unsigned char rem = val & 0xf;
+        buf[n++] = (rem >= 10 ? 'a' + rem - 10 : '0' + rem);
 	val = quot;
       } while (val != 0);
     }
@@ -178,8 +177,8 @@ public:
       {
 	ASSERT(n < sizeof(buf));
 	unsigned long long quot = val >> 4;
-	unsigned long long rem = val & 0xf;
-        buf[n++] = DIGITS[rem];
+	unsigned char rem = val & 0xf;
+        buf[n++] = (rem >= 10 ? 'a' + rem - 10 : '0' + rem);
 	val = quot;
       } while (val != 0);
     }

@@ -2469,6 +2469,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
   ProfileInfo::Nodes      &nodes = prof->nodes();
 
+  int base = 10;
   bool isPipe = false;
   FILE *inFile = openDump(filename.c_str(), isPipe);
   IgTokenizer t(inFile, filename.c_str());
@@ -2476,7 +2477,13 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
   // Parse the header line, which has form:
   // ^P=\(ID=[0-9]* N=\(.*\) T=[0-9]+.[0-9]*\)
-  t.skipString("P=(ID=");
+  t.skipString("P=(");
+  if (t.nextChar() == 'H')
+  {
+    base = 16;
+    t.skipString("HEX ");
+  }
+  t.skipString("ID=");
   t.getToken(" ");
   t.skipString(" N=(");
   t.getToken(")");
@@ -2510,7 +2517,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     // Determine node stack level matching "^C\d+ ".
     t.skipChar('C');
 
-    int64_t newPosition = t.getTokenN(' ', 10) - 1;
+    int64_t newPosition = t.getTokenN(' ', base) - 1;
 
     if (newPosition < 0)
       t.syntaxError();
@@ -2530,7 +2537,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
     // Match either a function reference "FN[0-9]" followed by = or +.
     t.skipString("FN", 2);
-    int64_t symid = t.getTokenN("+=", 10);
+    int64_t symid = t.getTokenN("+=", base);
 
     // If this is previously unseen symbol, parse full definition.
     // Otherwise look up the previously recorded symbol object.
@@ -2542,7 +2549,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
       t.skipString("=(F");
       FileInfo *fileinfo = 0;
       std::string symname;
-      size_t fileId = t.getTokenN("+=", 10);
+      size_t fileId = t.getTokenN("+=", base);
 
       // If we are looking at a new file definition, get file name.
       // Otherwise retrieve the previously recorded file object.
@@ -2557,7 +2564,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
       // Get the file offset.
       t.skipChar('+');
-      int64_t fileoff = t.getTokenN(' ', 10);
+      int64_t fileoff = t.getTokenN(' ', base);
 
       // Read the symbol name and offset.
       t.skipString("N=(", 3);
@@ -2576,7 +2583,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
     // Skip unused symbol offset.
     t.skipChar('+');
-    t.getTokenN(" \n");
+    t.getTokenN(" \n", base);
 
     // Process this stack node.
     NodeInfo *parent = nodestack.empty() ? prof->spontaneous() : nodestack.back();
@@ -2600,7 +2607,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
     while (t.nextChar() != '\n')
     {
       t.skipString(" V", 2);
-      size_t ctrId = t.getTokenN(":=", 10);
+      size_t ctrId = t.getTokenN(":=", base);
 
       // Check if we are defining a new counter and possibly register it,
       // if it is of the kind we are interested in.
@@ -2623,9 +2630,9 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
       // Get the counter counts.
       t.skipString(":(", 2);
-      int64_t ctrfreq = t.getTokenN(',');
-      int64_t ctrvalNormal = t.getTokenN(',');
-      int64_t ctrvalPeak = t.getTokenN(')');
+      int64_t ctrfreq = t.getTokenN(',', base);
+      int64_t ctrvalNormal = t.getTokenN(',', base);
+      int64_t ctrvalPeak = t.getTokenN(')', base);
 
       // Record if we are interested in something related to this counter.
       if (keys[ctrId])
@@ -2649,7 +2656,7 @@ IgProfAnalyzerApplication::readDump(ProfileInfo *prof,
 
         // Get the leak address and size.
         int64_t leakAddress = t.getTokenN(',', 16);
-        int64_t leakSize = t.getTokenN(')', 10);
+        int64_t leakSize = t.getTokenN(')', base);
 
         // In the case we specify one of the --show-pages --show-page-ranges
         // or --show-locality-metrics options, we keep track

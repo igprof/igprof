@@ -36,11 +36,6 @@ HIDDEN IgProfAtomic     s_igprof_enabled = 0;
 HIDDEN pthread_key_t    s_igprof_bufkey;
 HIDDEN pthread_key_t    s_igprof_flagkey;
 
-const char FastIO::DIGITS[16] = {
-  '0', '1', '2', '3', '4', '5', '6', '7',
-  '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-};
-
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
 struct HIDDEN IgProfWrappedArg
@@ -306,7 +301,7 @@ dumpAllProfiles(void *arg)
     size_t clockreslen = sprintf(clockres, "%f", s_clockres);
     size_t prognamelen = strlen(program_invocation_name);
     info->io.attach(fileno(info->output));
-    info->io.put("P=(ID=").put(getpid())
+    info->io.put("P=(HEX ID=").put(getpid())
 	    .put(" N=(").put(program_invocation_name, prognamelen)
 	    .put(") T=").put(clockres, clockreslen)
 	    .put(")\n");
