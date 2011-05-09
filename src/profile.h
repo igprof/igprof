@@ -54,7 +54,7 @@ HIDDEN inline bool
 igprof_enable(void)
 {
   IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_igprof_flagkey);
-  return IgProfAtomicInc(flag) > 0 && s_igprof_enabled > 0;
+  return LIKELY(flag) && IgProfAtomicInc(flag) > 0 && s_igprof_enabled > 0;
 }
 
 /** Disable the profiler in this thread. Safe to call from anywhere.
@@ -63,7 +63,7 @@ HIDDEN inline bool
 igprof_disable(void)
 {
   IgProfAtomic *flag = (IgProfAtomic *) pthread_getspecific(s_igprof_flagkey);
-  return IgProfAtomicDec(flag) >= 0 && s_igprof_enabled > 0;
+  return LIKELY(flag) && IgProfAtomicDec(flag) >= 0 && s_igprof_enabled > 0;
 }
 
 #endif // PROFILE_H
