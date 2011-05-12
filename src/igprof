@@ -18,12 +18,13 @@ usage() {
   echo -e "-pr, --real-time           \tmeasure real time in performance profiler"
   echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
+  echo -e "-fn, --function-profile X  \tprofile cpu cycles spent in function X"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
 }
 
 append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
 
-SORT= MEM= FD= PERF= ALL= OUT= OUTZ=false OPTS=
+SORT= MEM= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS=
 while [ "$#" != 0 ]; do
   case "$1" in
     -h | --help )
@@ -72,6 +73,10 @@ while [ "$#" != 0 ]; do
     -pu | --user-time )
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:user"; shift ;;
 
+    # FIXME: For the time being only "free" and "malloc" supported by igprof.
+    -fp | --function-profile )
+      [ -z "$FUNC" ] && FUNC="func"; FUNC="$FUNC:name=$2"; shift; shift ;;
+
     -- )
       shift; break ;;
 
@@ -85,7 +90,7 @@ while [ "$#" != 0 ]; do
   esac
 done
 
-[ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X ] && PERF=perf
+[ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X ] && PERF=perf
 
 if $OUTZ; then
   [ X"$OUT" = X ] && OUT="igprof.$$.gz"
@@ -103,7 +108,8 @@ fi
 [ X"$MEM" = X ]   || append IGPROF "$MEM"
 [ X"$FD" = X ]    || append IGPROF "$FD"
 [ X"$PERF" = X ]  || append IGPROF "$PERF"
-
+[ X"$FUNC" = X ]  || append IGPROF "$FUNC"
+echo $IGPROF
 case $(uname) in
   Darwin )
     # DYLD_INSERT_LIBRARIES=$LOCALRT/lib/`scramv1 arch`/libIgProf.dylib
