@@ -109,7 +109,7 @@ fi
 [ X"$FD" = X ]    || append IGPROF "$FD"
 [ X"$PERF" = X ]  || append IGPROF "$PERF"
 [ X"$FUNC" = X ]  || append IGPROF "$FUNC"
-echo $IGPROF
+
 case $(uname) in
   Darwin )
     # DYLD_INSERT_LIBRARIES=$LOCALRT/lib/`scramv1 arch`/libIgProf.dylib
