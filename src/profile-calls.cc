@@ -137,7 +137,9 @@ initialize(void)
 
 #if __linux
   if (trace_free)
+  {
     if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
+  }
   else
   {
     if (domalloc_hook_main.raw.chain)    IgHook::hook(domalloc_hook_libc.raw);
