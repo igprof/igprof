@@ -70,6 +70,7 @@ INSTALL(FILES
         src/igprof-segment
         src/igprof-symbol-sizes
         src/igprof
+        src/igpython-analyse
         src/igtrace
         src/igtrace-mmap-analysis
         src/igtrace-mmap-summary
