@@ -90,30 +90,6 @@ def decodeNum(s):
   return sum((alphabetEnum[j] * (alphabetSize ** (ls - i - 1)))
              for (i, j) in enumerate(s))
 
-# @return a tuple (static, type, cache period) or None depending on whether
-# @a what is a known static file or not.
-def isStatic(what):
-  what = what.strip("/")
-  if not what:
-    what = "igprof-book.html"
-  staticHTML = ["igprof-book.html"]
-  staticJS = ["jquery.tablesorter.min.js", "jquery.ba-hashchange.min.js",
-              "jquery.jqplot.min.css", "protovis-r3.2.js",
-              "jquery.tipsy.js", "jquery-1.4.4.min.js"]
-  staticCSS = ["tipsy.css"]
-  # First check if we match one of the files requested.
-  if what in staticHTML:
-    return (what, "text/html", 0)
-  if what in staticJS:
-    return (what, "application/javascript", 3600)
-  if what in staticCSS:
-    return (what, "text/css", 3600)
-  return None
-
-# Helper to write a given static to stream @a out.
-def serveStatic(what, out):
-  out.write(file(join(dirname(__file__), what)).read())
-
 # This methods is the main logic for constructing the web page.
 # rank can either be the rank of a method
 #
@@ -272,16 +248,10 @@ class SimpleServerHandler(BaseHTTPRequestHandler):
       parts = urlparse(self.path)
       what = parts[2].strip("/")
       if not what:
-        what = ""
-      staticInfo = isStatic(what)
-      if staticInfo:
-        filename, static_type, cachable = staticInfo
         self.send_response(200)
-        self.send_header('Content-type', static_type)
-        if cachable:
-          self.send_header("Cache-Control", "max-age=%s" % cachable)
+        self.send_header('Content-type', "text/html")
         self.end_headers()
-        serveStatic(filename, self.wfile)
+        self.wfile.write(__DATA__)
         return
       buf = StringIO.StringIO()
       error = buildReply(parts[2], self.__class__.database, buf)
@@ -369,16 +339,11 @@ def cgiReply():
     sys.stdout.write("Content-Type: text/html\n\n")
     sys.stdout.write("Error while opening database.")
     sys.exit(0)
-  staticInfo = isStatic(relPath)
-  if staticInfo:
-    filename, static_type, cachable = staticInfo
-    sys.stdout.write("Content-Type: %s\n" % static_type)
-    if cachable:
-      sys.stdout.write("Cache-Control: %s\n" % cachable)
-    sys.stdout.write("\n")
-    serveStatic(filename, sys.stdout)
-    sys.stdout.write("\n")
+  if not relPath:
+    sys.stdout.write("Content-type: text/html\n\n")
+    sys.stdout.write(__DATA__)
     exit(0)
+
   sys.stdout.write("Content-Type: text/html\n\n")
   buildReply(relPath, db, sys.stdout)
   sys.stdout.write("\n")

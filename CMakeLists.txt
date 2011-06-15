@@ -37,6 +37,22 @@ IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES 64)
   FIND_LIBRARY(UNWIND_LIBRARY NAMES unwind)
 ENDIF()
 
+# Build web page
+FIND_PATH(PROTOVIS_ROOT protovis-r3.2.js)
+FIND_PATH(JQUERY_ROOT jquery-1.4.4.min.js)
+FIND_PATH(JQUERY_BA_HASHCHANGE_ROOT jquery.ba-hashchange.min.js)
+IF(JQUERY_BA_HASHCHANGE_ROOT AND JQUERY_ROOT AND PROTOVIS_ROOT)
+ADD_CUSTOM_TARGET(igprof-book ALL
+                  COMMAND src/igprof-book-build
+                            --js-path ${JQUERY_ROOT}:${PROTOVIS_ROOT}:${JQUERY_BA_HASHCHANGE_ROOT}
+                            src/igprof-book.html
+                            --driver src/igprof-book.in > igprof-book
+                  DEPENDS src/igprof-book.html src/igprof-book src/igprof-book.js)
+INSTALL(FILES igprof-book
+        DESTINATION bin
+        PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+ENDIF()
+
 # Build targets.
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR} ${UNWIND_INCLUDE_DIR})
 ADD_LIBRARY(igprof SHARED
@@ -68,6 +84,7 @@ INSTALL(FILES
         src/igprof-navigator
         src/igprof-navigator-summary
         src/igprof-segment
+        src/igprof-populator
         src/igprof-symbol-sizes
         src/igprof
         src/igpython-analyse
