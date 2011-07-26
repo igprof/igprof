@@ -69,12 +69,12 @@ INSERT_MAINROWS_QUERY="""INSERT INTO mainrows(id, symbol_id, self_count,
                          self_calls, total_calls, self_paths, total_paths, pct)
                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
 INSERT_CHILDREN_QUERY="""INSERT INTO children(self_id, parent_id,
-                         from_parent_count, from_parent_calls, from_parent_paths)
-                         VALUES(%s, %s, %s, %s, %s);"""
+                         from_parent_count, from_parent_calls, from_parent_paths, pct)
+                         VALUES(%s, %s, %s, %s, %s, 0);"""
 INSERT_PARENTS_QUERY="""INSERT INTO parents(self_id, child_id,
                                             to_child_count, to_child_calls,
-                                            to_child_paths)
-                         VALUES(%s, %s, %s, %s, %s);"""
+                                            to_child_paths, pct)
+                         VALUES(%s, %s, %s, %s, %s, 0);"""
 INSERT_FILES_QUERY="""INSERT INTO files(id, name)
                       VALUES(%s, "%s");"""
 INSERT_SYMBOLS_QUERY="""INSERT INTO symbols(id, name, filename_id)
@@ -86,7 +86,7 @@ INSERT_SUMMARY_TABLE = """INSERT INTO summary (counter, total_count,
 TICK_PERIOD = 10000
 
 def node_symbol(node):
-  return node[2] + ":" + node[0] + ":" + str(node[1])
+  return node[2] + " (" + re.sub(".*/", "", node[0]) + ":" + str(node[1]) + ")"
 
 if __name__ == "__main__":
   parser = OptionParser()
