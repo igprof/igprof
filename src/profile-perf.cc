@@ -269,8 +269,8 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
 
   // Now calculate how much time we spent doing the fork, and blame
   // the actual system call for it, drop this frame out of stack.
-  // Only do this in the parent; in child the timer is disabled.
-  if (ret > 0)
+  // Assign costs to the parent, but re-enable timer also in child.
+  if (ret >= 0)
   {
     getitimer(s_itimer, &left);
     setitimer(s_itimer, &orig, 0);
@@ -278,6 +278,10 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     ival = tv2sec(fast.it_interval);
     dt += tv2sec(slow.it_value) - tv2sec(left.it_value);
     nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
+
+    if (ret == 0)
+      dt = nticks = 0;
+
     if (enabled && nticks && (buf = igprof_buffer()))
     {
       void *addresses[IgProfTrace::MAX_DEPTH];
@@ -295,8 +299,10 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
       buf->tick(frame, &s_ct_ticks, 1, nticks);
       buf->traceperf(depth, tstart, tend);
     }
-    igprof_debug("resuming profiling after blinking for fork() for"
-		 " %.3fms, %d ticks\n", dt*1000, nticks);
+
+    if (ret != 0)
+      igprof_debug("resuming profiling after blinking for fork() for"
+		   " %.3fms, %d ticks\n", dt*1000, nticks);
   }
 
   igprof_enable();
