@@ -17,6 +17,7 @@ usage() {
   echo -e "-pp, --performance-profiler\tstart the performance profile (default)"
   echo -e "-pr, --real-time           \tmeasure real time in performance profiler"
   echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
+  echo -e "-pk, --keep-on-fork        \tdo not reset performance profile in fork child"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
   echo -e "-fn, --function-profile X  \tprofile cpu cycles spent in function X"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
@@ -72,6 +73,8 @@ while [ "$#" != 0 ]; do
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:real"; shift ;;
     -pu | --user-time )
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:user"; shift ;;
+    -pk | --keep-on-fork )
+      [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:keep"; shift ;;
 
     # FIXME: For the time being only "free" and "malloc" supported by igprof.
     -fp | --function-profile )

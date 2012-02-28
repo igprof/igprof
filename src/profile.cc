@@ -591,6 +591,27 @@ igprof_options(void)
   return s_options;
 }
 
+/** Reset all current profile buffers. */
+void
+igprof_reset_profiles(void)
+{
+  pthread_mutex_lock(&s_buflock);
+  std::set<IgProfTrace *>::iterator i, e;
+  std::set<IgProfTrace *> &bufs = allTraceBuffers();
+  for (i = bufs.begin(), e = bufs.end(); i != e; ++i)
+  {
+    IgProfTrace *buf = *i;
+    buf->lock();
+    buf->reset();
+    buf->unlock();
+  }
+
+  s_masterbuf->lock();
+  s_masterbuf->reset();
+  s_masterbuf->unlock();
+  pthread_mutex_unlock(&s_buflock);
+}
+
 /** Internal assertion helper routine.  */
 int
 igprof_panic(const char *file, int line, const char *func, const char *expr)

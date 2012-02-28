@@ -27,6 +27,7 @@ LIBHOOK(3, int, dosigaction, _main,
 // Data for this profiler module
 static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
 static bool                     s_initialized   = false;
+static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;
 static int                      s_itimer        = ITIMER_PROF;
 
@@ -141,6 +142,11 @@ initialize(void)
           s_signal = SIGPROF;
           s_itimer = ITIMER_PROF;
           options += 7;
+        }
+        else if (! strncmp(options, ":keep", 5))
+        {
+          s_keep = true;
+          options += 5;
         }
         else
           break;
@@ -270,6 +276,7 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
   // Now calculate how much time we spent doing the fork, and blame
   // the actual system call for it, drop this frame out of stack.
   // Assign costs to the parent, but re-enable timer also in child.
+  // Normally we reset profiles in child, but allow an override.
   if (ret >= 0)
   {
     getitimer(s_itimer, &left);
@@ -280,7 +287,11 @@ dofork(IgHook::SafeData<igprof_dofork_t> &hook)
     nticks = (ival > 0 ? int(dt / ival + 0.5) : 0);
 
     if (ret == 0)
+    {
       dt = nticks = 0;
+      if (! s_keep)
+        igprof_reset_profiles();
+    }
 
     if (enabled && nticks && (buf = igprof_buffer()))
     {

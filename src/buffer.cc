@@ -16,6 +16,17 @@ IgProfBuffer::IgProfBuffer(void)
     freestart_(0),
     freeend_(0)
 {
+  initPool();
+}
+
+IgProfBuffer::~IgProfBuffer(void)
+{
+  freePools();
+}
+
+void
+IgProfBuffer::initPool(void)
+{
   // Get the first pool and initialise the chain pointer to null.
   void *pool = allocateRaw(MEM_POOL_SIZE);
   poolfirst_ = poolcur_ = (void **) pool;
@@ -26,7 +37,8 @@ IgProfBuffer::IgProfBuffer(void)
   freeend_ = (char *) pool + MEM_POOL_SIZE;
 }
 
-IgProfBuffer::~IgProfBuffer(void)
+void
+IgProfBuffer::freePools(void)
 {
   void **p = poolfirst_;
   while (p)

@@ -17,6 +17,7 @@ extern char *           (*igprof_getenv) (const char *);
 extern int              (*igprof_unsetenv) (const char *);
 
 HIDDEN const char *igprof_options(void);
+HIDDEN void igprof_reset_profiles(void);
 HIDDEN void igprof_debug(const char *format, ...);
 HIDDEN int igprof_panic(const char *file, int line, const char *func, const char *expr);
 HIDDEN bool igprof_init(const char *id, void (*threadinit)(void),

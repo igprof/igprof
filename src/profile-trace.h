@@ -192,6 +192,7 @@ public:
   IgProfTrace(void);
   ~IgProfTrace(void);
 
+  void			reset(void);
   void                  lock(void);
   Stack *               push(void **stack, int depth);
   Counter *             tick(Stack *frame, CounterDef *def, Value amount, Value ticks);

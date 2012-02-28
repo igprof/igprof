@@ -49,6 +49,29 @@ IgProfTrace::~IgProfTrace(void)
 }
 
 void
+IgProfTrace::reset(void)
+{
+  // Free all pools, then create a new one.
+  freePools();
+  initPool();
+
+  // Reset member variables back to initial values. Keep restable but reset it.
+  memset(restable_, 0, (1u << hashLogSize_)*sizeof(HResource));
+  callcache_ = (StackCache *) allocateSpace(MAX_DEPTH*sizeof(StackCache));
+  stack_ = allocate<Stack>();
+  hashUsed_ = 0;
+  resfree_ = 0;
+
+  perfStats_.ntraces   = 0;
+  perfStats_.sumDepth  = 0;
+  perfStats_.sum2Depth = 0;
+  perfStats_.sumTicks  = 0;
+  perfStats_.sum2Ticks = 0;
+  perfStats_.sumTPerD  = 0;
+  perfStats_.sum2TPerD = 0;
+}
+
+void
 IgProfTrace::expandResourceHash(void)
 {
   HResource *newTable;

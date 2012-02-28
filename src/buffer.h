@@ -14,6 +14,8 @@ protected:
   ~IgProfBuffer(void);
 
 protected:
+  void initPool(void);
+  void freePools(void);
   void unallocateRaw(void *p, size_t size);
   void *allocateRaw(size_t size);
   void *allocateSpace(size_t amount)
