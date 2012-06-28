@@ -3,7 +3,7 @@ title: IgProf, The Ignominous Profiler
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
+ - { name: Downloads, link: https://github.com/ktf/igprof/tags }
  - { name: Bugs, link: https://github.com/ktf/igprof/issues }
  - { name: Project, link: https://github.com/ktf/igprof }
 ---
