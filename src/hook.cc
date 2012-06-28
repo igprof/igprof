@@ -38,6 +38,13 @@
 # define dlvsym(h,fn,v) dlsym(h,fn)
 #endif
 
+//struct modRM to help finding out lenght of instruction
+struct modRM {
+  int mod;
+  int reg;
+  int rm;
+} modRMbyte;
+
 /** Allocate a trampoline area into @a ptr.  Returns error code on
     failure, success otherwise.  The memory is allocated into an
     address suitable for single-instruction branches (see @c direct
@@ -250,16 +257,76 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
 
   return IgHook::Success;
 }
+/*
+ *  Functions evalModRM() calls this function.
+ *  Function assigns mod,reg and rm into modRMbyte which is
+ *  modRM struct type.
+ */
+void getModRM(int byte)
+{
+  modRMbyte.mod = byte >> 6;      // |x|x|*|*|*|*|*|*|
+  modRMbyte.rm = byte & (~0xF8);  // |*|*|x|x|x|*|*|*|
+  modRMbyte.reg = byte & (~0xC0);     // |*|*|*|*|*|x|x|x|
+  modRMbyte.reg = modRMbyte.reg >> 3;
+}
+/*
+ * Function to help evaluate instruction lenght. Parse function calls this when modRM
+ * byte is part of instruction. Returns lenght of instruction
+ */
+int evalModRM(int byte)
+{
+  int n = 0;
+  
+  getModRM(byte);
+  //mod 00 and rm == 5
+  if(modRMbyte.mod == 0 && modRMbyte.rm == 5) //opcode, modRM,rip + 32bit
+    n = 6;  //caller handles patching
+  //mod 00  
+  else if(modRMbyte.mod == 0)
+  {
+    if(modRMbyte.rm != 4) // no SIB
+      n = 2;  //opcode, modRM
+    else
+      n = 3; //opcode, modRM, SIB 
+  }
+  //Mod == 01
+  else if(modRMbyte.mod == 1)
+  {
+    if(modRMbyte.rm != 4) // no SIB
+      n = 3;  // opcode, modRM, 1byte
+    else
+      n = 4; // opcode, modRM, SIB, 1byte
+  }
+  //Mod == 10
+  else if(modRMbyte.mod == 2)
+  {
+    if(modRMbyte.rm != 4)
+      n = 6; //opcode,modRM,4bytes
+    else
+      n = 7; //opcode, modRM, SIB, 4bytes
+  }
+  //Mod == 11
+  else
+    n = 2;  //opcode, modRM
+
+  return n;
+}
 
 /** Parse function prologue at @a address.  Returns the number of
     instructions understood that need to be moved out to insert a jump
     to the trampoline, or -1 if a sufficiently long safe sequence was
-    not found.  */
+    not found.  
+
+    Other prefixes but rex prefixes(4*), opcodes 0F group, 6C-6F, 8C, 8E, 98-9F,
+    A0-A7, AA-AF, C2-C5, D6-DF, E0-E3,EC-EF,F0-FD are not supported.
+    Group FF is partly supported
+*/
+
 static int
 parse(const char *func, void *address, unsigned *patches)
 {
   int n = 0;
-
+  int temp = 0;
 #if __i386__
   unsigned char *insns = (unsigned char *) address;
   if (insns[0] == 0xe9)
@@ -313,6 +380,7 @@ parse(const char *func, void *address, unsigned *patches)
   }
 #elif __x86_64__
   unsigned char *insns = (unsigned char *) address;
+  bool rex = false;
   if (insns[0] == 0xe9)
   {
     unsigned long target = (unsigned long) insns + *(int *)(insns+1) + 5;
@@ -329,74 +397,173 @@ parse(const char *func, void *address, unsigned *patches)
 
   while (n < 5)
   {
-    if (insns[0] == 0xf && insns[1] == 0x5)         /* syscall */
+    if(insns[0] >= 0x40 && insns[0] <= 0x4f)
+    {
+      insns += 1;
+      n += 1;
+      rex = true;
+    }
+    
+    //one byte instructions
+    if((insns[0] >= 0x50 && insns[0] <= 0x5f) ||
+       (insns[0] >= 0x90 && insns[0] <= 0x97))
+    {
+      ++insns, ++n;
+    }
+    //opcode + one byte
+    else if((insns[0] >= 0xb0 && insns[0] <= 0xb7)||
+            (insns[0] >= 0xd0 && insns[0] <= 0xd3)||
+    	    (insns[0] >= 0xe4 && insns[0] <= 0xe7)||
+             insns[0] == 0x04 || insns[0] == 0x14 ||
+             insns[0] == 0x24 || insns[0] == 0x34 ||
+             insns[0] == 0x0c || insns[0] == 0x1c ||
+             insns[0] == 0x2c || insns[0] == 0x3c ||
+             insns[0] == 0xa1 || insns[0] == 0xa8 ||
+             insns[0] == 0x6a )
+    {
+      insns += 2, n += 2;
+    }
+    //opcode + 4 bytes
+    else if((insns[0] >= 0xb8 && insns[0] <= 0xbf)||
+             insns[0] == 0x05 || insns[0] == 0x15 ||
+             insns[0] == 0x25 || insns[0] == 0x35 ||
+             insns[0] == 0x0d || insns[0] == 0x1d ||
+             insns[0] == 0x2d || insns[0] == 0x3d ||
+             insns[0] == 0xa9 || insns[0] == 0x68 )
+    {
+      insns += 5, n += 5;
+    }
+    //jmp /call 4bytes offset
+    else if(insns[0] == 0xe8 || insns[0] == 0xe9 )
+    {
+      if(rex)
+        *patches++ = 0x600 + n+1, n += 5, insns += 5; //rex, opcode, 4byte displacement
+      else
+        *patches++ = 0x500 + n+1, n += 5, insns += 5; //opcode, 4byte displacement
+    }
+    // opcode + modRM (no immediate)
+    else if((insns[0] <= 0x03) ||
+            (insns[0] >= 0x08 && insns[0] <= 0x0b) ||
+            (insns[0] >= 0x10 && insns[0] <= 0x13) ||
+            (insns[0] >= 0x18 && insns[0] <= 0x1b) ||
+            (insns[0] >= 0x20 && insns[0] <= 0x23) ||
+            (insns[0] >= 0x28 && insns[0] <= 0x2b) ||
+            (insns[0] >= 0x30 && insns[0] <= 0x33) ||
+            (insns[0] >= 0x38 && insns[0] <= 0x3b) ||
+            (insns[0] >= 0x84 && insns[0] <= 0x8b) ||
+             insns[0] == 0x8d || insns[0] == 0x63 ||
+             insns[0] == 0xc0 || insns[0] == 0xc1 )
+    {
+      temp = evalModRM(insns[1]);
+      if(temp == 6 && modRMbyte.mod == 0) //patching needed
+      {
+        if(rex)	//rex, opcode, modRM, rip + 32bit
+        {
+          *patches++ = 0x700 + n+2, n += 6, insns += 6;
+        }
+        else	//opcode, modRM, rip + 32bit 
+          *patches++ = 0x600 + n+2, n +=6, insns += 6;
+      }
+      else	//modRM.mod == 10
+        insns += temp, n += temp;
+    }
+    //opcode, modRM,(sib),1 or 4 byte immediate
+    else if((insns[0] >= 0x80 && insns[0] <= 0x83)||
+             insns[0] == 0x69 || insns[0] == 0x6b ||
+             insns[0] == 0xc0 || insns[0] == 0xc1 ||
+             insns[0] == 0xd0 || insns[0] == 0xd1 ||
+             insns[0] == 0xfe || insns[0] == 0xc6 ||
+             insns[0] == 0xc7 || insns[0] == 0xf6 ||
+             insns[0] == 0xf7 )
+    {
+      if(insns[0] == 0xc6 || insns[0] == 0xc7 ) //opcode groups
+      {
+        getModRM(insns[1]);
+        if(modRMbyte.reg != 0)
+          return -1;
+      }
+      temp = evalModRM(insns[1]);
+    
+      if(temp == 6 && modRMbyte.mod == 0)	//patching needed
+      {
+        if(insns[0] == 0x81 || insns[0] == 0x69 ||	//4byte displacement
+	   insns[0] == 0xc7 )
+        {
+          if(rex)
+            *patches++ = 0xb00 + n+2, n += 10, insns += 10;
+          else
+            *patches++ = 0xa00 + n+2, n += 10, insns += 10;
+        }
+        else  //one byte immediate
+        {
+          if(rex)
+            *patches++ = 0x800 + n+2, n += 7, insns += 7;
+          else
+            *patches++ = 0x700 + n+2, n += 7, insns += 7;
+        }
+      }
+      else
+      {
+        if(insns[0] == 0x81 || insns[0] == 0x69 ||
+	   insns[0] == 0xc7 )
+          n += (temp + 4), insns += (temp + 4);
+        else
+          n += (temp + 1), insns += (temp + 1);
+      }
+    }
+    // f6 and f7 group
+    else if(insns[0] == 0xf6 || insns[0] == 0xf7)
+    {
+      temp = evalModRM(insns[1]);
+      if(modRMbyte.reg == 0 || modRMbyte.reg == 1) //instruction needs immediate value
+      {
+        if(temp == 6 && modRMbyte.mod == 0)
+        {
+          if(insns[0] == 0xf6)  //one byte immediate
+          {
+            if(rex)
+              *patches++ = 0x800 + n+2, n += 7, insns += 7;
+            else
+              *patches++ = 0x700 + n+2, n += 7, insns += 7;
+          }
+          else  //4 byte immediate
+          {
+            if(rex)
+              *patches++ = 0xb00 + n+2, n += 10, insns += 10;
+            else
+              *patches++ = 0xa00 + n+2, n += 10, insns += 10;
+          }
+        }
+      }
+      else if(temp == 6 && modRMbyte.mod == 0)	//patching needed
+      {
+        if(rex)	//rex, opcode, modRM, rip + 32bit
+          *patches++ = 0x700 + n+2, n += 6, insns += 6;
+        else	//rex, opcode, modRM, rip + 32bit
+          *patches++ = 0x600 + n+2, n += 6, insns += 6;
+      }
+      else
+        n += temp, insns += temp;
+    }
+    //0xff group
+    else if(insns[0] == 0xff)
+    {
+      temp = evalModRM(insns[1]);
+      if(modRMbyte.reg == 3 || modRMbyte.reg == 5)
+        return -1;
+      else if(temp == 6 && modRMbyte.mod == 0)	//patching needed
+      {
+        if(rex)	//rex,opcode,modRM, rip + 32bit
+          *patches++ = 0x700 + n+2, n += 6, insns += 6;
+        else	//opcode, modRM, rip + 32bit
+          *patches++ = 0x600 + n+2, n += 6, insns += 6;
+      }
+      else
+        n += temp, insns += temp;
+    }
+    //syscall
+    else if (insns[0] == 0xf && insns[1] == 0x5)
       n += 2, insns += 2;
-
-    else if (insns[0] == 0x41 && (insns[1] >= 0x54 && insns[1] <= 0x57))
-      n += 2, insns += 2;                         /* push %r* */
-
-    else if (insns[0] == 0x41 && insns[1] == 0x89 && insns[2] == 0xfc)
-      n += 3, insns += 3;                         /* mov %edi,%r12d */
-
-    else if (insns[0] == 0x41 && insns[1] == 0xb9)  /* mov $0x*,%r9d */
-      n += 6, insns += 6;
-
-    else if (insns[0] == 0x48 && insns[1] == 0x85 && insns[2] == 0xf6)
-      n += 3, insns += 3;                         /* test  %rsi,%rsi */
-
-    else if (insns[0] == 0x48 && insns[1] == 0x63 && insns[2] == 0xf7)
-      n += 3, insns += 3;                         /* movslq %edi,%rsi */
-
-    else if ((insns[0] == 0x48 || insns[0] == 0x4c) /* mov %r*,$0x*(%rsp) */
-	     && insns[1] == 0x89 && insns[3] == 0x24)
-      n += 5, insns += 5;
-
-    else if (insns[0] == 0x48 && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
-	     && (insns[2] == 0x3d || insns[2] == 0x05))
-      *patches++ = 0x700 + n+3, n += 7, insns += 7;
-
-    else if (insns[0] == 0x48 && insns[1] == 0xc7 && insns[2] == 0xc0)
-      n += 7, insns += 7;                         /* mov $0x*,%rax */
-
-    else if (insns[0] == 0x48 && insns[1] == 0x81 && insns[2] == 0xec)
-      n += 7, insns += 7;                         /* sub $0x*,%rsp */
-
-    else if (insns[0] == 0x48 && insns[1] == 0x83 && insns[2] == 0xec)
-      n += 4, insns += 4;                         /* sub $0x*,%rsp */
-
-    else if (insns[0] == 0x48 && insns[1] == 0x8d && insns[2] == 0x05)
-      *patches++ = 0x700 + n+3, n += 7, insns += 7; /* lea $0x*(%rip),%rax */
-
-    else if (insns[0] == 0x48 && insns[1] == 0x89)
-      n += 3, insns += 3;                         /* mov %r*,%r* */
-
-    else if (insns[0] == 0x49 && insns[1] == 0x89)
-      n += 3, insns += 3;                         /* mov %r*,%r* */
-
-    else if (insns[0] == 0x4c && insns[1] == 0x8b   /* mov $0x*(%rip),%r* */
-	     && insns[2] == 0x0d)
-      *patches++ = 0x700 + n+3, n += 7, insns += 7;
-
-    else if (insns[0] == 0x4c && insns[1] == 0x8d && insns[2] == 0x3d)
-      *patches++ = 0x700 + n+3, n += 7, insns += 7; /* lea $0x*(%rip),%r15 */
-
-    else if (insns[0] == 0x55 || insns[0] == 0x53)
-      n += 1, insns += 1;                         /* push %rbp / %rbx */
-
-    else if (insns[0] == 0x83 && insns[1] == 0xf8)  /* cmp $0x*,%eax */
-      n += 3, insns += 3;
-
-    else if (insns[0] == 0x89 && insns[1] == 0xfd)
-      n += 2, insns += 2;                         /* mov %edi,%ebp */
-
-    else if (insns[0] == 0x8d && insns[1] == 0x47)
-      n += 3, insns += 3;                         /* lea $0x*(%rdi),%eax */
-
-    else if (insns[0] == 0xb8)                      /* mov $0x*,%eax */
-      n += 5, insns += 5;
-
-    else if (insns[0] == 0xe9)                      /* jmpq (32-bit offset) */
-      *patches++ = 0x500 + n+1, n += 5, insns += 5;
 
     else
     {
@@ -405,6 +572,8 @@ parse(const char *func, void *address, unsigned *patches)
 		   insns[0], insns[1], insns[2], insns[3]);
       return -1;
     }
+    temp = 0;
+    rex = false;
   }
 #elif __ppc__
   // FIXME: check for various branch-relative etc. instructions
