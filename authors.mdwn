@@ -1,0 +1,21 @@
+---
+title: We did it!
+layout: default
+related:
+ - { name: Top, link: . }
+ - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
+ - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
+ - { name: Project, link: http://sourceforge.net/projects/igprof/ }
+---
+IgProf was developed by Lassi Tuura and Giulio Eulisse in order to assist
+software development projects for the [CMS experiment][cms] at [CERN][].
+
+The authors can be reached at `first.last@cern.ch` e-mail addresses.
+
+The development was funded by the United States [National Science
+Foundation][nsf] and [Department of Energy][doe].
+
+[cms]: http://cms.cern.ch
+[CERN]: http://www.cern.ch
+[nsf]: http://nsf.gov
+[doe]: http://www.energy.gov
