@@ -402,24 +402,24 @@ parse(const char *func, void *address, unsigned *patches)
     }
     //opcode + one byte
     else if ((insns[0] >= 0xb0 && insns[0] <= 0xb7)
-    			|| (insns[0] >= 0xd0 && insns[0] <= 0xd3)
-    			|| (insns[0] >= 0xe4 && insns[0] <= 0xe7)
-    			|| insns[0] == 0x04 || insns[0] == 0x14
-    			|| insns[0] == 0x24 || insns[0] == 0x34
-    			|| insns[0] == 0x0c || insns[0] == 0x1c
-    			|| insns[0] == 0x2c || insns[0] == 0x3c
-    			|| insns[0] == 0xa1 || insns[0] == 0xa8
-    			|| insns[0] == 0x6a )
+    	 || (insns[0] >= 0xd0 && insns[0] <= 0xd3)
+    	 || (insns[0] >= 0xe4 && insns[0] <= 0xe7)
+    	 || insns[0] == 0x04 || insns[0] == 0x14
+    	 || insns[0] == 0x24 || insns[0] == 0x34
+    	 || insns[0] == 0x0c || insns[0] == 0x1c
+    	 || insns[0] == 0x2c || insns[0] == 0x3c
+    	 || insns[0] == 0xa1 || insns[0] == 0xa8
+    	 || insns[0] == 0x6a )
     {
       insns += 2, n += 2;
     }
     //opcode + 4 bytes
     else if ((insns[0] >= 0xb8 && insns[0] <= 0xbf)
-    			 || insns[0] == 0x05 || insns[0] == 0x15
-    			 || insns[0] == 0x25 || insns[0] == 0x35
-    			 || insns[0] == 0x0d || insns[0] == 0x1d
-    			 || insns[0] == 0x2d || insns[0] == 0x3d 
-    			 || insns[0] == 0xa9 || insns[0] == 0x68 )
+    	 || insns[0] == 0x05 || insns[0] == 0x15
+    	 || insns[0] == 0x25 || insns[0] == 0x35
+    	 || insns[0] == 0x0d || insns[0] == 0x1d
+    	 || insns[0] == 0x2d || insns[0] == 0x3d 
+    	 || insns[0] == 0xa9 || insns[0] == 0x68 )
     {
       insns += 5, n += 5;
     }
@@ -430,7 +430,7 @@ parse(const char *func, void *address, unsigned *patches)
     }
     // opcode + modRM (no immediate)
     else if ((insns[0] <= 0x03)
-    			|| (insns[0] >= 0x08 && insns[0] <= 0x0b)
+          || (insns[0] >= 0x08 && insns[0] <= 0x0b)
           || (insns[0] >= 0x10 && insns[0] <= 0x13)
           || (insns[0] >= 0x18 && insns[0] <= 0x1b)
           || (insns[0] >= 0x20 && insns[0] <= 0x23) 
@@ -451,12 +451,12 @@ parse(const char *func, void *address, unsigned *patches)
     }
     //opcode, modRM,(sib),1 or 4 byte immediate
     else if ((insns[0] >= 0x80 && insns[0] <= 0x83)
-    			 || insns[0] == 0x69 || insns[0] == 0x6b
-    			 || insns[0] == 0xc0 || insns[0] == 0xc1
-    			 || insns[0] == 0xd0 || insns[0] == 0xd1
-    			 || insns[0] == 0xfe || insns[0] == 0xc6
-    			 || insns[0] == 0xc7 || insns[0] == 0xf6
-    			 || insns[0] == 0xf7 )
+    	 || insns[0] == 0x69 || insns[0] == 0x6b
+    	 || insns[0] == 0xc0 || insns[0] == 0xc1
+	 || insns[0] == 0xd0 || insns[0] == 0xd1
+	 || insns[0] == 0xfe || insns[0] == 0xc6
+	 || insns[0] == 0xc7 || insns[0] == 0xf6
+	 || insns[0] == 0xf7 )
     {
       if (insns[0] == 0xc6 || insns[0] == 0xc7 ) //opcode groups
       {
