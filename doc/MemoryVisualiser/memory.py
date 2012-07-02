@@ -13,11 +13,12 @@ class checkMemory(object):
     self.cwd = os.getcwd()
     self.filesPath = "/".join(os.path.abspath(__file__).split("/")[:-1])
     if(not self.cwd == self.filesPath):
-      # move files from to cwd from filesPath
+      # move files  to cwd from filesPath
       # and save all files in cwd
-      name = ["/pageVisual.js","/colours.css","/Memory.html"]
-      [subprocess.Popen(["cp",self.filesPath+s,self.cwd+s],stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE).communicate() for s in name]
+      n1= self.filesPath+"/Memory.html"
+      n2 = self.cwd+ "/Memory.html"
+      subprocess.Popen(["cp",n1,n2],stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE).communicate()
     f = open("memMap2",'w')
     f.close()
     f = open("PageData",'w')
@@ -286,15 +287,26 @@ if __name__ == "__main__":
                     help="Default is 4KB. Page size in KB.", type ='int')
   (options, args) = parser.parse_args()
   if not options._files:
-    parser.error("No files were supplied.")
-  t1 = time.time()
- 
-  files = options._files.replace("[","").replace("]","")
-  if("," in files):
-    files = files.split(",")
+    err = False
+    if(len(sys.argv)==1):
+     err = True
+    else:
+      files = sys.argv[1:]
+      if("-p" in files):
+        inde = files.index("-p")
+        del files[inde: inde+2]
+        if(len(files)==0):
+          err = True
+    if(err):
+      parser.error("No files were supplied.")  
   else:
-    files = files.split(" ")
+    files = options._files.replace("[","").replace("]","")
+    if("," in files):
+      files = files.split(",")
+    else:
+      files = files.split(" ")
   print "Files are %s. Page size is %dKB."%(str(files), options._page)
+  t1 = time.time()
   checkMemory(files, int(options._page))
   t2 = time.time()
   print 'took %0.3f ms' % ((t2-t1)*1000.0)
