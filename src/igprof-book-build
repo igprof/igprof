@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # A script which merges all the relevant resources of a igprof-book into one
 # single file.
