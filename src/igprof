@@ -20,12 +20,13 @@ usage() {
   echo -e "-pk, --keep-on-fork        \tdo not reset performance profile in fork child"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
   echo -e "-fn, --function-profile X  \tprofile cpu cycles spent in function X"
+  echo -e "-j, --jemalloc             \tuse libjemalloc.so.1 instead of libc.so.6"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
 }
 
 append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
 
-SORT= MEM= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS=
+SORT= MEM= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS= IGPROF_MALLOC_LIB='libc.so.6'
 while [ "$#" != 0 ]; do
   case "$1" in
     -h | --help )
@@ -80,6 +81,8 @@ while [ "$#" != 0 ]; do
     -fp | --function-profile )
       [ -z "$FUNC" ] && FUNC="func"; FUNC="$FUNC:name=$2"; shift; shift ;;
 
+    -j | --jemalloc )
+      IGPROF_MALLOC_LIB='libjemalloc.so.1'; shift ;;
     -- )
       shift; break ;;
 
@@ -92,6 +95,8 @@ while [ "$#" != 0 ]; do
       break ;;
   esac
 done
+
+export IGPROF_MALLOC_LIB
 
 [ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X ] && PERF=perf
 
