@@ -19,8 +19,10 @@ usage() {
   echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
   echo -e "-pk, --keep-on-fork        \tdo not reset performance profile in fork child"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
-  echo -e "-fn, --function-profile X  \tprofile cpu cycles spent in function X"
-  echo -e "-j, --jemalloc             \tuse libjemalloc.so.1 instead of libc.so.6"
+  echo -e "-fp:malloc:LIB	      \tprofile cpu cycles spent in malloc like functions"
+  echo -e "-fpi:FUNC:LIB	      \tprofile cpu cycles spent in function X which returns integer or pointer"
+  echo -e "-fpf:FUNC:LIB	      \tprofile cpu cycles spent in function X which returns floating point number"
+  echo -e "-j, --jemalloc	      \tuse libjemalloc.so library instead of libc.so.6"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
 }
 
@@ -77,18 +79,39 @@ while [ "$#" != 0 ]; do
     -pk | --keep-on-fork )
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:keep"; shift ;;
 
-    # FIXME: For the time being only "free" and "malloc" supported by igprof.
-    -fp | --function-profile )
-      [ -z "$FUNC" ] && FUNC="func"; FUNC="$FUNC:name=$2"; shift; shift ;;
+    -fp* )
+      oldIFS=$IFS; IFS=':'; array=($1); IFS=$oldIFS;
+      FP_MODE=${array[0]};
+      FP_FUNC=${array[1]};
+      if [ -z "$FP_FUNC" ]; then
+        echo "No function to profile, quitting";
+        exit 1;
+      fi
+      FP_LIB=${array[2]}
+      [ -z "$FUNC" ] && FUNC="func";
+      if [ $FP_MODE == "-fpi" ]; then
+        FUNC="$FUNC:name=other";
+      elif [ $FP_MODE == "-fpf" ]; then
+        FUNC="$FUNC:name=otherf";
+      elif [ $FP_MODE == "-fp" ] && [ $FP_FUNC == "malloc" ]; then
+        FUNC="$FUNC:name=malloc";
+      else
+        echo "$1 bad option, expected -fp:malloc:LIB or -fpi:FUNC:LIB or -fpf:FUNC:LIB";
+        exit 1;
+      fi
+      export IGPROF_FP_FUNC=$FP_FUNC;
+      export IGPROF_FP_LIB=$FP_LIB;
+      shift ;;
 
     -j | --jemalloc )
-      IGPROF_MALLOC_LIB='libjemalloc.so.1'; shift ;;
+       IGPROF_MALLOC_LIB='libjemalloc.so.1'; shift ;;
+
     -- )
       shift; break ;;
 
     -* )
       echo "$0: unrecognised option $1"
-      usage 
+      usage
       exit 1 ;;
 
     * )
