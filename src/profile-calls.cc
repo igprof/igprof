@@ -30,24 +30,24 @@ DUAL_HOOK(1, void *, dovalloc, _main, _libc,
           (size_t size), (size),
           "valloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 
-static void *doothermain(void *a, void *b, void *c);
-static IgHook::TypedData<void*(void *a, void *b, void *c)> doother_hook_main
-    = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
-      &doothermain, 0, 0, 0 } };
+static void *doothermain(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+       doother_hook_main = { { 0, igprof_getenv("IGPROF_FUNC"), 0, 0,
+       &doothermain, 0, 0, 0 } };
  
-static void *dootherlib(void *a, void *b, void *c);
-static IgHook::TypedData<void*(void *a, void *b, void *c)> doother_hook_lib 
-    = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+static void *dootherlib(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+    doother_hook_lib = { { 0, igprof_getenv("IGPROF_FUNC"), 0, igprof_getenv("IGPROF_LIB"),
       &dootherlib, 0, 0, 0 } };
 
-static double dodoublemain(void *a, void *b, void *c);
-static IgHook::TypedData<double(void *a, void *b, void *c)> dodouble_hook_main
-    = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
+static double dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+    dodouble_hook_main = { { 0, igprof_getenv("IGPROF_FUNC"), 0, 0,
       &dodoublemain, 0, 0, 0 } };
 
-static double dodoublelib(void *a, void *b, void *c); 
-static IgHook::TypedData<double(void *a, void *b, void *c)> dodouble_hook_lib 
-    = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+static double dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f); 
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+    dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FUNC"), 0, igprof_getenv("IGPROF_LIB"),
       &dodoublelib, 0, 0, 0 } };
 
 static IgProfTrace::CounterDef  s_ct_total      = { "CALLS_TOTAL",    IgProfTrace::TICK, -1 };
@@ -291,13 +291,13 @@ dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
 }
 
 static void*
-doothermain(void *a, void *b, void *c)
+doothermain(void *a, void *b, void *c, void *d, void *e, void *f)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
 
   RDTSC(tstart);
-  void *result = (*doother_hook_main.typed.chain)(a,b,c);
+  void *result = (*doother_hook_main.typed.chain)(a,b,c,d,e,f);
   RDTSC(tend);
 
   if (LIKELY(enabled))
@@ -307,13 +307,13 @@ doothermain(void *a, void *b, void *c)
   return result;
 }
 static void*
-dootherlib(void *a, void *b, void *c)
+dootherlib(void *a, void *b, void *c, void *d, void *e, void *f)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
 
   RDTSC(tstart);
-  void *result = (*doother_hook_lib.typed.chain)(a,b,c);
+  void *result = (*doother_hook_lib.typed.chain)(a,b,c,d,e,f);
   RDTSC(tend);
 
   if (LIKELY(enabled))
@@ -324,13 +324,13 @@ dootherlib(void *a, void *b, void *c)
 }
 
 static double
-dodoublemain(void *a, void *b, void *c)
+dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
 
   RDTSC(tstart);
-  double result = (*dodouble_hook_main.typed.chain)(a,b,c);
+  double result = (*dodouble_hook_main.typed.chain)(a,b,c,d,e,f);
   RDTSC(tend);
 
   if(LIKELY(enabled))
@@ -341,13 +341,13 @@ dodoublemain(void *a, void *b, void *c)
 }
 
 static double
-dodoublelib(void *a, void *b, void *c)
+dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
 
   RDTSC(tstart);
-  double result = (*dodouble_hook_lib.typed.chain)(a,b,c);
+  double result = (*dodouble_hook_lib.typed.chain)(a,b,c,d,e,f);
   RDTSC(tend);
 
   if(LIKELY(enabled))
