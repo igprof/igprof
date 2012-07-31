@@ -32,22 +32,38 @@ DUAL_HOOK(1, void *, dovalloc, _main, _libc,
 
 static void *doothermain(void *a, void *b, void *c, void *d, void *e, void *f);
 static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+<<<<<<< HEAD
        doother_hook_main = { { 0, igprof_getenv("IGPROF_FUNC"), 0, 0,
+=======
+       doother_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
+>>>>>>> ce4a4c3cf3d6778b46e6c08b2f81fb67883b2f31
        &doothermain, 0, 0, 0 } };
  
 static void *dootherlib(void *a, void *b, void *c, void *d, void *e, void *f);
 static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+<<<<<<< HEAD
     doother_hook_lib = { { 0, igprof_getenv("IGPROF_FUNC"), 0, igprof_getenv("IGPROF_LIB"),
+=======
+    doother_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+>>>>>>> ce4a4c3cf3d6778b46e6c08b2f81fb67883b2f31
       &dootherlib, 0, 0, 0 } };
 
 static double dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f);
 static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+<<<<<<< HEAD
     dodouble_hook_main = { { 0, igprof_getenv("IGPROF_FUNC"), 0, 0,
+=======
+    dodouble_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
+>>>>>>> ce4a4c3cf3d6778b46e6c08b2f81fb67883b2f31
       &dodoublemain, 0, 0, 0 } };
 
 static double dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f); 
 static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+<<<<<<< HEAD
     dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FUNC"), 0, igprof_getenv("IGPROF_LIB"),
+=======
+    dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+>>>>>>> ce4a4c3cf3d6778b46e6c08b2f81fb67883b2f31
       &dodoublelib, 0, 0, 0 } };
 
 static IgProfTrace::CounterDef  s_ct_total      = { "CALLS_TOTAL",    IgProfTrace::TICK, -1 };
@@ -145,7 +161,11 @@ initialize(void)
   igprof_disable_globally();
   if (trace_other || trace_otherf || trace_malloc)
     igprof_debug("function profiler: profiling %s\n",
+<<<<<<< HEAD
 		igprof_getenv("IGPROF_FUNC"));
+=======
+		igprof_getenv("IGPROF_FP_FUNC"));
+>>>>>>> ce4a4c3cf3d6778b46e6c08b2f81fb67883b2f31
   else
   {
     igprof_debug("function profiler: no function given, quitting");
