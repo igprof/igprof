@@ -90,8 +90,8 @@ initialize(void)
   const char    *options = igprof_options();
   bool          enable = false;
   bool          trace_malloc = false;
-  bool					trace_other = false;
-  bool					trace_otherf = false;
+  bool		trace_other = false;
+  bool		trace_otherf = false;
 
   while (options && *options)
   {
