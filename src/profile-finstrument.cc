@@ -32,6 +32,7 @@ add()
   buf->unlock();
 
 }
+
 static void initialize(void)
 {
   if (s_initialized) return;
@@ -68,6 +69,8 @@ static void initialize(void)
   igprof_debug("finstrument-profiler enabled\n");
   igprof_enable_globally();
 }
+
+//finstrument enter function
 extern "C" void __cyg_profile_func_enter (void *this_fn UNUSED, void *caller UNUSED)
 {
   bool enabled = igprof_disable();

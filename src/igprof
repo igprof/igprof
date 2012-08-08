@@ -19,10 +19,11 @@ usage() {
   echo -e "-pu, --user-time           \tmeasure user time in performance profiler"
   echo -e "-pk, --keep-on-fork        \tdo not reset performance profile in fork child"
   echo -e "-fd, --file-descriptor     \tstart the file descriptor profile"
-  echo -e "-fp:malloc:LIB	      \tprofile cpu cycles spent in malloc like functions"
-  echo -e "-fpi:FUNC:LIB	      \tprofile cpu cycles spent in function X which returns integer or pointer"
-  echo -e "-fpf:FUNC:LIB	      \tprofile cpu cycles spent in function X which returns floating point number"
-  echo -e "-j, --jemalloc	      \tuse libjemalloc.so library instead of libc.so.6"
+  echo -e "-fp:malloc:LIB	            \tprofile cpu cycles spent in malloc like functions"
+  echo -e "-fpi:FUNC:LIB	            \tprofile cpu cycles spent in function X which returns integer or pointer"
+  echo -e "-fpf:FUNC:LIB	            \tprofile cpu cycles spent in function X which returns floating point number"
+  echo -e "-j, --jemalloc	            \tuse libjemalloc.so library instead of libc.so.6"
+  echo -e "-finst                     \tCount calls of -finstrument-functions"
   echo -e "[--] cmd [args...]         \tcommand arguments to execute"
 }
 
