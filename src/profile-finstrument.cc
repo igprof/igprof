@@ -15,7 +15,9 @@ static IgHook::TypedData<void()> do_exit_hook = { { 0, "__cyg_profile_func_exit"
 static bool s_initialized = false;
 static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1 };
+//enter time stack for functions in each treads
 uint64_t times[IgProfTrace::MAX_DEPTH];
+//enter counter
 int callCount = 0;
 
 static void 
@@ -58,24 +60,33 @@ initialize(void)
   igprof_enable_globally();
 }
 
-extern "C" void __cyg_profile_func_enter(void *func UNUSED, void *caller UNUSED){}
-extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED){}
-
+// dummy functions which will be hooked
+extern "C" void __cyg_profile_func_enter(void *func UNUSED, void *caller UNUSED)
+{
+}
+extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
+{
+}
+// save TSC value at before entering the real function
 static void 
 do_enter ()
 {
-    int64_t tstart;
-    callCount++;
-    RDTSC(tstart);
-    times[callCount-1] = tstart; 
+    
+  int64_t tstart;
+  callCount++;
+  RDTSC(tstart);
+  times[callCount-1] = tstart; 
 }
 
 static void 
 do_exit ()
 {
-    uint64_t tstop;
+    uint64_t tstop,texit;
     RDTSC(tstop);
     callCount--;
+    //diff = time spent in the function
+    uint64_t diff = tstop - times[callCount];
+
     void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace *buf = igprof_buffer();
     IgProfTrace::Stack *frame;
@@ -86,11 +97,18 @@ do_exit ()
 
     depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
      
-    buf->lock();
     frame = buf->push(addresses+1, depth-1);
     buf->tick(frame, &s_ct_calls, 1, 1);
-    buf->tick(frame, &s_ct_time, (tstop-times[callCount]), 1);
-    buf->unlock();
+    buf->tick(frame, &s_ct_time, diff, 1);
+    //if function is child, add time spent measuring the function into parent start time
+    if (callCount > 0)
+    {
+      RDTSC(texit);
+      for(int i = callCount ; i > 0; i--)
+      {
+        times[callCount-i] += texit-times[callCount];
+      }    
+    }
 }
 
 static bool autoboot = (initialize(), true);
