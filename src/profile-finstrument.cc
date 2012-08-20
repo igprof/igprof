@@ -19,6 +19,8 @@ static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::
 uint64_t times[IgProfTrace::MAX_DEPTH];
 //enter counter
 int callCount = 0;
+//times spent in child functions
+uint64_t child[IgProfTrace::MAX_DEPTH] = {0};
 
 static void 
 initialize(void)
@@ -67,26 +69,28 @@ extern "C" void __cyg_profile_func_enter(void *func UNUSED, void *caller UNUSED)
 extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 {
 }
+
 // save TSC value at before entering the real function
 static void 
 do_enter ()
 {
     
-  int64_t tstart;
-  callCount++;
+  uint64_t tstart;
+  ++callCount;
+  child[callCount-1] = 0;
   RDTSC(tstart);
-  times[callCount-1] = tstart; 
+  times[callCount-1] = -tstart; 
 }
 
+//stop timer and tick counter
 static void 
 do_exit ()
 {
     uint64_t tstop,texit;
     RDTSC(tstop);
-    callCount--;
-    //diff = time spent in the function
-    uint64_t diff = tstop - times[callCount];
-
+    --callCount;
+    //diff = time spent in the function subtracted by time spent on childs
+    uint64_t diff = times[callCount] - child[callCount] + tstop;
     void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace *buf = igprof_buffer();
     IgProfTrace::Stack *frame;
@@ -98,16 +102,13 @@ do_exit ()
     depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
      
     frame = buf->push(addresses+1, depth-1);
-    buf->tick(frame, &s_ct_calls, 1, 1);
     buf->tick(frame, &s_ct_time, diff, 1);
-    //if function is child, add time spent measuring the function into parent start time
+    buf->tick(frame, &s_ct_calls, 1, 1);
+    //if function is child, add time spent on child array for parent
     if (callCount > 0)
     {
       RDTSC(texit);
-      for(int i = callCount ; i > 0; i--)
-      {
-        times[callCount-i] += texit-times[callCount];
-      }    
+      child[callCount-1] += child[callCount] + diff + (texit - tstop);
     }
 }
 
