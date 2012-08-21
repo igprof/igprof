@@ -74,7 +74,6 @@ extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 static void 
 do_enter ()
 {
-    
   uint64_t tstart;
   ++callCount;
   child[callCount-1] = 0;
