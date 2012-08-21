@@ -495,6 +495,10 @@ parse(const char *func, void *address, unsigned *patches)
     else if (insns[0] == 0xf && insns[1] == 0x5)
       n += 2, insns += 2;
 
+    
+    else if (insns[0] == 0xf3 && insns[1] == 0xc3)
+      n +=5, insns += 5;
+
     else
     {
       igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
