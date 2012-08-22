@@ -29,6 +29,8 @@ usage() {
 append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
 
 SORT= MEM= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS= IGPROF_MALLOC_LIB='libc.so.6'
+FINST=
+
 while [ "$#" != 0 ]; do
   case "$1" in
     -h | --help )
@@ -103,6 +105,9 @@ while [ "$#" != 0 ]; do
       export IGPROF_FP_LIB=$FP_LIB;
       shift ;;
 
+    -finst )
+      [ -z "$FINST" ] && FINST="finst"; shift ;;
+
     -j | --jemalloc )
        IGPROF_MALLOC_LIB='libjemalloc.so.1'; shift ;;
 
@@ -121,7 +126,7 @@ done
 
 export IGPROF_MALLOC_LIB
 
-[ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X ] && PERF=perf
+[ X"$MEM" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X -a X"$FINST" = X ] && PERF=perf
 
 if $OUTZ; then
   [ X"$OUT" = X ] && OUT="igprof.$$.gz"
@@ -140,6 +145,7 @@ fi
 [ X"$FD" = X ]    || append IGPROF "$FD"
 [ X"$PERF" = X ]  || append IGPROF "$PERF"
 [ X"$FUNC" = X ]  || append IGPROF "$FUNC"
+[ X"$FINST" = X ] || append IGPROF "$FINST"
 
 case $(uname) in
   Darwin )
