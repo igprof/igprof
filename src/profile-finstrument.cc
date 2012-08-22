@@ -107,8 +107,9 @@ do_exit ()
     //if function is child, add time spent on child array for parent
     if (callCount > 0)
     {
+      child[callCount-1] += child[callCount] + diff - tstop;
       RDTSC(texit);
-      child[callCount-1] += child[callCount] + diff + (texit - tstop);
+      child[callCount-1] += texit;
     }
 }
 
