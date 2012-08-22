@@ -15,39 +15,12 @@ static IgHook::TypedData<void()> do_exit_hook = { { 0, "__cyg_profile_func_exit"
 static bool s_initialized = false;
 static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1 };
-//Maximum amount of threads
-const int MAX_THREADS = 10;
 //enter time stack for functions in each treads
-uint64_t times[MAX_THREADS][IgProfTrace::MAX_DEPTH];
+__thread uint64_t times[IgProfTrace::MAX_DEPTH];
 //enter counter
-int callCount[MAX_THREADS];
+__thread int callCount;
 //times spent in child functions
-uint64_t child[MAX_THREADS][IgProfTrace::MAX_DEPTH];
-//mutex lock for getIdNumber function
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-//Threads array, threadIDs are stored here. Index is the idNumber of the thread
-int threads[MAX_THREADS];
-//Returns thread idNumber. If the thread is not saved yet. Adds threadID into threads array
-//and position in array becomes idNumber
-static int
-getIdNumber(int threadID)
-{
-  int idNumber = 0;
-  pthread_mutex_lock(&lock);
-  while (idNumber < MAX_THREADS)
-  {
-    if (threads[idNumber] == 0)
-      threads[idNumber] = threadID;
-    if (threadID == threads[idNumber])
-    {
-      pthread_mutex_unlock(&lock);
-      return idNumber;
-    }
-    ++idNumber;
-  }
-  pthread_mutex_unlock(&lock);
-  return -1;
-}
+__thread uint64_t child[IgProfTrace::MAX_DEPTH];
 
 static void
 initialize(void)
@@ -100,18 +73,11 @@ extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 static void 
 do_enter ()
 {
-  int threadID = pthread_self();
-  int idNumber = getIdNumber(threadID);
-  if (idNumber == -1)
-  {
-    igprof_debug("An error occured in getIdNumber()");
-    return;
-  }
   uint64_t tstart;
-  ++callCount[idNumber];
-  child[idNumber][callCount[idNumber]-1] = 0;
+  ++callCount;
+  child[callCount-1] = 0;
   RDTSC(tstart);
-  times[idNumber][callCount[idNumber]-1] = -tstart; 
+  times[callCount-1] = -tstart; 
 }
 
 //stop timer and tick counter
@@ -120,16 +86,9 @@ do_exit ()
 {
     uint64_t tstop,texit;
     RDTSC(tstop);
-    int threadID = pthread_self();
-    int idNumber = getIdNumber(threadID);
-    if (idNumber == -1)
-    {
-      igprof_debug("An error occured in getIdNumber()");
-      return;
-    }
-    --callCount[idNumber];
+    --callCount;
     //diff = time spent in the function subtracted by time spent on childs
-    uint64_t diff = times[idNumber][callCount[idNumber]] - child[idNumber][callCount[idNumber]] + tstop;
+    uint64_t diff = times[callCount] - child[callCount] + tstop;
     void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace *buf = igprof_buffer();
     IgProfTrace::Stack *frame;
@@ -149,7 +108,7 @@ do_exit ()
     if (callCount > 0)
     {
       RDTSC(texit);
-      child[idNumber][callCount[idNumber]-1] += child[idNumber][callCount[idNumber]] + diff + (texit - tstop);
+      child[callCount-1] += child[callCount] + diff + (texit - tstop);
     }
 }
 
