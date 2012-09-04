@@ -1,312 +1,610 @@
 import re, traceback, sys
 import subprocess
 import inspect, os
+import gzip
+import copy
 
 class checkMemory(object):
 
 
-  def __init__(self, theFiles, pageSize):
-    self.names = []
-    self.ids = dict()
-    self.results, self.results2 = [],[]
-    self.calls , self.calls2 = [],[]
-    self.cwd = os.getcwd()
-    self.filesPath = "/".join(os.path.abspath(__file__).split("/")[:-1])
-    if(not self.cwd == self.filesPath):
+  def __init__(self, theFiles, pageSize, doAll, force):
+    self.mapPageMemStart,self.mapPageMemStart2 = {},{}
+    self.mapStartEnd, self.mapStartEnd2, = {},{}
+    self.pageToUsage = {}
+    # 0:c1-0
+    self.lineToCalls, self.lineToCalls2={},{} 
+    # store as c1-0:[(address), address][addrees]
+    self.callToAdd,self.callToAdd2 ={},{} 
+    self.pageSize,self.forcePage = pageSize, force
+    self.pages, self.pages2,self.currentKeys =[],[],[]
+    self.percentPage, self.pageMap = "PercentPage","PageMap-"
+    self.pageData, self.memMap = "PageData","memMap"
+    cwd = os.getcwd()
+    filesPath = "/".join(os.path.abspath(__file__).split("/")[:-1])
+    if(not cwd == filesPath):
       # move files  to cwd from filesPath
       # and save all files in cwd
-      n1= self.filesPath+"/Memory.html"
-      n2 = self.cwd+ "/Memory.html"
-      subprocess.Popen(["cp",n1,n2],stdout=subprocess.PIPE,
+      filesPath+="/Memory.html"
+      cwd+="/Memory.html"
+      subprocess.Popen(["cp",filesPath,cwd],stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE).communicate()
-    f = open("memMap2",'w')
+    f = open(self.percentPage,'w')
     f.close()
-    f = open("PageData",'w')
-    f.close()
-    f = open("PercentPage",'w')
-    f.close()
-    self.doFiles(theFiles, pageSize)
+    if(not doAll): # only calculate the PercentPage file.
+      for theFile in files:
+        self.percentLoop(theFile,0)
+        self.printPercentFile(theFile)
+    else:
+      f = open(self.pageData,'w')
+      f.close()
+      f = open(self.memMap, 'w')
+      f.close()
+      theFile = self.doFiles(theFiles)
+      if(theFile): # if there are things in currentkeys? TODO
+        f = open(self.memMap,'a')
+        line = "(%s) %s : %s\n\n"
+        for lineNumber in self.currentKeys:
+          fullName = self.lineToCalls2[lineNumber]
+          addr = self.callToAdd2[fullName]
+          f.write(line%(theFile,fullName.split("-")[0],str(addr[0])))
 
   # Take each file, open it and compute files for it.
-  def doFiles(self, files, pageSize):
+  def doFiles(self, files):
     length = len(files)
     for i, theFile in enumerate(files):
       if(i == length-1 and i!=0): # the last file
-        self.results = self.results2
-        self.computePages(theFile, pageSize)
-        break
-      if(i==0 and i== length-1):
-        self.loopFile(theFile,0,0)
-        self.computePages(theFile, pageSize)
-        break
-      if(i == 0):
-        # the next file starts from this position
-        pos = self.loopFile(theFile, 0, 0)
-      else:
-        # this file will be in results2
-        self.results = self.results2
-        self.results2 = []
-        self.calls = self.calls2
-        self.calls2 = []
-      # get data on next file
-      pos = self.loopFile(files[i+1], pos, 1)
+        self.printOut(theFile)
+        return theFile
+      if(i==0): 
+        self.loopFile(theFile,0)
+        if(i==length-1):# only one file
+          self.printOut(theFile)
+          return
+      self.loopFile(files[i+1], 1)
       # show the difference between the two files.
       self.diff(theFile, files[i+1])
       # compute the pages for the current file.
-      self.computePages(theFile, pageSize)
-
-  # Loops round a file calling finding LKs and
-  # returning end point of file.
-  def loopFile(self, fileName, pos, toggle):
+      self.printOut(theFile)
+      # have done the difference and printed out first file.
+      self.lineToCalls = self.lineToCalls2
+      self.callToAdd = self.callToAdd2
+      self.pages = self.pages2
+      self.mapStartEnd = self.mapStartEnd2
+      self.mapPageMemStart = self.mapPageMemStart2
+      
+  # Only calculate what's needed for PercentPage file.
+  def percentLoop(self, fileName, toggle):
     print "Opening file %s."%(fileName)
-    try:
-      f = open(fileName)
-      lineNumber = 0
-      f.seek(pos)
-      for line in f :
-        if(toggle == 0):
-      	  res = self.results
-      	  calls = self.calls
-        else:
-          res = self.results2
-          calls = self.calls2
+    pageSize = self.pageSize*1024
+    memoryMap = {}
+    LKRE = re.compile("LK=[(]0x([0-9a-f]+),[ ]*([0-9a-f]+)[)]")
+    closeF=0
+    try:  
+      if(fileName.endswith(".gz")):
+        fi = subprocess.Popen(["zcat",fileName], stdout=subprocess.PIPE)
+        # same as normal file, only different loop.
+        iterable = iter(fi.stdout.readline,'')
+      else:
+        iterable = open(fileName, 'r')
+        closeF = 1
+      # for each line in the file
+      for line in iterable:
+        if not "LK" in line:
+          continue 
+        allocs = [(int(x.group(1), 16), int(x.group(2), 16))
+                  for x in LKRE.finditer(line)]
+        data = [(address, size, address/pageSize, (address+(size-1))/pageSize) 
+               for (address, size) in allocs]
         # find if LK is on this line
-        result = re.search(r'LK', line)
-        if(result):
-          start = result.start()
-          call = ""
-          loop= True
-          # do this loop while there is LKs in the line
-          while(loop):
-            loop=False
-            index = -1
-            if(len(call) == 0):
-              callres = re.search(r'^C(\d*\w)',line)
-              call = line[callres.start():callres.end()]
-              if call.strip() in calls:
-                index = calls.index(call.strip())
-              else:
-                calls.append(call.strip())
-            match = line[start:]
-            details = match[match.find("("):match.find(")")+1]
-            pairs = dict()
-            details = details.split(',')
-            n1 = details[0].strip().replace("(","")
-            n2 = details[1].strip().replace(")","")
-            pairs[n1] = n2
-            if(lineNumber >= len(res)):
-              if(index >= 0):
-                res[index]= pairs
-                lineNumber = index
-              else:
-                res.append(pairs)
-                lineNumber = len(res)-1
-            else:
-              res[lineNumber][n1] = n2
-            match = match[match.find(")")+1:]
-            #if there are more LKs in the line.
-            find = re.search(r'LK', match)
-            if(find):
-              loop = True
-              line = match
-              start = find.start()
-        lineNumber+=1
+        for address, size, startPage, finalPage in data:
+          if startPage == finalPage:
+            memoryMap[startPage] = memoryMap.setdefault(startPage,0) + size
+            continue
+          startSize = pageSize - (address % pageSize)
+          endSize = (address + (size)) % pageSize
+          memoryMap[startPage] = memoryMap.setdefault(startPage,0) + startSize
+          memoryMap[finalPage] = memoryMap.setdefault(finalPage,0) + endSize
+          for page in xrange(startPage+1, finalPage-1):
+            memoryMap[page] = pageSize
+      self.pageToUsage = dict((pageAddr, (size * 100.0) / pageSize) 
+             for (pageAddr, size) in memoryMap.items())
+      self.pages = [x for x in self.pageToUsage.keys()]
+      if(closeF):
+        iterable.close()
+    except Exception:
+      traceback.print_exc()
+      sys.exit()
+
+  # Loops round a file finding LKs
+  # Stores each LK, so can print out all files.
+  def loopFile(self, fileName, toggle):
+    print "Opening file %s."%(fileName)
+    memoryMapPages, memoryMapSizes = {},{}
+    lineToCalls,callToAdd={},{}
+    callToNewName ={}
+    allCalls=[] # c1, c2
+    thelen,closeF = 0,0
+    pageSize = self.pageSize*1024
+    LKRE = re.compile("LK=[(]0x([0-9a-f]+),[ ]*([0-9a-f]+)[)]")
+    CRE = re.compile(r'C(\d*\w)')
+    try:
+      if(fileName.endswith(".gz")):
+        fi = subprocess.Popen(["zcat",fileName], stdout=subprocess.PIPE)
+        # same as normal file, only different loop.
+        iterable = iter(fi.stdout.readline,'')
+      else:
+        iterable = open(fileName, 'r')
+        closeF = 1
+      # for each line in the file
+      for line in iterable :  
+        # find if LK is on this line
+        if ("LK" not in line):
+          continue
+        callres = CRE.search(line) 
+        call = line[callres.start(): callres.end()]
+        allocs = [(int(x.group(1), 16), int(x.group(2), 16)) 
+                  for x in LKRE.finditer(line)]
+        data = [(address, size, address/pageSize, (address+(size-1))/pageSize)
+                for (address, size) in allocs]
+        thelen+=1
+        addr = [[address for address in allocs]]
+        if(call in allCalls):
+          # this call name has already appeared in this file.
+          # add these addresses to previous call entry.
+          allCalls.remove(call) # remove so next entrys are matched
+          oldName = callToNewName[call]
+          callToAdd[oldName].append(addr)
+        else:
+          # first time seeing this call entry, or first after match
+          # save the call name, make the new name and add addresses.
+          allCalls.append(call)
+          newName = "%s-%s"%(call,str(thelen))
+          callToAdd[newName] = addr
+          callToNewName[call] = newName
+          lineToCalls[thelen]= newName
+
+        for (address, size, startPage, finalPage) in data:
+            memoryMapPages.setdefault(startPage,[]).append(address)
+            if startPage == finalPage:
+              # need to store how much is stored from that address 
+              memoryMapSizes[address]= memoryMapSizes.setdefault(
+                                       address,0)+size
+              continue
+            startSize = pageSize - (address % pageSize)
+            endSize = (address + (size)) % pageSize
+            add = finalPage*pageSize
+            memoryMapSizes[address]= memoryMapSizes.setdefault(
+                                      address,0)+ startSize
+            memoryMapPages.setdefault(finalPage,[]).append(add)
+            memoryMapSizes[add]= memoryMapSizes.setdefault(add,0)+ endSize
+            for page in xrange(startPage+1, finalPage-1):
+              add = page*pageSize
+              memoryMapPages.setdefault(page,[]).append(add)
+              memoryMapSizes[add]= memoryMapSizes.setdefault(add,0)+ pageSize
+      if(toggle == 0):
+        self.lineToCalls = lineToCalls
+        self.callToAdd = callToAdd
+        self.mapStartEnd = memoryMapSizes
+        self.mapPageMemStart = memoryMapPages 
+        self.pages = [x for x in memoryMapPages.keys()]
+      else:
+        self.lineToCalls2 = lineToCalls 
+        self.callToAdd2 = callToAdd 
+        self.mapStartEnd2 = memoryMapSizes
+        self.mapPageMemStart2 = memoryMapPages
+        self.temp2 = memoryMapPages
+        self.pages2 = [x for x in memoryMapPages.keys()]
       # the next file starts from this position
-      pos = f.tell()
-      f.close()
-      return pos
+      if(closeF):
+        iterable.close()
     except IOError:
       traceback.print_exc()
       sys.exit()
 
-  # Shows the differences between files, for each call stack point.
+  # Prints out the match up of call stack names
+  # Showing the memory usage progression.
   def diff(self, firstName, secName):
-    line = "(%s) %s : %s\n"
-    f = open("memMap", 'a')
-    f.write("------------------------------------------------------\n")
-    for i, x in enumerate(self.calls):
-      f.write(line%(firstName,x,str(self.results[i].items()))+'\n')
-      if(x in self.calls2):
-        inde = self.calls2.index(x)      
-        f.write("|\n|\nV\n")
-        f.write(line%(secName,x,str(self.results2[i].items()))+'\n\n')
-    f.write("------------------------------------------------------\n")
-    f.close()
-  
-  # Addresses are in hex reprsenting bytes, change to dec, 
-  # divide by 1024 to get KB. Then divide by pageSize to 
-  # get what page number it will be in. If Page size 
-  # is  4KB(so 0 to 4095?)if first num before "." is 0 
-  # then that's in page0,if its 1 then its in page1 etc
-  # e.g. say we have 1025 bytes = 1.00025KB/4 = 0.25 - in page0
-  # and 4096/1024 = 4k/4 = 1 - in page 1.
-  def computePages(self, name, pageSize):
-    pages = []
-    # in bytes
-    pageStartEnd,mapPageMemStart,mapStartEnd = dict(), dict(), dict()
-    for i,x in enumerate(self.results):
-      for hexAdd in x:
-        decAdd = int(hexAdd, 16) # in bytes
-        decKB= float(decAdd)/1024.0 # now in KB
-        decVal = int(x[hexAdd],16)
-        # this is needed as pageNumber is put into an integer
-        # no matter if theres a fraction from the divide.
-        # so decKB and addPageStartsAt could end up being different.
-        pageNumber = (int(decKB)/pageSize) 
-        addPageStartsAt= pageNumber * pageSize # in KB 
-        #find if it is spread over more than one page
-        endAdd = (decAdd + decVal)-1  # as we store stuff in the firsts
-          
-        if(endAdd > (addPageStartsAt +pageSize)*1024):
-          # the used memory is split over more than one page.
-          otherPage = pageNumber + 1
-          startsAt = ((addPageStartsAt +pageSize)*1024)
-          endsAt = (startsAt + (pageSize*1024)) -1
-          if otherPage not in pages:
-            pages.append(otherPage)
-            pages.sort()
-            pageStartEnd[otherPage]= [startsAt,endsAt]
-            mapPageMemStart[otherPage]=[startsAt]
-          else:
-            memUsed = mapPageMemStart[otherPage]
-            memUsed.append(startsAt)
-            memUsed.sort()
-            # not sure if this is needed
-            mapPageMemStart[otherPage] = memUsed
-          mapStartEnd[startsAt]= endAdd
-          # need to set the end add for other pageNumber 
-          # - its just the end of its page.
-          endAdd = ((addPageStartsAt+pageSize)*1024) -1
+    line = "(%s) %s : %s\n\n"
+    bufferLine = "|\n|\nV\n"
+    fileKeys, otherFileKeys = self.lineToCalls.keys(),self.lineToCalls2.keys()
+    fileKeys.sort()
+    otherFileKeys.sort()
+    currentKeys = otherFileKeys
+    try:
+      print "Writing to memMap file."
+      f = open("memMap", 'a')
+      f.write("----------------------------------\n")
+      for lineNumber in fileKeys: 
+        fullName = self.lineToCalls[lineNumber]
+        callName = fullName.split("-")[0]
+        addr = self.callToAdd[fullName]
+        f.write(line%(firstName,callName,str(addr[0])))
+        if(len(addr)>1):
+          # then we found the matching one in the same file.
+          f.write(bufferLine)
+          f.write(line%(firstName,callName,str(addr[1])))
+          continue
+        # see if its in the other file.
+        for lineNumber2 in otherFileKeys:
+          fullName = self.lineToCalls2[lineNumber2]
+          if(fullName.split("-")[0] == callName):
+            # we found a match - print it out
+            addr = self.callToAdd2[fullName]
+            f.write(bufferLine)
+            f.write(line%(secName,callName,str(addr[0])))
+            currentKeys.remove(lineNumber2)
+            break
+        otherFileKeys = currentKeys
+      # instead save the stuff from 2nd file in first parts
+      self.currentKeys = otherFileKeys
+      f.close()
+    except IOError:
+      traceback.print_exc()
+      sys.exit()
 
-        # store
-        if pageNumber not in pages:
-          pages.append(pageNumber)
-          pages.sort()
-          pageStartEnd[pageNumber]= [addPageStartsAt*1024,
-																((addPageStartsAt+pageSize)*1024)-1]
-          mapPageMemStart[pageNumber]=[decAdd]          
-        else:
-          memUsed = mapPageMemStart[pageNumber]
-          memUsed.append(decAdd)
-          memUsed.sort()
-          # not sure if this is needed
-          mapPageMemStart[pageNumber] = memUsed
-        mapStartEnd[decAdd]= endAdd
+  #Only prints the percent file.
+  def printPercentFile(self, name):
+    print "printing only percent file - %s"%(self.percentPage)
+    self.pages.sort()
+    print "sorted pages"
+    percentStr ="%s,"
+    pageSize = self.pageSize
+    answer = len(self.pages)/(pageSize*1024)
+    try:
+      percentFile = open(self.percentPage,'a')
+      percentFile.write(name+'\n')
+      if(answer >0 and not self.forcePage):
+        # if we can choose the page size and the current one isn't big enough.
+        newOne = pageSize+(answer*4)
+        percentFile.write("%s\n"%(str(newOne)))
+        # So we want to find the new page numbers
+        waiting =0
+        waitingPercent = 0
+        divide = (newOne/pageSize)
+        for pageNum in self.pages:
+          newOne = pageNum/divide
+          if(waiting >0):
+            if(newOne == waiting):
+              waitingPercent += self.pageToUsage[pageNum]
+              continue
+            else:
+              percentFile.write(percentStr%(hex(waiting)))
+              percent = waitingPercent/divide
+              if(percent < 1):
+                percent+=0.5
+              percentFile.write(str(int(round(percent))))
+              percentStr ="\n%s,"
+          waiting = newOne
+          waitingPercent = self.pageToUsage[pageNum]
+        percentFile.write(percentStr%(hex(waiting)))
+        percent = waitingPercent/divide
+        if(percent < 1):
+          percent+=0.5
+        percentFile.write(str(int(round(percent))))
+        self.pageSize = newOne
+      
+      else:
+        percentFile.write(str(pageSize)+'\n')
+        for pageNumber in self.pages:
+          # percent file
+          percentFile.write(percentStr%(hex(pageNumber)))
+          percent = (self.pageToUsage[pageNumber])
+          print "percent "+ str(percent)
+          if(percent < 1):
+            percent+=0.5
+          percentFile.write(str(int(round(percent))))
+          percentStr ="\n%s,"
+      
+    except IOError:
+      traceback.print_exc()
+      sys.exit()
+    else:
+      percentFile.write("\n\n")
+      percentFile.close()
+
+  # Prints out all files.
+  def printOut(self, name):
+    pages = self.pages
+    pageMemStart = self.mapPageMemStart
+    startEnd = self.mapStartEnd
+    test = pageMemStart
+    for key, li in pageMemStart.items():
+      test[key] = list(set(li))
+    pageMemStart = test
+    pages.sort()
+    pS = self.pageSize
+    pageSize = self.pageSize*1024
+    print "printing out "+str(name)
+    actualName = name.split("/")[-1]
+    answer = len(pages)/(pageSize)
     try:
       # print stuff out
-      actualName = name.split("/")[-1]
-      print "Creating %s."%("PageMap-"+actualName)
-      pageMapFile= open("PageMap-"+actualName, 'w') 
-      mapStr= "\tStart: %s. %s bytes long\n\t"\
-              "Last byte at: %s. Finishes At: %s\n"  
-
-      pageDataFile = open("PageData",'a')
-      pageDataFile.write('\n'+name)
-      
-      percentFile = open("PercentPage",'a')
-      percentFile.write(name+'\n')
-      percentStr ="%s,"
-      for pageNum in pages:
-        hexNum= hex(pageNum)
-        # for page map file.
-        pageMapFile.write('\nPage number:'+ hexNum)
-        startEnd = pageStartEnd[pageNum]
-        pageMapFile.write("\nPage starts at:%s \n"%(hex(startEnd[0])))
-        previousEnd = startEnd[0]
-        totalFree = freePartitions = biggestFree = smallestFree = 0
-        #----
-        #for page data
-        pageDataFile.write("\n%s: "%(hexNum))
-        #----
-        #for percent file
-        percentFile.write(percentStr%(hexNum))
-        percent=0
-        soFar =0
-        full = pageSize*1024.0
-        #----
-        memStarts = mapPageMemStart[pageNum]
-        for start in memStarts:
+      print "Creating %s, %s, %s."%(self.pageMap+actualName, 
+                                    self.pageData, self.percentPage)
+      pageMapFile= open(self.pageMap+actualName, 'w') 
+      pageDataFile = open(self.pageData,'a')
+      pageDataFile.write("\n%s"%(name))
+      percentFile = open(self.percentPage,'a')
+      percentFile.write("%s\n"%(name))
+      if(answer >0 and not self.forcePage):
+        newPageSize = pS+(answer*4) # in kb
+        percentFile.write("%s\n"%(str(newPageSize)))
+        self.calcPagePrintAll(newPageSize,percentFile,pageDataFile,pageMapFile)
+      else:
+        mapStr= "\tStart: %s. %s bytes long\n\t"\
+              "Last byte at: %s. Finishes At: %s\n"
+        freeStr= "Free: %d\n"
+        bFreeStr= "\tBiggest Free: %d. Smallest Free: %d\n"
+        sStr = "Stats: \n\t%d total free in %d partitions.\n"
+        pEndsStr= "Page ends at: %s\n"
+        dataStr= "%s - %s,"
+        percentStr ="%s,"
+        pNStr= "\nPage number:%s"
+        startsStr= "\nPage starts at:%s \n"
+        percentFile.write("%s\n"%(str(pS)))
+        for pageNum in self.pages:
+          hexNum= hex(pageNum)
+          # for page map file.
+          pageMapFile.write(pNStr%(hexNum))
+          startAdd = pageNum*pageSize # the address the page starts at
+          endAdd = startAdd + (pageSize-1) # minus 1?
+          pageMapFile.write(startsStr%(hex(startAdd)))
+          previousEnd = startAdd
+          totalFree = freePartitions = biggestFree = smallestFree = 0
+          #----
           #for page data
-          actualStart= start - startEnd[0]
-          actualEnd = mapStartEnd[start]- startEnd[0] 
-          pageDataFile.write("%s - %s,"%(str(actualStart),str(actualEnd)))
+          pageDataFile.write("\n%s: "%(hexNum))
           #----
           #for percent file
-          soFar += (mapStartEnd[start]- start)+1
+          percentFile.write(percentStr%(hexNum))
+          percent=soFar=0
+          full = self.pageSize*1024.0
           #----
-          # rest of loop for page map file
-          free = start - previousEnd
-          if(free >0):
-            if(biggestFree ==0):
-              smallestFree = free
-            if(free > biggestFree):
-              biggestFree = free
-            if(free < smallestFree):
-              smallestFree = free
-            totalFree += free
+          memStarts = pageMemStart[pageNum]
+          memStarts.sort()
+          for start in memStarts:
+            #for page data
+            actualStart= start - startAdd 
+            # the address where the mem starts at minus 
+            #the address the page starts at
+            size = startEnd[start] # this should just give how much is used now
+            actualEnd = actualStart+ size
+            pageDataFile.write(dataStr%(str(actualStart),str(actualEnd)))
+            #----
+            #for percent file
+            # so far keeps track of how much is used
+            soFar +=size
+            #----
+            # rest of loop for page map file
+            free = start - previousEnd
+            if(free >0):
+              if(biggestFree ==0):
+                smallestFree = free
+              if(free > biggestFree):
+                biggestFree = free
+              if(free < smallestFree):
+                smallestFree = free
+              totalFree += free
+              freePartitions +=1
+              pageMapFile.write(freeStr%(free))
+            pageMapFile.write(mapStr%(hex(start),
+                           size,
+                           hex(start+size-1),
+                           hex(start+size)))
+            previousEnd =start+size
+          endSpace= (endAdd - previousEnd)+1
+          if(endSpace>0):
+            totalFree += endSpace
             freePartitions +=1
-            pageMapFile.write("Free: %d\n"%(free))
-          pageMapFile.write(mapStr%(hex(start),
-                           (mapStartEnd[start]- start)+1,
-                           hex(mapStartEnd[start]),
-				                   hex(mapStartEnd[start]+1)))
-          previousEnd = mapStartEnd[start]+1
-        endSpace= (startEnd[1] - previousEnd)+1
+            if(endSpace > biggestFree):
+              biggestFree = endSpace
+            pageMapFile.write(freeStr %(endSpace))
+          pageMapFile.write(pEndsStr %(hex(endAdd)))
+          pageMapFile.write(sStr%(totalFree, freePartitions))
+          pageMapFile.write(bFreeStr%(biggestFree, smallestFree))
+          # percent file
+          percent = (soFar/full)*100.0
+          percentFile.write(str(int(round(percent))))
+          percentStr ="\n%s,"
+          #----
+        percentFile.write("\n\n")
+    except IOError:
+      # can put these here as the files will always be found.
+      percentFile.close()
+      pageMapFile.close()
+      pageDataFile.close() 
+      traceback.print_exc()
+      sys.exit()
+    else:
+      percentFile.close()
+      pageMapFile.close()
+      pageDataFile.close() 
+    
+  # Calculates an appropiate page size, prints out all files.
+  def calcPagePrintAll(self,newPageSize,percentFile,pageDataFile,pageMapFile):
+    print "new page sizes"
+    pages = self.pages
+    mapStr= "\tStart: %s. %s bytes long\n\t"\
+              "Last byte at: %s. Finishes At: %s\n"
+    percentStr ="%s,"
+    # now need to be able to change everything to be new pages
+    # just keep the strings or keep data?
+    waitingNumber,waitingSize = 0, 0
+    full = newPageSize*1024.0
+    newPageSizeB=  int(full)
+    newPageSizeBL=  int(full-1)
+    divide = (newPageSize/self.pageSize)
+    startAdd = totalFree = freePartitions = biggestFree = smallestFree = 0
+    previousEnd = startAdd
+    freeStr= "Free: %d\n"
+    bFreeStr= "\tBiggest Free: %d. Smallest Free: %d\n"
+    sStr = "Stats: \n\t%d total free in %d partitions.\n"
+    pEndsStr= "Page ends at: %s\n"
+    dataStr= "%s - %s,"
+    pNStr= "\nPage number:%s"
+    startsStr= "\nPage starts at:%s \n"
+    for pageNum in pages:
+      newPageNumber = pageNum/divide # new pageNumber
+      startAdd = newPageNumber*newPageSizeB# the address the page starts at
+      memStarts = self.mapPageMemStart[pageNum]
+      memStarts.sort()
+      if(waitingNumber >0):
+        if(newPageNumber == waitingNumber):
+          # just add to the waiting stuff, can print out pageData
+          for start in memStarts:
+            size = self.mapStartEnd[start]
+            waitingSize += size
+            # now for pageData
+            actualStart= start - startAdd 
+            # the address where the mem starts at minus 
+            # the address the page starts at
+            pageDataFile.write(dataStr%(str(actualStart),
+                              str(actualStart+ size))) # okay to print it out
+            #----
+       			# rest of loop for page map file
+            # can store the previous end
+            free = start - previousEnd
+            if(free >0):
+              if(biggestFree ==0):
+                smallestFree = free
+              if(free > biggestFree):
+                biggestFree = free
+              if(free < smallestFree):
+                smallestFree = free
+              totalFree += free
+              freePartitions +=1
+              pageMapFile.write(freeStr%(free))
+            previousEnd = start+size
+            pageMapFile.write(mapStr%(hex(start), size, hex(previousEnd-1),
+                              hex(previousEnd)))
+          continue 
+        else:
+         # Write waiting data to percent file.
+         percentFile.write(percentStr%(hex(waitingNumber)))
+         percent = (waitingSize/full)*100.0
+         if(percent < 1):
+           percent+=0.5
+         percentFile.write(str(int(round(percent))))
+         percentStr ="\n%s,"
+        # PageData doesn't need anything else
+        # PageMap does though
+        # need to write the end -
+        # so whats free, where the page ends and the stats
+        endSpace= (endAdd - previousEnd)+1
         if(endSpace>0):
           totalFree += endSpace
           freePartitions +=1
           if(endSpace > biggestFree):
             biggestFree = endSpace
-          pageMapFile.write("Free:%d\n" %(endSpace))
-        pageMapFile.write("Page ends at: %s\n" %(hex(startEnd[1])))
-        pageMapFile.write("Stats: \n\t%d total free in"\
-                          " %d partitions.\n"%(totalFree, freePartitions))
-        pageMapFile.write("\tBiggest Free: %d."\
-				                 " Smallest Free: %d\n"%(biggestFree, smallestFree))
-        # percent file
-        percent = (soFar/full)*100.0
-        percentFile.write(str(int(round(percent))))
-        percentStr ="\n%s,"
+          pageMapFile.write(freeStr %(endSpace))
+        pageMapFile.write(pEndsStr %(hex(endAdd)))
+        pageMapFile.write(sStr%(totalFree, freePartitions))
+        pageMapFile.write(bFreeStr%(biggestFree, smallestFree))
+        previousEnd = startAdd
+        totalFree = freePartitions = biggestFree = smallestFree = 0
+        # still need to store the current page stuff.. fall to after if.
+
+      # after if
+      # it's 0, so first one, just store, can print some stuff.
+      #store things for percent file.
+      waitingNumber = newPageNumber
+      waitingSize = 0
+      hexNewPage = hex(newPageNumber)
+      # print for pageMapFile
+      pageMapFile.write(pNStr%(hexNewPage))
+      pageMapFile.write(startsStr%(hex(startAdd)))
+      # print pageData file
+      pageDataFile.write("\n%s: "%(hexNewPage))
+      endAdd = startAdd + newPageSizeBL # minus 1?
+      previousEnd = startAdd
+      for start in memStarts:
+        size = self.mapStartEnd[start]
+        waitingSize += size
+        # now for pageData
+        actualStart= start - startAdd 
+        # the address where the mem starts at minus the address the page starts at
+        pageDataFile.write(dataStr%(str(actualStart),str(actualStart + size))) 
+        # okay to print it out?
         #----
-      percentFile.write("\n\n")
+      	# rest of loop for page map file
+        # can store the previous end
+        free = start - previousEnd
+        if(free >0):
+          if(biggestFree ==0):
+             smallestFree = free
+          if(free > biggestFree):
+            biggestFree = free
+          if(free < smallestFree):
+            smallestFree = free
+          totalFree += free
+          freePartitions +=1
+          pageMapFile.write(freeStr%(free))
+        previousEnd = start+size
+        pageMapFile.write(mapStr%(hex(start), size,
+                         hex(previousEnd-1), hex(previousEnd)))
+    #need to check for things left over!
+    # so write last pecernt things
+    percentFile.write(percentStr%(hex(waitingNumber)))
+    percent = (waitingSize/full)*100.0
+    if(percent < 1):
+      percent+=0.5
+    percentFile.write(str(int(round(percent))))
+    percentStr ="\n%s,"
+    #write last pageMap
+    endSpace= (endAdd - previousEnd)+1
+    if(endSpace>0):
+      totalFree += endSpace
+      freePartitions +=1
+      if(endSpace > biggestFree):
+        biggestFree = endSpace
+      pageMapFile.write(freeStr %(endSpace))
+    pageMapFile.write(pEndsStr %(hex(endAdd)))
+    pageMapFile.write(sStr%(totalFree, freePartitions))
+    pageMapFile.write(bFreeStr%(biggestFree, smallestFree))
+    return
 
-      percentFile.close()
-      pageMapFile.close()
-      pageDataFile.close()  
-    except IOError:
-      traceback.print_exc()
-      sys.exit()        
-
+      
 if __name__ == "__main__":
-  import optparse, time
+  import optparse, time, profile
   parser = optparse.OptionParser()
+  flags =["-p","-e","-P"]
   parser.add_option("-f", "--files", dest="_files",
                     help="Argument required. Files to be parsed."\
                          " Can be in format [\"file1\",\"file2\",..]")
   parser.add_option("-p", "--page_size", dest="_page", default=4,
-                    help="Default is 4KB. Page size in KB.", type ='int')
+                    help="Default is 4KB. Page size in KB. "\
+                    "This will just be a guide."\
+                    " To force this size use -P.", type ='int')
+  parser.add_option("-e", "--compute_all", dest="_all", default=False,
+                    action="store_true",
+                    help="Compute all pages. Default is False"\
+                    " - only computes pages needed for visualiser.")
+  parser.add_option("-P", "--force_page", dest="_force", default=False,
+                    action="store_true",
+                    help="Force the page size to be adhered to.")
   (options, args) = parser.parse_args()
+  print "options "+ str(options)
   if not options._files:
     err = False
     if(len(sys.argv)==1):
-     err = True
+      err = True
     else:
       files = sys.argv[1:]
-      if("-p" in files):
-        inde = files.index("-p")
-        del files[inde: inde+2]
-        if(len(files)==0):
-          err = True
+      for x in flags:
+        if(x in files):
+          inde = files.index(x)
+          del files[inde: inde+2]
+          if(len(files)==0):
+            err = True
     if(err):
       parser.error("No files were supplied.")  
   else:
-    files = options._files.replace("[","").replace("]","")
-    if("," in files):
+    files = [options._files.replace("[","").replace("]","")]
+    if(" " in files):
       files = files.split(",")
-    else:
-      files = files.split(" ")
+
   print "Files are %s. Page size is %dKB."%(str(files), options._page)
   t1 = time.time()
-  checkMemory(files, int(options._page))
+  checkMemory(files, int(options._page), options._all, options._force)
   t2 = time.time()
   print 'took %0.3f ms' % ((t2-t1)*1000.0)
