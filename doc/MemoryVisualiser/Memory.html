@@ -3,7 +3,6 @@
   <head>
     <script src="http://d3js.org/d3.v2.js"></script>
 		<script type="text/javascript" >
-
 var names=[], sizes=[];
 var svgWidth= 600,svgHeight = 1800;
 var width=10, height=width;
@@ -11,44 +10,53 @@ var rowPadding =width/5;
 var colPadding =1;
 var numOfCircs=4;
 var divider =3;
-var biggestShare = (width/divider)/numOfCircs;
+var biggestShare = (width/divider)/numOfCircs; // share each circle gets
 var r = biggestShare/numOfCircs;
 var circleArea = width/divider;
 var firstSVG;
-var testing = false;
+var pageSizes =[];
 
 function createVisual(){
-  if(testing){doTests(); return;}
 	var everything = readFile("PercentPage");
+  //console.log("everb "+ everything);
   var biggerFont = (width/4)+10;
-  var objs =[];
-  var onClick = function(){
-    var obj = d3.select(this);
-    if(obj.attr("opacity")=="0"){
-      if(objs.length ==2){
-        var lastObj = objs.pop(); // take off the first one
-        lastObj.attr("opacity", "0");
-			}
-			obj.attr("opacity", "1");
-      objs.push(obj);
-		}
-    else{
-      var ind = -1
-      var id = obj.attr("id");
-      for(var i=0; i < objs.length; i++){
-        if(id == objs[i].attr("id")){
-          ind = i;
-          break;
-        }
-      }
-		  obj.attr("opacity", "0");
-      objs.splice(ind, 1);
-	  }
-  }
+  var recSelect  =[], recSelectText=[];
+  var onClick = function(theText, theRect){
+                  var obj = theRect;
+                  if(theRect.attr("stroke")=="#eee9e9"){
+                    if(recSelect.length ==2){
+                       var lastObj = recSelect.pop(); // take off the first one
+                       lastObj.attr("stroke", "#eee9e9");
+                       lastObj = recSelectText.pop(); // take off the first one
+                       lastObj.attr("stroke", "#eee9e9");
+                       lastObj.text("Click to select");
+			              }
+                    theText.attr("stroke", "blue");
+                    theText.text("Click to unselect");
+                    theRect.attr("stroke", "blue");
+                    recSelect.push(theRect);
+                    recSelectText.push(theText);
+		              }
+                  else{
+                    var ind = -1
+                    var id = obj.attr("id");
+                    for(var i=0; i < recSelect.length; i++){
+                      if(id == recSelect[i].attr("id")){
+                        ind = i;
+                        break;
+                      }
+                    }
+                    theText.attr("stroke", "#eee9e9");
+                    theText.text("Click to select");
+                    theRect.attr("stroke", "#eee9e9");
+                    recSelect.splice(ind, 1);
+                    recSelectText.splice(ind, 1);
+	                }
+                }
   var submit = function(){
-    if(objs.length != 2)return;
-    compare(objs, everything, false);
-	}
+                 if(recSelect.length != 2)return;
+                   compare(recSelect, everything, false);
+	             }
 
 	for(var k=0; k < everything.length;k++){
     // create divs to anchor svg to
@@ -71,16 +79,45 @@ function createVisual(){
               .style("background-color","white")
 		 					.attr("class",function(d){return d;});
     var svgRect = svg.append("rect")
-                  .attr("id", k)
+                  .attr("id", "#re-"+k)
                   .attr("x",1)
                   .attr("y",1)
                   .attr("width", svgWidth-1)
                   .attr("height", svgHeight-2)
-                  .on("click", onClick)
+                  .on("click", function(d,i){
+                                 var id = d3.select(this).attr("id");
+                                 var textID = "#txt-"+id.split("-")[1];
+                                 var children = this.parentNode.childNodes
+                                 for(var i=0; i < children.length; i++){
+                                   if(d3.select(children[i]).attr("id")== textID){
+                                     onClick(d3.select(children[i]),d3.select(this));
+                                   }
+                                 }
+                               })
                   .attr("cursor", "pointer")
-                  .attr("stroke", "blue")
+                  .attr("stroke", "#eee9e9")
                   .attr("fill", "white")
-                  .attr("opacity","0");
+                  .attr("opacity","1");
+    svg.append("text")
+       .attr("dx", 1)
+       .attr("id", "#txt-"+k)
+         .attr("dy", 10)
+         .attr("font-size", 12)
+         .attr("stroke", "grey")
+         .style("font-family", "Courier New, Times, serif")
+         .attr("kernel", "50%")
+         .attr("cursor", "pointer")
+         .on("click", function(d,i){
+                        var id = d3.select(this).attr("id");             
+                        var rectID = "#re-"+id.split("-")[1];
+                        var children = this.parentNode.childNodes
+                        for(var i=0; i < children.length; i++){
+                          if(d3.select(children[i]).attr("id")== rectID){
+                            onClick(d3.select(this),d3.select(children[i]));
+                          }
+                        } 
+                      })
+         .text("Click to select");
     if(k==0){
       firstSVG = svg;
       // only want one button
@@ -106,7 +143,7 @@ function createVisual(){
          .on("click", submit)
          .text("compare");
 		}
-		var end = addRec(svg, everything, k, 0, "first"+k, svgWidth, false);
+		var end = addRec(svg, everything, k, 0, "first"+k, svgWidth, false, 7);
     var endHeight = end[1] +height;
     if(endHeight < 100)endHeight=100;
     svg.attr("height", endHeight);
@@ -117,19 +154,21 @@ function createVisual(){
        .attr("dy", end[1])
        .attr("font-size", 12)
        .text(end[2].toString(16));
+
+   
   }
 }
 
 /*
  Functions for highlighting individual pages.
 */
-var highlight = function(text, obj) {
+var highlight = function(obj) {
   // make outline grey
 	var rect = d3.select(obj.parentNode.childNodes[0]);
 	oldCol= rect.attr("stroke");
 	rect.attr("stroke","grey");
 }
-var unhighlight = function(text, obj) {
+var unhighlight = function(obj) {
   var rect = d3.select(obj.parentNode.childNodes[0]);
 	rect.attr("stroke",oldCol);
 }
@@ -137,8 +176,9 @@ var unhighlight = function(text, obj) {
 /*
 Adds the rectangles representing each page.
 */
-function addRec(svg, everything, k, start, id, svgWidthy, sign){
- 	var x = (start-width), y = rowPadding+10;
+function addRec(svg, everything, k, start, id, svgWidthy, sign, yOffset){
+  start = start +4;
+ 	var x = (start-width), y = rowPadding+10 +yOffset;
 	var circs =[];
 	var tmpY = y;
   // create a group node.
@@ -157,6 +197,7 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign){
                         var subs= d.split(".");
                         if(addCircleWidth){x += circleArea+colPadding;}
 												else x+=width+colPadding;
+                        
      										if(x >= svgWidthy-width){
                           x =start; 
 													tmpY = tmpY + height+rowPadding;
@@ -171,10 +212,11 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign){
     											var cx = x + (amountLeft/2)+ r; // amountLeft should be halved as half goes before circle and half after.
             			         								                // need to add r as cx is middle of circle.
     											var end = (x + biggestShare)- r; // end of area that circles share.
+
     											var cy = tmpY + (height/2);
                           if(cx+circleArea+colPadding> svgWidthy){
-                            cx = start+ (amountLeft/2)+r; 
-                            end = (1+biggestShare) -r;
+                            cx = start+ (amountLeft/2)+r; // this at the start
+                            end = (start+biggestShare) -r;
                             cy= cy+height+rowPadding;
                             endYPos = cy;
                             x =start; 
@@ -191,15 +233,16 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign){
     										  return oldX;   
 												}
                         endXPos =x;
+                        
 												return x;
 											})
 		  					.attr("y",
                       function(d,i){
-                        var subs= d.split(".");
 												if(flip.indexOf(i)>-1){
 												  y =y + height+rowPadding;
 												}
                         if(y > endYPos){
+                          
                           endYPos = y+(height/2); 
                         }
 												return y;
@@ -229,13 +272,12 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign){
                         else if (-10  >= num){
 												  var first = num.substring(0,2);
 												}
-                         
 												return "c-"+first;
 											})
    							.attr("width", width)
    							.attr("height", height)
-                .on("mouseover", function(d,i){highlight(false, this);})
-    						.on("mouseout", function(d,i){unhighlight(false, this);})
+                .on("mouseover", function(d,i){highlight(this);})
+    						.on("mouseout", function(d,i){unhighlight(this);})
    							.attr("title",
                       function(d) {
                         var tempPageNum=pageNum; 
@@ -253,6 +295,7 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign){
 												return n+"% \n"+tempPageNum.toString(16);
 											});
   var result = width/(r*r);
+
   // add circles for indicating compressed data
 	svg.selectAll("circle"+id)
      .data(circs)
@@ -293,6 +336,7 @@ function readFile(theName) {
 		}
     if(eachFilePages.length>1){ 
       var size = eachFilePages.length -2
+      pageSizes.push(eachFilePages[1]);
 			var theName= eachFilePages[0]+" "+ eachFilePages[1]+"KB Pages.";
     	names.push(theName);
       var flattenEffect=0;
@@ -338,95 +382,6 @@ function readFile(theName) {
 	}
   return list;
 }
-/*
-Compares two results. TODO rework and tidy.
-*/
-
-var allPaths=[];
-var tests =[];
-function doTests(){
-  var numPaths=48;//so far, try to keep up to date.
-  var test1=[["0.1","13.1","7.1","0.1","5.1","3.1","1.1"],
-           ["0.1","14.1","20.1","0.1","7.3"]];
-  var test1Res=["0.1","1.1","13.1","0.1","2.1","4.1","6.1"];
-  var test2 =[["0.1","13.1","7.1","0.1","5.1","3.1","1.1","4.1","2.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
-  var test2Res=["0.1","1.1","13.1","0.1","2.1","4.1","6.1","1.1","4.1"];
-
-  var test3 =[["0.1","13.1","7.1","0.1","5.1","6.3","2.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
-  var test3Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","4.1"];
-
-  var test4 =[["0.1","13.1","7.1","0.1","5.1","6.4","2.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
-  var test4Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","0.1","-2.1"];
-
-  var test5 =[["0.1","13.1","7.1","0.1","5.1","6.4","2.1","5.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1","3.2"]];
-  var test5Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","0.1","-1.1", "-2.1","3.1"];
-
-  var test6 =[["0.1","13.1","7.1","0.1","5.1","6.2","5.1","6.2","5.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1"]];
-  var test6Res=["0.1","1.1","13.1","0.1","2.1","1.2","0.1","0.1","-5.1", "-5.1"];
-
-  var test7 =[["0.1","13.1","7.1","0.1","5.1","6.2","5.1","6.3","19.1"],
-            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1"]];
-  var test7Res=["0.1","1.1","13.1","0.1","2.1","1.2","0.1","0.1","-5.1","-6.1","-19.1"];
-
-  var test8 =[["3.3","2.1","2.1","7.1"],
-            ["1.1","1.1","1.1","3.1"]];
-  var test8Res=["-2.1","-2.1","-2.1","1.1","-2.1","-7.1"];
-
-  var test9 =[["3.3","2.1","2.1","7.1"],
-            ["1.1","4.4","1.1","3.1"]];
-  var test9Res=["-2.1","1.2","2.1","2.1","-6.1","3.1"];
-
-  var allTests =[test1, test2, test3, test4, test5, test6, test7, test8, test9];
-  var allTestsRes =[test1Res, test2Res, test3Res, test4Res, test5Res, test6Res, test7Res, test8Res, test9Res];
-
-  var testsPassed =0;
-  var testsFailed =0;
-  for(var i=0; i < allTests.length; i++){
-    var res= compare([],allTests[i],true);
-    console.log(res);
-    console.log(test1Res);
-    console.log("allpaths "+ allPaths);
-    console.log("allpaths "+ allPaths.sort(function sortfunction(a, b){
-                //Compare "a" and "b" in some fashion, and return -1, 0, or 1
-                return (a-b);
-                 }));
-    if(res.length == allTestsRes[i].length){
-      var same = true;
-      for(var p=0; p < res.length; p++){
-        if(res[p] != allTestsRes[i][p]){
-          console.log("res p is" + (res[p]));
-          console.log("oth p is" + (allTestsRes[i][p]));
-          same = false;
-          break;
-        }
-      }
-      if(!same){
-        console.log("test "+ i+ " result was NOT expected");
-        testsFailed ++;
-      }
-      else {
-       console.log("test "+ i+ " result was expected");
-       testsPassed ++;
-      }
-    }
-    else {
-      console.log("test "+ i+ " result was NOT expected");
-      testsFailed ++;
-    }
-  }
-  console.log("testsPassed "+ testsPassed +" testsFailed "+ testsFailed +" num of tests "+ allTests.length);
-}
-
-var trace =[];
-function testPaths(number){
-  if(allPaths.indexOf(number)==-1)allPaths.push(number);
-  trace.push(number);
-}
 
 function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, percent){
   smallest = changedX2orY2;
@@ -440,7 +395,6 @@ function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, per
       return !isX;
     }
     smallest = changedX2orY2;
-    testPaths("shiftLoop");
     var done = true;
     var len = stillToDo/2;
     for(var p=0; p < len; p++){
@@ -477,59 +431,138 @@ function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, per
 var isX= false;
 var newPoints=[];
 
-function compare(objs, everything, test){
-  // now compare them
-  newPoints=[],stillToDo=[];
-  if(!test){
-    var obj1 = everything[objs[0].attr("id")];
-    var obj2 = everything[objs[1].attr("id")];
+function reconfigurePageSize(changedOne, offset, oppOffset){
+  var len = changedOne.length;
+  var updated =[];
+  var waitingPer =[];
+  var waitingPages =[];
+  if(changedOne[0].split(".")[0]==0 && changedOne[0].split(".")[1] > oppOffset){
+    var first = changedOne.shift().split(".");
+    var after = parseInt(first[1])*offset;
+    updated.push("0."+ Math.round(after));
 
-    var first = obj1;
-    var sec = obj2;
-    // always compare the first result with next result.
-    if(objs[0].attr("id") > objs[1].attr("id")){
-      var first = obj2;
-      var sec = obj1;
+  }
+  while(changedOne.length >0 || waitingPer.length >0){
+      // need as many pages to merge as oppOffset
+      var percent = 0;
+      var howManyPages = 0;
+      if(waitingPer.length >0){
+        // do this first
+        var waitingLen = waitingPer.length;
+        for(var p=0; p < waitingLen; p++){
+          per = waitingPer.shift();
+          howMany= waitingPages.shift();
+          if(howMany+ howManyPages == oppOffset){
+            // good
+            howManyPages = oppOffset;
+            percent += (per * howMany);
+            break;
+          }
+          if(howMany+ howManyPages > oppOffset){
+            // take what we need, push back onto waiting
+            var whatsUsed = (oppOffset - howMany);
+            var whatsLeft = howManyPages - whatsUsed;
+            waitingPer.unshift(per);
+            waitingPages.unshift(whatsLeft);
+            //now found everything i need
+            howManyPages = oppOffset;
+            percent += (per * whatsUsed);
+            break;
+            
+          }
+          if(howMany+ howManyPages < oppOffset){
+            //we can keep looping
+            howManyPages +=howMany;
+            // need to know how many percents im adding.
+            percent += (per * howMany);
+          }
+        }
+      }
+      while (changedOne.length >0 && howManyPages != oppOffset){
+        // keep adding to percent and how many pages
+        var y = (changedOne.shift()).split(".");
+        var whatUsed = parseInt(y[1]);
+        if(whatUsed+ howManyPages > oppOffset){ 
+          // we don need all of y
+          // we only want some of the y then
+          restOfY = whatUsed - (oppOffset- howManyPages); // whats left of y
+          per = parseInt(y[0]); // the percent
+          whatUsed = parseInt(y[1]) - restOfY; // what we took from y
+          // still need to store whats left
+          waitingPer.push(per);
+          waitingPages.push(restOfY);
+
+        }
+        percent += (parseInt(y[0])*whatUsed); // times percent by whatUsed
+        howManyPages +=whatUsed;
+      }
+      // have all percent we need and all pages together we need
+      actualPercent = percent*offset;
+      updated.push(Math.round(actualPercent)+".1");
     }
+ return updated;
+}
+function compare(objs, everything, test){
+  newPoints=[],stillToDo=[];
+  var obj1 = everything[objs[0].attr("id").split("-")[1]].slice(0);
+  var obj2 = everything[objs[1].attr("id").split("-")[1]].slice(0);
+  var pageSize1 = pageSizes[objs[0].attr("id").split("-")[1]];
+  var pageSize2 = pageSizes[objs[1].attr("id").split("-")[1]];
+  // are they the same page size?
+  if(pageSize1 != pageSize2){
+    if(pageSize1 > pageSize2){
+      var offset = pageSize2/pageSize1;
+      var oppOffset = pageSize1/pageSize2;
+      var changedOne = obj2;
+    }
+    else{
+      var offset = pageSize1/pageSize2;
+      var oppOffset = pageSize2/pageSize1;
+      var changedOne = obj1;
+    }
+    updated = reconfigurePageSize(changedOne, offset,oppOffset );
+    if(pageSize1 >pageSize2) obj2 = updated;
+    else obj1=updated;
   }
-  else{
-    var first = everything[0];
-    var sec =everything[1];
+  var first = obj1;
+  var sec = obj2;
+  // always compare the first result with next result.
+  if(objs[0].attr("id") > objs[1].attr("id")){
+    var first = obj2;
+    var sec = obj1;
   }
-  testPaths(1);
+
   // loop around the first objects first
   // compare each against the sec object.
+  var firstBigger = first.length - sec.length;
 	stillToDo = doLoop(first, sec);
-  if(first.length < sec.length){
-    testPaths(38);
+  if(firstBigger < 0){ 
 		// then the rest of the new points is just sec.
-		var rest = sec.length- first.length;
-    var start = first.length;
-    // okay so there is still stuff left to do.
-    //
     if(!isX){
-      testPaths(39);
       // also need to do the rest of the sec? or it's okay as that's done after?
-      for(var j=0; j < stillToDo.length; j=j+2){
+      var leng = stillToDo.length;
+      for(var j=0; j < leng; j=j+2){
 			  // just push it.
         // its not from the first one
-        testPaths(40);
-        newPoints.push(stillToDo[j]+"."+stillToDo[j+1]);
+        newPoints.push(stillToDo.shift()+"."+stillToDo.shift());
       }
     }
     else{
-      testPaths(41);
       //isX in stillToDo
       var leng = stillToDo.length;
       fi =[];
-      se = sec.splice(first.length);
-      for(var j=0; j <= (stillToDo.length)/2; j++){
+      //se = sec.splice(first.length); // maybe not needed.
+      for(var j=0; j <= (leng)/2; j++){
         fi.push(stillToDo.shift()+"."+stillToDo.shift())
       }
       stillToDo=[];
-      stillToDo = doLoop(fi, se);
-			
+      stillToDo = doLoop(fi, sec);
     }// else
+    var len = sec.length
+    for(var q=0; q < len; q++){ // TODO and make sure the sec only has the stuff we still need to do.
+      // do the rest of the sec.
+      newPoints.push(sec.shift());
+    }
 	}// if
   if(stillToDo.length >0){
   for(var i=0; i <= (stillToDo.length)/2; i++){
@@ -544,10 +577,10 @@ function compare(objs, everything, test){
     return newPoints;
   }
   var theSVG= d3.selectAll("#svg0");
-  var temp = theSVG.append("g").attr("id", "blah")
+  var temp = theSVG.append("g").attr("id", "extra")
   var start=750;
 
-  var thing = document.getElementById("blah");
+  var thing = document.getElementById("extra");
   if(thing){
     var fc = thing.firstChild;
     if(fc != null){
@@ -557,7 +590,7 @@ function compare(objs, everything, test){
       }
     }
   }
-  var end = addRec(temp, [newPoints], 0, 750, "sec", 1200, true);
+  var end = addRec(temp, [newPoints], 0, 750, "sec", 1200, true, 7);
   var endHeight = end[1] +height;
   if(endHeight < 100)endHeight=100;
   firstSVG.attr("height", endHeight);
@@ -570,17 +603,15 @@ function compare(objs, everything, test){
 }
 
 function doLoop(first, sec){
-  for(var i=0; i <first.length; i++){
-	  var xUnsplit = first[i].split(".");
+  var loopNumber = first.length // added so we have a definite loop number that wont change.
+  for(var i=0; i <loopNumber; i++){
+    var xUnsplit = first.shift().split("."); // added
     var x1 = parseInt(xUnsplit[0]); // the percent
     var x2 = parseInt(xUnsplit[1]); // how many pages the percent is over
     if(i >= sec.length){ 
       // nothing left to compare with in other file.
-      //tested.
-      testPaths(2);
       if(stillToDo.length >0){
         if(!isX){
-          testPaths(3);
           for(var p=0; p < stillToDo.length; p++){
             var pC2 =  parseInt(stillToDo.shift());
             var num2 =  parseInt(stillToDo.shift());
@@ -594,7 +625,6 @@ function doLoop(first, sec){
               testPaths(4);
             }
             else{
-              testPaths(5);
               var howMany = x2;
               stillToDo.unshift(pC2,num2-x2);
               x2 = 0, x1 = 0;
@@ -608,7 +638,6 @@ function doLoop(first, sec){
         }
         else{ //isX
           // okay can loop around stillToDo and then do this first one
-          testPaths(7);
           for(var p=0; p < stillToDo.length; p++){
             var pC = stillToDo.shift();
             var num= stillToDo.shift();
@@ -619,71 +648,59 @@ function doLoop(first, sec){
       // do the current first one
       // since at this point there is nothing to compare with
       // stillToDo has nothing and nether does the sec.
-      testPaths(8);
       newPoints.push("-"+x1+"."+x2);
       continue;
     }
-    testPaths(9);
-    var yUnsplit= sec[i].split(".");        
+    var yUnsplit = sec.shift().split("."); // added.    
     var y1 = parseInt(yUnsplit[0]); // the percent
     var y2 = parseInt(yUnsplit[1]); // how many pages the percent is over
           
     if(stillToDo.length==0){
 		  // both at same point so far (at same pageNumber)
       // can compare normally
-      testPaths(10);
       var diff = y1-x1;
       if(x2==y2){
-        testPaths(11);
 			  // the pages the percents is over is the same
         newPoints.push(diff+"."+x2);
         continue;
 			}
       // the num of pages the percent is over is different
       // so its the same for a couple, but not for all.
-      testPaths(12);
 			var leftOver = x2-y2;
       var smallest = y2;
       isX = true;
       re = x1;
       if (x2< y2){
-        testPaths(13);
         smallest=x2;
         re = y1;
         isX= false;
       }
       newPoints.push(diff+"."+smallest);
       // still need to store the bit left over.
-      //if(smallest != x2)isX= true;
       stillToDo.push(re);
       stillToDo.push(Math.abs(leftOver));
       continue;
 		}
 		// okay so something has been left over.
     if(isX){ // in stillToDO is the x value
-      testPaths(14);
 		  var theX1 = stillToDo.shift();
       var theX2 = stillToDo.shift();
       var theY1= y1,theY2 = y2;
 		}
 		else{ // in stillToDO is the y value
-      testPaths(15);
 		  var theX1 = x1,theX2 = x2;
       var theY1=stillToDo.shift();;
       var theY2 = stillToDo.shift();;
 		}
 		if(theX2 == theY2){
       //both for the same amount
-      testPaths(16);
 		  newPoints.push(theY1-theX1+"."+theY2);
       // now do the next one
 			if(isX){
-        testPaths(17);
 			  stillToDo.push(x1);
         stillToDo.push(x2);
 			}
 			else{
-        testPaths(18);  
 			  stillToDo.push(y1);
         stillToDo.push(y2);
         isX=false;
@@ -692,7 +709,6 @@ function doLoop(first, sec){
 		}
     // merge these together
     if(isX && theX2 > theY2){
-      testPaths(19);
 		  // so this one is bigger than y2, so some of it will be saved as will x2
       var percent =  y1 - theX1;
       newPoints.push(percent+"."+y2);
@@ -702,10 +718,8 @@ function doLoop(first, sec){
       // also need to push x1 
       stillToDo.push(x1);
       stillToDo.push(x2);
-      //isX.push(true);
 		}
     else if(!isX && theY2 > theX2){
-      testPaths(20);
 		  var percent =  theY1 - theX1;
       newPoints.push(percent+"."+theX2);
       stillToDo.unshift(theY2 - theX2);
@@ -737,15 +751,11 @@ function doLoop(first, sec){
 			}// is X
       else{
         //Not X
-        // not theY2 > theX2 // the Y2 is less than theX2
-        // since it's notX we know that theX2==x2;
-        testPaths(30);
         // theY2 is bigger than x2
 				newPoints.push(percent+"."+theY2);
         var nowX2 = theX2- theY2;// it will never be 0.
         // now use previous y1 to compare
         percent = y1- x1;
-        // nowX2 is theX2 -
         if(nowX2 == y2){
          newPoints.push(percent+"."+y2);
          continue;
@@ -757,9 +767,11 @@ function doLoop(first, sec){
 			}// other else
 		}	// other else
 	} // for loop
-
 return stillToDo;
 }
+
+
+
 
 </script>
 		<!link rel="stylesheet" type="text/css" href="colours.css" />

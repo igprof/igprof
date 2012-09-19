@@ -30,8 +30,10 @@ class checkMemory(object):
                             stderr=subprocess.PIPE).communicate()
     f = open(self.percentPage,'w')
     f.close()
+    print "herere " + str(doAll)
     if(not doAll): # only calculate the PercentPage file.
       for theFile in files:
+        print "the file is "+ theFile
         self.percentLoop(theFile,0)
         self.printPercentFile(theFile)
     else:
@@ -40,9 +42,11 @@ class checkMemory(object):
       f = open(self.memMap, 'w')
       f.close()
       theFile = self.doFiles(theFiles)
+      print "the file "+ str(theFile) 
       if(theFile): # if there are things in currentkeys? TODO
         f = open(self.memMap,'a')
         line = "(%s) %s : %s\n\n"
+        print "current keys "+ str(self.currentKeys)
         for lineNumber in self.currentKeys:
           fullName = self.lineToCalls2[lineNumber]
           addr = self.callToAdd2[fullName]
@@ -79,22 +83,37 @@ class checkMemory(object):
     memoryMap = {}
     LKRE = re.compile("LK=[(]0x([0-9a-f]+),[ ]*([0-9a-f]+)[)]")
     closeF=0
+    zipped = False
     try:  
       if(fileName.endswith(".gz")):
         fi = subprocess.Popen(["zcat",fileName], stdout=subprocess.PIPE)
+        na = fileName.split(".")[0]
         # same as normal file, only different loop.
         iterable = iter(fi.stdout.readline,'')
+        notFirst = False
+        zipped = True
       else:
         iterable = open(fileName, 'r')
         closeF = 1
       # for each line in the file
       for line in iterable:
+        if(zipped and na in line and notFirst):
+          # start of a new file..
+          # finish with this current file
+          self.pageToUsage = dict((pageAddr, (size * 100.0) / pageSize) 
+             for (pageAddr, size) in memoryMap.items())
+          self.pages = [x for x in self.pageToUsage.keys()]
+          self.printPercentFile(fileName)
+          # now initialise everything and keep looping.  
+          memoryMap = {}
+        notFirst = True
         if not "LK" in line:
           continue 
         allocs = [(int(x.group(1), 16), int(x.group(2), 16))
                   for x in LKRE.finditer(line)]
         data = [(address, size, address/pageSize, (address+(size-1))/pageSize) 
                for (address, size) in allocs]
+        
         # find if LK is on this line
         for address, size, startPage, finalPage in data:
           if startPage == finalPage:
@@ -127,17 +146,65 @@ class checkMemory(object):
     pageSize = self.pageSize*1024
     LKRE = re.compile("LK=[(]0x([0-9a-f]+),[ ]*([0-9a-f]+)[)]")
     CRE = re.compile(r'C(\d*\w)')
+    firstDone,secndDone, zipped = False, False, False
     try:
       if(fileName.endswith(".gz")):
         fi = subprocess.Popen(["zcat",fileName], stdout=subprocess.PIPE)
+        print "fi is "+ str(fi)
+        na = fileName.split(".")[0]
         # same as normal file, only different loop.
         iterable = iter(fi.stdout.readline,'')
+        zipped = True
       else:
         iterable = open(fileName, 'r')
         closeF = 1
       # for each line in the file
       for line in iterable :  
         # find if LK is on this line
+        if(zipped and na in line):
+          # start of a new file..
+          # finish with this current file
+          # here it's more complex as i need to
+          # wait this is just the start of this file..
+          #.... need to know to do this stuff later instead
+          # either after the loop or when the next file starts.
+          if(firstDone):
+            # the first one is done, so now we're onto the 2nd.
+            # set 2nd done
+            self.lineToCalls = lineToCalls
+            self.callToAdd = callToAdd
+            self.mapStartEnd = memoryMapSizes
+            self.mapPageMemStart = memoryMapPages 
+            self.pages = [x for x in memoryMapPages.keys()]
+            secndDone = True
+            firstDone = False
+          elif(secndDone):
+            # 2nd is done, so we can compare things 
+            self.lineToCalls2 = lineToCalls 
+            self.callToAdd2 = callToAdd 
+            self.mapStartEnd2 = memoryMapSizes
+            self.mapPageMemStart2 = memoryMapPages
+            self.temp2 = memoryMapPages
+            self.pages2 = [x for x in memoryMapPages.keys()]
+            # now do diff depending on what we need to do. 
+            # If we have things waiting on us or not.
+            self.diff(fileName, fileName)
+            # compute the pages for the current file.
+            self.printOut(fileName)
+            # have done the difference and printed out first file.
+            self.lineToCalls = self.lineToCalls2
+            self.callToAdd = self.callToAdd2
+            self.pages = self.pages2
+            self.mapStartEnd = self.mapStartEnd2
+            self.mapPageMemStart = self.mapPageMemStart2
+          else:
+            # nothing has been done yet, so its the first
+            firstDone = True
+          # now initialise everything and keep looping.  
+          memoryMapPages, memoryMapSizes = {},{}
+          lineToCalls,callToAdd={} ,{}
+          callToNewName ={}
+          allCalls=[] # c1, c2
         if ("LK" not in line):
           continue
         callres = CRE.search(line) 
@@ -181,6 +248,27 @@ class checkMemory(object):
               add = page*pageSize
               memoryMapPages.setdefault(page,[]).append(add)
               memoryMapSizes[add]= memoryMapSizes.setdefault(add,0)+ pageSize
+
+      if(secndDone):
+        # 2nd is done, so we can compare things 
+        self.lineToCalls2 = lineToCalls 
+        self.callToAdd2 = callToAdd 
+        self.mapStartEnd2 = memoryMapSizes
+        self.mapPageMemStart2 = memoryMapPages
+        self.temp2 = memoryMapPages
+        self.pages2 = [x for x in memoryMapPages.keys()]
+        # now do diff depending on what we need to do.
+        # If we have things waiting on us or not.
+        self.diff(fileName, fileName)
+        # compute the pages for the current file.
+        self.printOut(fileName)
+        # have done the difference and printed out first file.
+        self.lineToCalls = self.lineToCalls2
+        self.callToAdd = self.callToAdd2
+        self.pages = self.pages2
+        self.mapStartEnd = self.mapStartEnd2
+        self.mapPageMemStart = self.mapPageMemStart2
+
       if(toggle == 0):
         self.lineToCalls = lineToCalls
         self.callToAdd = callToAdd
@@ -194,6 +282,7 @@ class checkMemory(object):
         self.mapPageMemStart2 = memoryMapPages
         self.temp2 = memoryMapPages
         self.pages2 = [x for x in memoryMapPages.keys()]
+
       # the next file starts from this position
       if(closeF):
         iterable.close()
@@ -212,7 +301,7 @@ class checkMemory(object):
     currentKeys = otherFileKeys
     try:
       print "Writing to memMap file."
-      f = open("memMap", 'a')
+      f = open(self.memMap, 'a')
       f.write("----------------------------------\n")
       for lineNumber in fileKeys: 
         fullName = self.lineToCalls[lineNumber]
@@ -249,6 +338,7 @@ class checkMemory(object):
     print "sorted pages"
     percentStr ="%s,"
     pageSize = self.pageSize
+    print "number of pages "+ str(len(self.pages))
     answer = len(self.pages)/(pageSize*1024)
     try:
       percentFile = open(self.percentPage,'a')
@@ -261,6 +351,7 @@ class checkMemory(object):
         waiting =0
         waitingPercent = 0
         divide = (newOne/pageSize)
+        
         for pageNum in self.pages:
           newOne = pageNum/divide
           if(waiting >0):
@@ -281,7 +372,8 @@ class checkMemory(object):
         if(percent < 1):
           percent+=0.5
         percentFile.write(str(int(round(percent))))
-        self.pageSize = newOne
+        #self.pageSize = newOne
+        print "self.pageSize now is "+ str(self.pageSize)
       
       else:
         percentFile.write(str(pageSize)+'\n')
@@ -404,10 +496,12 @@ class checkMemory(object):
           pageMapFile.write(bFreeStr%(biggestFree, smallestFree))
           # percent file
           percent = (soFar/full)*100.0
+          if(percent < 1):
+            percent+=0.5
           percentFile.write(str(int(round(percent))))
           percentStr ="\n%s,"
           #----
-        percentFile.write("\n\n")
+        
     except IOError:
       # can put these here as the files will always be found.
       percentFile.close()
@@ -416,6 +510,7 @@ class checkMemory(object):
       traceback.print_exc()
       sys.exit()
     else:
+      percentFile.write("\n\n")
       percentFile.close()
       pageMapFile.close()
       pageDataFile.close() 
@@ -522,7 +617,8 @@ class checkMemory(object):
         waitingSize += size
         # now for pageData
         actualStart= start - startAdd 
-        # the address where the mem starts at minus the address the page starts at
+        # the address where the mem starts at minus the address 
+        # the page starts at
         pageDataFile.write(dataStr%(str(actualStart),str(actualStart + size))) 
         # okay to print it out?
         #----
