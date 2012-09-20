@@ -12,26 +12,26 @@
 // Traps for this profiler module
 DUAL_HOOK(1, void *, domalloc, _main, _libc,
           (size_t n), (n),
-          "malloc", 0, "libc.so.6")
+          "malloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, docalloc, _main, _libc,
           (size_t n, size_t m), (n, m),
-          "calloc", 0, "libc.so.6")
+          "calloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, dorealloc, _main, _libc,
           (void *ptr, size_t n), (ptr, n),
-          "realloc", 0, "libc.so.6")
+          "realloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(3, int, dopmemalign, _main, _libc,
           (void **ptr, size_t alignment, size_t size),
           (ptr, alignment, size),
-          "posix_memalign", 0, "libc.so.6")
+          "posix_memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, domemalign, _main, _libc,
           (size_t alignment, size_t size), (alignment, size),
-          "memalign", 0, "libc.so.6")
+          "memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(1, void *, dovalloc, _main, _libc,
           (size_t size), (size),
-          "valloc", 0, "libc.so.6")
+          "valloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(1, void, dofree, _main, _libc,
           (void *ptr), (ptr),
-          "free", 0, "libc.so.6")
+          "free", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 
 // Data for this profiler module
 static const int                OVERHEAD_NONE   = 0; // Memory use without malloc overheads

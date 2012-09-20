@@ -12,26 +12,43 @@
 // Traps for this profiler module
 DUAL_HOOK(1, void *, domalloc, _main, _libc,
           (size_t n), (n),
-          "malloc", 0, "libc.so.6")
+          "malloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, docalloc, _main, _libc,
           (size_t n, size_t m), (n, m),
-          "calloc", 0, "libc.so.6")
+          "calloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, dorealloc, _main, _libc,
           (void *ptr, size_t n), (ptr, n),
-          "realloc", 0, "libc.so.6")
+          "realloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(3, int, dopmemalign, _main, _libc,
           (void **ptr, size_t alignment, size_t size),
           (ptr, alignment, size),
-          "posix_memalign", 0, "libc.so.6")
+          "posix_memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(2, void *, domemalign, _main, _libc,
           (size_t alignment, size_t size), (alignment, size),
-          "memalign", 0, "libc.so.6")
+          "memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(1, void *, dovalloc, _main, _libc,
           (size_t size), (size),
-          "valloc", 0, "libc.so.6")
-DUAL_HOOK(1, void, dofree, _main, _libc,
-          (void *ptr), (ptr),
-          "free", 0, "libc.so.6")
+          "valloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
+
+static void *doothermain(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+       doother_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
+       &doothermain, 0, 0, 0 } };
+ 
+static void *dootherlib(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
+    doother_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+      &dootherlib, 0, 0, 0 } };
+
+static double dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+    dodouble_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
+      &dodoublemain, 0, 0, 0 } };
+
+static double dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f); 
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+    dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
+      &dodoublelib, 0, 0, 0 } };
 
 static IgProfTrace::CounterDef  s_ct_total      = { "CALLS_TOTAL",    IgProfTrace::TICK, -1 };
 static bool                     s_initialized   = false;
@@ -73,7 +90,8 @@ initialize(void)
   const char    *options = igprof_options();
   bool          enable = false;
   bool          trace_malloc = false;
-  bool          trace_free = false;
+  bool		trace_other = false;
+  bool		trace_otherf = false;
 
   while (options && *options)
   {
@@ -86,17 +104,22 @@ initialize(void)
       enable = true;
       while (*options)
       {
-        if (! strncmp(options, ":name=free", 10))
-        {
-          trace_free=true;
-          options += 10;
-        }
-        else if (! strncmp(options, ":name=malloc", 12))
+        if (! strncmp(options, ":name=malloc", 12))
         {
           trace_malloc=true;
           options += 12;
         }
-        else
+        else if (! strncmp(options, ":name=otherf", 12))
+	{
+	  trace_otherf = true;
+	  options += 12;
+	}
+	else if (! strncmp(options, ":name=other", 11))
+	{
+	  trace_other = true;
+	  options += 11;
+	}
+	else
           break;
       }
     }
@@ -110,7 +133,7 @@ initialize(void)
   if (! enable)
     return;
 
-  if ((! trace_malloc) && (! trace_free))
+  if ((! trace_malloc)&& (! trace_other) && (! trace_otherf))
   {
     igprof_debug("function profiler: can only profile malloc and free for the time being\n");
     return;
@@ -120,12 +143,16 @@ initialize(void)
     return;
 
   igprof_disable_globally();
-  igprof_debug("function profiler: profiling %s\n",
-               (trace_free ? "free" : "alloc"));
-
-  if (trace_free)
-    IgHook::hook(dofree_hook_main.raw);
+  if (trace_other || trace_otherf || trace_malloc)
+    igprof_debug("function profiler: profiling %s\n",
+		igprof_getenv("IGPROF_FP_FUNC"));
   else
+  {
+    igprof_debug("function profiler: no function given, quitting");
+    return;
+  }
+
+  if (trace_malloc)
   {
     IgHook::hook(domalloc_hook_main.raw);
     IgHook::hook(docalloc_hook_main.raw);
@@ -134,19 +161,26 @@ initialize(void)
     IgHook::hook(domemalign_hook_main.raw);
     IgHook::hook(dovalloc_hook_main.raw);
   }
+  else if (trace_other)
+    IgHook::hook(doother_hook_main.raw);
+  else
+    IgHook::hook(dodouble_hook_main.raw); 
 
 #if __linux
-  if (trace_free)
-  {
-    if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
-  }
-  else
+  if (trace_malloc)
   {
     if (domalloc_hook_main.raw.chain)    IgHook::hook(domalloc_hook_libc.raw);
     if (docalloc_hook_main.raw.chain)    IgHook::hook(docalloc_hook_libc.raw);
     if (domemalign_hook_main.raw.chain)  IgHook::hook(domemalign_hook_libc.raw);
     if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   }
+  else if (trace_other)
+  {
+    if(doother_hook_main.raw.chain)	 IgHook::hook(doother_hook_lib.raw);
+  }
+  else
+    if(dodouble_hook_main.raw.chain)	 IgHook::hook(dodouble_hook_lib.raw);
+
 #endif
   igprof_enable_globally();
 }
@@ -256,20 +290,71 @@ dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
   return result;
 }
 
-static void
-dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
+static void*
+doothermain(void *a, void *b, void *c, void *d, void *e, void *f)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
 
   RDTSC(tstart);
-  (*hook.chain)(ptr);
+  void *result = (*doother_hook_main.typed.chain)(a,b,c,d,e,f);
   RDTSC(tend);
 
   if (LIKELY(enabled))
     add(tend-tstart);
 
   igprof_enable();
+  return result;
+}
+static void*
+dootherlib(void *a, void *b, void *c, void *d, void *e, void *f)
+{
+  bool enabled = igprof_disable();
+  uint64_t tstart, tend;
+
+  RDTSC(tstart);
+  void *result = (*doother_hook_lib.typed.chain)(a,b,c,d,e,f);
+  RDTSC(tend);
+
+  if (LIKELY(enabled))
+    add(tend-tstart);
+
+  igprof_enable();
+  return result;
+}
+
+static double
+dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f)
+{
+  bool enabled = igprof_disable();
+  uint64_t tstart, tend;
+
+  RDTSC(tstart);
+  double result = (*dodouble_hook_main.typed.chain)(a,b,c,d,e,f);
+  RDTSC(tend);
+
+  if(LIKELY(enabled))
+    add(tend-tstart);
+
+  igprof_enable();
+  return result;
+}
+
+static double
+dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f)
+{
+  bool enabled = igprof_disable();
+  uint64_t tstart, tend;
+
+  RDTSC(tstart);
+  double result = (*dodouble_hook_lib.typed.chain)(a,b,c,d,e,f);
+  RDTSC(tend);
+
+  if(LIKELY(enabled))
+    add(tend-tstart);
+
+  igprof_enable();
+  return result;
 }
 
 // -------------------------------------------------------------------

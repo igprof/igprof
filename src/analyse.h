@@ -15,6 +15,7 @@
 #include <inttypes.h>
 #include <cstdio>
 #include <cassert>
+#include <unistd.h>
 
 /** This class is the payload for a node in the stacktrace
     and holds all the information about the counter that we looking at.

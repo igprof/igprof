@@ -98,15 +98,16 @@ public:
   }
 
   /** Write out @a val as a simply formatted integer. */
-  FastIO &put(long long val)
+  FastIO &put(long long signedVal)
   {
     char buf[128];
     size_t n = 0;
     int sign = 0;
-    if (UNLIKELY(val < 0))
+    unsigned long long val = signedVal;
+    if (UNLIKELY(signedVal < 0))
     {
       sign = -1;
-      val = -val;
+      val = -signedVal;
     }
 
     if (val == 0)
