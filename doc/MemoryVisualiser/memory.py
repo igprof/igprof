@@ -30,10 +30,8 @@ class checkMemory(object):
                             stderr=subprocess.PIPE).communicate()
     f = open(self.percentPage,'w')
     f.close()
-    print "herere " + str(doAll)
     if(not doAll): # only calculate the PercentPage file.
       for theFile in files:
-        print "the file is "+ theFile
         self.percentLoop(theFile,0)
         self.printPercentFile(theFile)
     else:
@@ -42,15 +40,12 @@ class checkMemory(object):
       f = open(self.memMap, 'w')
       f.close()
       theFile = self.doFiles(theFiles)
-      print "the file "+ str(theFile) 
-      if(theFile): # if there are things in currentkeys? TODO
-        f = open(self.memMap,'a')
-        line = "(%s) %s : %s\n\n"
-        print "current keys "+ str(self.currentKeys)
-        for lineNumber in self.currentKeys:
-          fullName = self.lineToCalls2[lineNumber]
-          addr = self.callToAdd2[fullName]
-          f.write(line%(theFile,fullName.split("-")[0],str(addr[0])))
+      if(theFile): # do the diff of last file.
+        self.lineToCalls = self.lineToCalls2.copy()
+        self.lineToCalls2 ={}
+        self.callToAdd = self.callToAdd2.copy()
+        self.callToAdd2 ={}
+        self.diff(theFile, "")
 
   # Take each file, open it and compute files for it.
   def doFiles(self, files):
@@ -63,6 +58,7 @@ class checkMemory(object):
         self.loopFile(theFile,0)
         if(i==length-1):# only one file
           self.printOut(theFile)
+          self.diff(theFile, "")
           return
       self.loopFile(files[i+1], 1)
       # show the difference between the two files.
@@ -150,7 +146,6 @@ class checkMemory(object):
     try:
       if(fileName.endswith(".gz")):
         fi = subprocess.Popen(["zcat",fileName], stdout=subprocess.PIPE)
-        print "fi is "+ str(fi)
         na = fileName.split(".")[0]
         # same as normal file, only different loop.
         iterable = iter(fi.stdout.readline,'')
@@ -164,10 +159,6 @@ class checkMemory(object):
         if(zipped and na in line):
           # start of a new file..
           # finish with this current file
-          # here it's more complex as i need to
-          # wait this is just the start of this file..
-          #.... need to know to do this stuff later instead
-          # either after the loop or when the next file starts.
           if(firstDone):
             # the first one is done, so now we're onto the 2nd.
             # set 2nd done
@@ -218,15 +209,20 @@ class checkMemory(object):
         if(call in allCalls):
           # this call name has already appeared in this file.
           # add these addresses to previous call entry.
-          allCalls.remove(call) # remove so next entrys are matched
           oldName = callToNewName[call]
           callToAdd[oldName].append(addr)
+          # added as test
+          newName = "%s-%s"%(call,str(thelen))
+          callToAdd[newName] = addr[:]
+          callToNewName[call] = newName
+          lineToCalls[thelen]= newName
+          
         else:
           # first time seeing this call entry, or first after match
           # save the call name, make the new name and add addresses.
           allCalls.append(call)
           newName = "%s-%s"%(call,str(thelen))
-          callToAdd[newName] = addr
+          callToAdd[newName] = addr[:]
           callToNewName[call] = newName
           lineToCalls[thelen]= newName
 
@@ -270,17 +266,17 @@ class checkMemory(object):
         self.mapPageMemStart = self.mapPageMemStart2
 
       if(toggle == 0):
-        self.lineToCalls = lineToCalls
-        self.callToAdd = callToAdd
-        self.mapStartEnd = memoryMapSizes
-        self.mapPageMemStart = memoryMapPages 
+        self.lineToCalls = lineToCalls.copy()
+        self.callToAdd = callToAdd.copy()
+        self.mapStartEnd = memoryMapSizes.copy()
+        self.mapPageMemStart = memoryMapPages.copy() 
         self.pages = [x for x in memoryMapPages.keys()]
       else:
-        self.lineToCalls2 = lineToCalls 
-        self.callToAdd2 = callToAdd 
-        self.mapStartEnd2 = memoryMapSizes
-        self.mapPageMemStart2 = memoryMapPages
-        self.temp2 = memoryMapPages
+        self.lineToCalls2 = lineToCalls .copy()
+        self.callToAdd2 = callToAdd .copy()
+        self.mapStartEnd2 = memoryMapSizes.copy()
+        self.mapPageMemStart2 = memoryMapPages.copy()
+        self.temp2 = memoryMapPages.copy()
         self.pages2 = [x for x in memoryMapPages.keys()]
 
       # the next file starts from this position
@@ -289,7 +285,7 @@ class checkMemory(object):
     except IOError:
       traceback.print_exc()
       sys.exit()
-
+    
   # Prints out the match up of call stack names
   # Showing the memory usage progression.
   def diff(self, firstName, secName):
@@ -314,7 +310,7 @@ class checkMemory(object):
           f.write(line%(firstName,callName,str(addr[1])))
           continue
         # see if its in the other file.
-        for lineNumber2 in otherFileKeys:
+        for lineNumber2 in otherFileKeys: #otherFileKeys
           fullName = self.lineToCalls2[lineNumber2]
           if(fullName.split("-")[0] == callName):
             # we found a match - print it out
@@ -372,8 +368,6 @@ class checkMemory(object):
         if(percent < 1):
           percent+=0.5
         percentFile.write(str(int(round(percent))))
-        #self.pageSize = newOne
-        print "self.pageSize now is "+ str(self.pageSize)
       
       else:
         percentFile.write(str(pageSize)+'\n')
@@ -381,7 +375,6 @@ class checkMemory(object):
           # percent file
           percentFile.write(percentStr%(hex(pageNumber)))
           percent = (self.pageToUsage[pageNumber])
-          print "percent "+ str(percent)
           if(percent < 1):
             percent+=0.5
           percentFile.write(str(int(round(percent))))
@@ -406,7 +399,6 @@ class checkMemory(object):
     pages.sort()
     pS = self.pageSize
     pageSize = self.pageSize*1024
-    print "printing out "+str(name)
     actualName = name.split("/")[-1]
     answer = len(pages)/(pageSize)
     try:
