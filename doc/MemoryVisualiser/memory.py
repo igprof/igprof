@@ -657,7 +657,7 @@ if __name__ == "__main__":
   parser = optparse.OptionParser()
   flags =["-p","-e","-P"]
   parser.add_option("-f", "--files", dest="_files",
-                    help="Argument required. Files to be parsed."\
+                    help="Files to be parsed."\
                          " Can be in format [\"file1\",\"file2\",..]")
   parser.add_option("-p", "--page_size", dest="_page", default=4,
                     help="Default is 4KB. Page size in KB. "\
@@ -688,8 +688,12 @@ if __name__ == "__main__":
       parser.error("No files were supplied.")  
   else:
     files = [options._files.replace("[","").replace("]","")]
-    if(" " in files):
-      files = files.split(",")
+    tmp = files[:]
+    for fi in tmp:
+      if("," in fi):    
+        files.remove(fi)
+        for f in fi.split(","):
+          files.append(f)
 
   print "Files are %s. Page size is %dKB."%(str(files), options._page)
   t1 = time.time()
