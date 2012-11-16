@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>Memory Visualiser</title>
     <script src="http://d3js.org/d3.v2.js"></script>
-		<script type="text/javascript" >
+		<script type="text/javascript">
 var names=[], sizes=[];
 var svgWidth= 600,svgHeight = 1800;
 var width=10, height=width;
@@ -15,9 +16,16 @@ var r = biggestShare/numOfCircs;
 var circleArea = width/divider;
 var firstSVG;
 var pageSizes =[];
+var testing = false;
+var isFirstFile= false;
+var newPoints=[];
 
 function createVisual(){
-	var everything = readFile("PercentPage");
+  if(testing){doTests(); return;}
+  //readFileNew(evt, theFile);
+  //console.log("everything "+ everything);
+  //return
+	//var everything = readFile("PercentPage");
   var biggerFont = (width/4)+10;
   var recSelect  =[], recSelectText=[];
   var onClick = function(theText, theRect){
@@ -308,21 +316,45 @@ function addRec(svg, everything, k, start, id, svgWidthy, sign, yOffset){
     return [endXPos+width,endYPos,pageNum];
 
 }
+
 /*
-Reads the file and transforms the data into a double array.
-Each line in file is changed into a number percent+.+numberofentries
-10318,28 
-10318,28
--> [0.10318,28.0,28.0]
+  Read the file using FileReader.
+  Browser needs to have File API suport to use this.
 */
-function readFile(theName) {
+function readFileUsingFileReader(evt, theFile){
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var content =  e.target.result;
+    var eachFile = content.split('\n\n');
+    if(sortFile(eachFile))createVisual();
+   }
+  reader.readAsText(theFile);
+}
+
+/* 
+  Read file without needing File API support.
+  //TODO check to see if this way will work Internet Explorer.
+*/
+function readFileAlt(theName) {
+  console.log("Alternative file reading.");
 	xmlhttp = new XMLHttpRequest();
 	xmlhttp.overrideMimeType('text/plain');
   xmlhttp.open("GET",theName,false);
   xmlhttp.send(null); 
   var allFilePages = xmlhttp.responseText.split('\n\n');
+  if(sortFile(allFilePages))createVisual();
+ }
+
+/*
+  Transforms the data into a double array.
+  Each line in file is changed into a number percent+.+numberofentries
+  10318,28 
+  10318,28
+  -> [0.10318,28.0,28.0]
+*/
+function sortFile(allFilePages){
   var list=[];
-  for (var i=0; i < allFilePages.length;i++){
+  for(var i=0; i < allFilePages.length;i++){
   	var eachFilePages = allFilePages[i].split('\n');
 		var li=[];
 		var number = 1;//number of ones that have the same percent
@@ -342,6 +374,10 @@ function readFile(theName) {
     	for(var j=2; j < eachFilePages.length;j++){
       	if(eachFilePages[j].length==0) continue;
   			var pageInfo = eachFilePages[j].split(',');
+        if(pageInfo.length !=2){
+          alert('Wrong file format. Expected format:\n\n\tname\n\tPage size\n\taddress,size\n\taddress,size\n\t...\n\nAs default the correct file is named PercentPage.');
+          return 0;
+        }
    	  	var pageNumber = parseInt(pageInfo[0], 16);
       	var percentFull = pageInfo[1];
         full += parseInt(percentFull);
@@ -379,10 +415,11 @@ function readFile(theName) {
 
     }
 	}
-  return list;
+  everything = list;
+  return 1;
 }
-
-function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, percent){
+// fuck, put in comments!
+function todo(isFirstFile,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, percent){
   smallest = changedX2orY2;
   // shouldnt i do the first point anyway?
   if(origX2orY2 < smallest){ // if y2 < x2
@@ -391,7 +428,7 @@ function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, per
     if(stillToDo.length==0){
       stillToDo.push(oppX1orY1);
       stillToDo.push(smallest- origX2orY2);
-      return !isX;
+      return !isFirstFile;
     }
     smallest = changedX2orY2;
     var done = true;
@@ -400,7 +437,7 @@ function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, per
       done=false;
 			var newPercent= stillToDo.shift(); //newX1
       var newAmount = stillToDo.shift();	// newX2
-      if(isX){
+      if(isFirstFile){
 			  percent= oppX1orY1-newPercent; // or newPercent- x1
       }
       else percent = newPercent - oppX1orY1;
@@ -418,18 +455,19 @@ function todo(isX,stillToDo, origX1orY1,oppX1orY1,origX2orY2, changedX2orY2, per
         break;
 			}
 		}
-    return isX;
+    return isFirstFile;
   }
   else{
     newPoints.push(percent+"."+smallest);
     stillToDo.push(origX1orY1);
     stillToDo.push(origX2orY2 - smallest);
-    return isX;
+    return isFirstFile;
   }
 }
-var isX= false;
-var newPoints=[];
 
+/*
+  
+*/
 function reconfigurePageSize(changedOne, offset, oppOffset){
   var len = changedOne.length;
   var updated =[];
@@ -501,14 +539,21 @@ function reconfigurePageSize(changedOne, offset, oppOffset){
     }
  return updated;
 }
+
+/*
+ Compare things, make sure they are same page size
+*/
 function compare(objs, everything, test){
-  newPoints=[],stillToDo=[];
+  newPoints=[];
+  var stillToDo=[];
+  if(!test){
   var obj1 = everything[objs[0].attr("id").split("-")[1]].slice(0);
   var obj2 = everything[objs[1].attr("id").split("-")[1]].slice(0);
   var pageSize1 = pageSizes[objs[0].attr("id").split("-")[1]];
   var pageSize2 = pageSizes[objs[1].attr("id").split("-")[1]];
   // are they the same page size?
   if(pageSize1 != pageSize2){
+    
     if(pageSize1 > pageSize2){
       var offset = pageSize2/pageSize1;
       var oppOffset = pageSize1/pageSize2;
@@ -530,47 +575,34 @@ function compare(objs, everything, test){
     var first = obj2;
     var sec = obj1;
   }
-
+  }
+  else{
+  // its a test
+    var first = everything[0];
+    var sec =everything[1];
+  }
   // loop around the first objects first
   // compare each against the sec object.
   var firstBigger = first.length - sec.length;
 	stillToDo = doLoop(first, sec);
   if(firstBigger < 0){ 
 		// then the rest of the new points is just sec.
-    if(!isX){
-      // also need to do the rest of the sec? or it's okay as that's done after?
-      var leng = stillToDo.length;
-      for(var j=0; j < leng; j=j+2){
-			  // just push it.
-        // its not from the first one
-        newPoints.push(stillToDo.shift()+"."+stillToDo.shift());
-      }
+    if(!isFirstFile){
+      shiftItems(stillToDo, newPoints, "");
     }
     else{
-      //isX in stillToDo
-      var leng = stillToDo.length;
-      fi =[];
-      //se = sec.splice(first.length); // maybe not needed.
-      for(var j=0; j <= (leng)/2; j++){
-        fi.push(stillToDo.shift()+"."+stillToDo.shift())
-      }
-      stillToDo=[];
+      //isFirstFile in stillToDo
+      // shift items so we can call loop.
+      var fi = shiftItems(stillToDo, [], "");
       stillToDo = doLoop(fi, sec);
-    }// else
-    var len = sec.length
-    for(var q=0; q < len; q++){ // TODO and make sure the sec only has the stuff we still need to do.
-      // do the rest of the sec.
-      newPoints.push(sec.shift());
     }
+    sec.forEach(function(element){newPoints.push(element)});
 	}// if
   if(stillToDo.length >0){
-  for(var i=0; i <= (stillToDo.length)/2; i++){
-    if(isX)
-      newPoints.push("-"+stillToDo.shift()+"."+ stillToDo.shift());
-    else
-      newPoints.push(stillToDo.shift()+"."+ stillToDo.shift());
+    var theStr="";
+    if(isFirstFile) theStr="-";
+    shiftItems(stillToDo, newPoints, theStr)
   }
-}
   // make the rectangle
   if(test){
     return newPoints;
@@ -601,16 +633,35 @@ function compare(objs, everything, test){
      .text(end[2].toString(16));
 }
 
+/*
+  Shift values two at a time onto list.
+*/
+function shiftItems(loopItems, addTo, startStr){
+  var leng = loopItems.length;
+  for(var j=0; j < leng; j+=2){
+    addTo.push(startStr+loopItems.shift()+"."+ loopItems.shift())
+   }
+   return addTo;
+}
+
+/*
+  Helper function for the comparison: Fully tested.
+  Does actual comparison, only goes round
+  The lists supplied in args will be changed.
+*/
 function doLoop(first, sec){
-  var loopNumber = first.length // added so we have a definite loop number that wont change.
+  // files also know as x and y
+  var loopNumber = first.length
+  var secLen = sec.length
+  var stillToDo=[];
   for(var i=0; i <loopNumber; i++){
-    var xUnsplit = first.shift().split("."); // added
+    var xUnsplit = first.shift().split(".");
     var x1 = parseInt(xUnsplit[0]); // the percent
     var x2 = parseInt(xUnsplit[1]); // how many pages the percent is over
-    if(i >= sec.length){ 
+    if(i >= secLen){ 
       // nothing left to compare with in other file.
       if(stillToDo.length >0){
-        if(!isX){
+        if(!isFirstFile){
           for(var p=0; p < stillToDo.length; p++){
             var pC2 =  parseInt(stillToDo.shift());
             var num2 =  parseInt(stillToDo.shift());
@@ -621,7 +672,6 @@ function doLoop(first, sec){
               var howMany = num2;
               x2 = x2 - num2;
               if(x2 ==0)breakOut = true;
-              testPaths(4);
             }
             else{
               var howMany = x2;
@@ -631,17 +681,13 @@ function doLoop(first, sec){
               if(i!=first.length-1)breakOut = true;
             }
             newPoints.push(diff+"."+howMany);
-            if(breakOut){testPaths(6);break;}
+            if(breakOut)break;
           }
           continue;
         }
-        else{ //isX
+        else{ //isFirstFile - so first file.
           // okay can loop around stillToDo and then do this first one
-          for(var p=0; p < stillToDo.length; p++){
-            var pC = stillToDo.shift();
-            var num= stillToDo.shift();
-            newPoints.push("-"+pC+"."+num);
-          }
+           shiftItems(stillToDo, newPoints, "-")
         }
       }
       // do the current first one
@@ -667,12 +713,12 @@ function doLoop(first, sec){
       // so its the same for a couple, but not for all.
 			var leftOver = x2-y2;
       var smallest = y2;
-      isX = true;
+      isFirstFile = true;
       re = x1;
       if (x2< y2){
         smallest=x2;
         re = y1;
-        isX= false;
+        isFirstFile = false;
       }
       newPoints.push(diff+"."+smallest);
       // still need to store the bit left over.
@@ -681,7 +727,7 @@ function doLoop(first, sec){
       continue;
 		}
 		// okay so something has been left over.
-    if(isX){ // in stillToDO is the x value
+    if(isFirstFile){ // in stillToDO is the x value
 		  var theX1 = stillToDo.shift();
       var theX2 = stillToDo.shift();
       var theY1= y1,theY2 = y2;
@@ -695,160 +741,278 @@ function doLoop(first, sec){
       //both for the same amount
 		  newPoints.push(theY1-theX1+"."+theY2);
       // now do the next one
-			if(isX){
+			if(isFirstFile){
 			  stillToDo.push(x1);
         stillToDo.push(x2);
 			}
 			else{
 			  stillToDo.push(y1);
         stillToDo.push(y2);
-        isX=false;
+        isFirstFile=false;
 			}
      continue;
 		}
-    // merge these together
-    if(isX && theX2 > theY2){
+    var percent =  theY1 - theX1;
+    if(isFirstFile && theX2 > theY2){
 		  // so this one is bigger than y2, so some of it will be saved as will x2
-      var percent =  y1 - theX1;
-      newPoints.push(percent+"."+y2);
-      stillToDo.unshift(theX2 - y2);
+      // i.e. one from stilltodo isgreater
+      // so get difference
+      newPoints.push(percent+"."+theY2);
+      // now put back whats left from the shifted
+      stillToDo.unshift(theX2 - theY2);
       stillToDo.unshift(theX1); // wait this came off the front, so i want it to go back in front
-      isX = true;
-      // also need to push x1 
+      isFirstFile = true;
+      // now add to stilltodo the current things.
       stillToDo.push(x1);
       stillToDo.push(x2);
 		}
-    else if(!isX && theY2 > theX2){
-		  var percent =  theY1 - theX1;
+    else if(!isFirstFile && theY2 > theX2){
+      // i.e. one from stilltodo isgreater
       newPoints.push(percent+"."+theX2);
       stillToDo.unshift(theY2 - theX2);
       stillToDo.unshift(theY1); // wait this came off the front, so i want it to go back in front
-      isX = false;
+      //isFirstFile = false; // bit reduncant?
       // also need to push x1 
       stillToDo.push(y1);
       stillToDo.push(y2);
 		}
-    else{
-      testPaths(21);
-		  // y2 is bigger than firstX2
-      // so add diff between it and firstx then do x1
-      var percent = theY1 - theX1;
-      // this depends on what is the extra one.
-      if(isX){
-        testPaths(22);
-        // so y2 is bigger than firstX2
-        newPoints.push(percent+"."+theX2);
-				var nowY2 = theY2-theX2;
-        // now x1 
-        percent = y1- x1;
-        var smallest = nowY2;
-        if(nowY2 == x2){
-         newPoints.push(percent+"."+x2);
-         continue;
-        }
-       isX= todo(isX,stillToDo, x1,y1,x2, nowY2, percent);
-			}// is X
-      else{
-        //Not X
-        // theY2 is bigger than x2
-				newPoints.push(percent+"."+theY2);
-        var nowX2 = theX2- theY2;// it will never be 0.
-        // now use previous y1 to compare
-        percent = y1- x1;
-        if(nowX2 == y2){
+    // the thing from stilltodo is not bigger.
+    else if(isFirstFile){
+      // so theY2 is bigger than firstX2
+      newPoints.push(percent+"."+theX2);
+      // get what remains of Y2
+			var nowY2 = theY2-theX2;
+      // now compare with current values.(what we got at top of loop)
+      percent = y1- x1;
+      if(nowY2 == x2){
+        // remaing Y2 is same as x2
+        newPoints.push(percent+"."+x2);
+        continue;
+      }
+      isFirstFile= todo(isFirstFile,stillToDo, x1,y1,x2, nowY2, percent);
+     }
+     else if(!isFirstFile){
+       // theX2 is bigger than theY2
+			 newPoints.push(percent+"."+theY2);
+       // now get remaining of X2
+       var nowX2 = theX2- theY2;// it will never be 0.
+       // now compare with current values.(what we got at top of loop)
+       percent = y1- x1;
+       if(nowX2 == y2){
          newPoints.push(percent+"."+y2);
          continue;
-        }
-        // if the one opposite from whats in stillTODO so here what's in x
-        // if x2 is bigger than the y2 then we loop around stillToDo. 
-        isX= todo(isX,stillToDo, y1,x1,y2, nowX2, percent);
-
-			}// other else
-		}	// other else
+       }
+       // if the one opposite from whats in stillTODO so here what's in x
+       // if x2 is bigger than the y2 then we loop around stillToDo. 
+       isFirstFile= todo(isFirstFile,stillToDo, y1,x1,y2, nowX2, percent);
+     }
 	} // for loop
-return stillToDo;
+  return stillToDo;
 }
+
+
+//TESTS for compare.
+/*
+Compares two results.
+*/
+
+var allPaths=[];
+var tests =[];
+function doTests(){
+  var numPaths=48;//so far, try to keep up to date.
+  var test1=[["0.1","13.1","7.1","0.1","5.1","3.1","1.1"],
+             ["0.1","14.1","20.1","0.1","7.3"]];
+  var test1Res=["0.1","1.1","13.1","0.1","2.1","4.1","6.1"];
+  var test2 =[["0.1","13.1","7.1","0.1","5.1","3.1","1.1","4.1","2.1"],
+            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
+  var test2Res=["0.1","1.1","13.1","0.1","2.1","4.1","6.1","1.1","4.1"];
+
+  var test3 =[["0.1","13.1","7.1","0.1","5.1","6.3","2.1"],
+            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
+  var test3Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","4.1"];
+
+  var test4 =[["0.1","13.1","7.1","0.1","5.1","6.4","2.1"],
+            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1"]];
+  var test4Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","0.1","-2.1"];
+
+  var test5 =[["0.1","13.1","7.1","0.1","5.1","6.4","2.1","5.1"],
+              ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1","3.2"]];
+  var test5Res=["0.1","1.1","13.1","0.1","2.1","1.2","-1.1","0.1","-1.1","-2.1","3.1"];
+
+  var test6 =[["0.1","13.1","7.1","0.1","5.1","6.2","5.1","6.2","5.1"],
+            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1"]];
+  var test6Res=["0.1","1.1","13.1","0.1","2.1","1.2","0.1","0.1","-5.1", "-5.1"];
+
+  var test7 =[["0.1","13.1","7.1","0.1","5.1","6.2","5.1","6.3","19.1"],
+            ["0.1","14.1","20.1","0.1","7.3","5.1","6.1","1.1"]];
+  var test7Res=["0.1","1.1","13.1","0.1","2.1","1.2","0.1","0.1","-5.1","-6.1","-19.1"];
+
+  var test8 =[["3.3","2.1","2.1","7.1"],
+            ["1.1","1.1","1.1","3.1"]];
+  var test8Res=["-2.1","-2.1","-2.1","1.1","-2.1","-7.1"];
+
+  var test9 =[["3.3","2.1","2.1","7.1"],
+            ["1.1","4.4","1.1","3.1"]];
+  var test9Res=["-2.1","1.2","2.1","2.1","-6.1","3.1"];
+
+  var test10 =[["3.3","2.2","2.1","7.1"],
+            ["1.1","4.4","1.1","3.1"]];
+  var test10Res=["-2.1","1.2","2.2","-1.1","-4.1"];
+
+   var test11 =[["1.1"],
+            ["1.2","3.1"]];
+  var test11Res=["0.1","1.1","3.1"];
+
+  var allTests =[test1, test2, test3, test4, test5, test6, test7, test8, test9, test10, test11];
+  var allTestsRes =[test1Res, test2Res, test3Res, test4Res, test5Res, test6Res, test7Res, test8Res, test9Res, test10Res, test11Res];
+
+  var testsPassed =0;
+  var testsFailed =0;
+  for(var i=0; i < allTests.length; i++){
+     console.log("-----------------");
+    var res= compare([],allTests[i],true);
+   
+    console.log("i is "+ i)
+    console.log(res);
+    //console.log("allpaths "+ allPaths);
+    //console.log("allpaths "+ allPaths.sort(function sortfunction(a, b){
+    //            return (a-b);
+    //             }));
+    if(res.length == allTestsRes[i].length){
+      var same = true;
+      for(var p=0; p < res.length; p++){
+        if(res[p] != allTestsRes[i][p]){
+          console.log("res p is" + (res[p]));
+          console.log("oth p is" + (allTestsRes[i][p]));
+          same = false;
+          break;
+        }
+      }
+      if(!same){
+        console.log("test "+ i+ " result was NOT expected");
+        testsFailed ++;
+      }
+      else {
+       console.log("test "+ i+ " result was expected");
+       testsPassed ++;
+      }
+    }
+    else {
+      console.log("test "+ i+ " result was sNOT expected");
+      testsFailed ++;
+    }
+  }
+  console.log("testsPassed "+ testsPassed +" testsFailed "+ testsFailed +" num of tests "+ allTests.length);
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 
 </script>
-		<!link rel="stylesheet" type="text/css" href="colours.css" />
-   <style>
-/* 0% full*/
-.c-00 {
-	fill:rgb(240,265,240);
-}
-.c-0 {
-	fill:rgb(220,265,220);
-}
-.c-1 {
-	fill:rgb(193,265,193);
-}
-.c-2 {
-	fill:rgb(180,248,180);
-}
-.c-3 {
-	fill:rgb(150,230,150);
-}
-.c-4 {
-	fill:rgb(100,210,100);
-}
-/* 50% full */
-.c-5 {
-	fill:rgb(50,180,50);
-}
-.c-6 {
-	fill:rgb(20,160,20);
-}
-.c-7 {
-	fill:rgb(10,142,10);
-}
-.c-8 {
-	fill:rgb(10,120,10);
-}
-.c-9 {
-	fill:rgb(0,100,10);
-}
-/* 100% full*/
-.c-10 {
-	fill:rgb(0,90,0);
-}
-.c--1{
-	fill:rgb(265,250,250);
-}
-.c--2{
-	fill:rgb(265,240,240);
-}
-.c--3{
-	fill:rgb(265,220,220);
-}
-.c--4{
-	fill:rgb(265,200,200);
-}
-.c--5{
-	fill:rgb(265,170,170);
-}
-.c--6{
-	fill:rgb(265,140,140);
-}
-.c--7{
-	fill:rgb(265,120,120);
-}
-.c--8{
-	fill:rgb(265,80,80);
-}
-.c--9{
-	fill:rgb(265,50,50);
-}
-.c--10{
-	fill:rgb(265,0,0);
-}
-  </style>
-	</head>
+    <style>
+      /* 0% full*/
+      .c-00 {
+	      fill:rgb(240,265,240);
+      }
+      .c-0 {
+	      fill:rgb(220,265,220);
+      }
+      .c-1 {
+	      fill:rgb(193,265,193);
+      }
+      .c-2 {
+	      fill:rgb(180,248,180);
+      }
+      .c-3 {
+	      fill:rgb(150,230,150);
+      }
+      .c-4 {
+	      fill:rgb(100,210,100);
+      }
+      /* 50% full */
+      .c-5 {
+	      fill:rgb(50,180,50);
+      }
+      .c-6 {
+	      fill:rgb(20,160,20);
+      }
+      .c-7 {
+	      fill:rgb(10,142,10);
+      }
+      .c-8 {
+	      fill:rgb(10,120,10);
+      }
+      .c-9 {
+	      fill:rgb(0,100,10);
+      }
+      /* 100% full*/
+      .c-10 {
+	      fill:rgb(0,90,0);
+      }
+      .c--1{
+	      fill:rgb(265,250,250);
+      }
+      .c--2{
+	      fill:rgb(265,240,240);
+      }
+      .c--3{
+	      fill:rgb(265,220,220);
+      }
+      .c--4{
+	      fill:rgb(265,200,200);
+      }
+      .c--5{
+	      fill:rgb(265,170,170);
+      }
+      .c--6{
+	      fill:rgb(265,140,140);
+      }
+      .c--7{
+	      fill:rgb(265,120,120);
+      }
+      .c--8{
+	      fill:rgb(265,80,80);
+      }
+      .c--9{
+	      fill:rgb(265,50,50);
+      }
+      .c--10{
+	      fill:rgb(265,0,0);
+      }
+    </style>
+  </head>
 	<body>
-		<script type='text/javascript'>
-			createVisual();
-		</script>
+    <input type="file" id="files"/>
+    <script>
+      // Check for the various File API support.
+      if (window.File && window.FileReader && window.FileList && window.Blob) {
+        // Great success! All the File APIs are supported.
+        function handleFileAPI(evt) {
+          var files = evt.target.files; // FileList object
+          readFileUsingFileReader(evt, files[0]);
+        }
+        document.getElementById('files').addEventListener('change', handleFileAPI, false);
+        } else {
+          //alert('The File APIs are not fully supported in this browser.');
+          //Try alternative!
+          function handleFileNonAPI(evt) {
+            var files = document.getElementById('files').value;
+            readFileAlt(files);
+          }
+          document.getElementById('files').addEventListener('change', handleFileNonAPI, false);
+        }
+    </script>
   </body>
 </html>
