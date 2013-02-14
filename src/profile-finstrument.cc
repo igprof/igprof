@@ -16,7 +16,7 @@ static bool s_initialized = false;
 static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1 };
 //enter time stack for functions in each treads
-uint64_t times[IgProfTrace::MAX_DEPTH];
+uint64_t igprof_times[IgProfTrace::MAX_DEPTH];
 //enter counter
 int callCount = 0;
 //times spent in child functions
@@ -78,7 +78,7 @@ do_enter ()
   ++callCount;
   child[callCount-1] = 0;
   RDTSC(tstart);
-  times[callCount-1] = -tstart; 
+  igprof_times[callCount-1] = -tstart; 
 }
 
 //stop timer and tick counter
@@ -89,7 +89,7 @@ do_exit ()
     RDTSC(tstop);
     --callCount;
     //diff = time spent in the function subtracted by time spent on childs
-    uint64_t diff = times[callCount] - child[callCount] + tstop;
+    uint64_t diff = igprof_times[callCount] - child[callCount] + tstop;
     void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace *buf = igprof_buffer();
     IgProfTrace::Stack *frame;
