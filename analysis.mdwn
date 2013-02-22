@@ -182,6 +182,7 @@ and use URL's like:
     http://cern.ch/<username>/cgi-bin/igprof-navigator/new/foo_perf/
 
 This allows one to organize the data files a bit better than just by
-filename.
+filename. An example profile can be found [here][example-profile].
 
 [CERN]: http://www.cern.ch/
+[example-profile]: http://eulisse.web.cern.ch/eulisse/performance/navigator/performance-report

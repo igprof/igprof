@@ -59,6 +59,9 @@ applications receiving asynchronous `SIGPROF` signals and the memory profiler
 trapping calls from all manner of operating system bowels while all kinds of
 interesting pthread mutexes are being held!
 
+Lately, initial support for generic instrumentation and precise profiling of
+applications has been introduced, thanks to the work done by Mikko Kurkela.
+
 [gprof]: http://sourceware.org/binutils/docs/gprof/index.html
 [jprof]: http://www.mozilla.org/performance/jprof.html
 [glibc]: http://www.gnu.org/software/libc/
