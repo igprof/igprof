@@ -208,7 +208,9 @@ public:
 private:
   void                  expandResourceHash(void);
   Stack *               childStackNode(Stack *parent, void *address);
+public:  
   HResource *           findResource(Address resource);
+private:
   void                  releaseResource(HResource *hres);
   void                  mergeFrom(int depth, Stack *frame, void **callstack);
 

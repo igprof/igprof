@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <malloc.h>
 
+
+
 // -------------------------------------------------------------------
 // Traps for this profiler module
 DUAL_HOOK(1, void *, domalloc, _main, _libc,
@@ -44,6 +46,8 @@ static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace:
 static int                      s_overhead      = OVERHEAD_NONE;
 static bool                     s_initialized   = false;
 
+static unsigned char s_zero_page[4096];
+
 /** Record an allocation at @a ptr of @a size bytes.  Increments counters
     in the tree for the allocations as per current configuration and adds
     the pointer to current live memory map if we are tracking leaks.  */
@@ -79,7 +83,7 @@ add(void *ptr, size_t size)
   // Drop top two stack frames (me, hook).
   buf->lock();
   frame = buf->push(addresses+2, depth-2);
-  buf->tick(frame, &s_ct_total, size, 1);
+  //buf->tick(frame, &s_ct_total, size, 1);
   buf->tick(frame, &s_ct_largest, size, 1);
   ctr = buf->tick(frame, &s_ct_live, size, 1);
   buf->acquire(ctr, (IgProfTrace::Address) ptr, size);
@@ -99,7 +103,26 @@ remove (void *ptr)
     if (UNLIKELY(! buf))
       return;
 
+    //igprof_debug("Hi, we are in free()\n");
+    
     buf->lock();
+    IgProfTrace::HResource *hres = buf->findResource((IgProfTrace::Address) ptr);
+    ASSERT(! hres || ! hres->record || hres->resource == (IgProfTrace::Address) ptr);
+    
+    if (hres && hres->record) {
+      IgProfTrace::Resource *res = hres->record;
+      IgProfTrace::Counter *ctr = res->counter;
+      ASSERT(ctr);
+      uint64_t zero_pages = 0;
+      unsigned char *mem_itr = (unsigned char *) res->hashslot->resource;
+      unsigned char *mem_end = mem_itr + res->size;
+      for (; mem_itr < mem_end-4096; mem_itr += 4096) {
+        zero_pages += !memcmp(mem_itr, s_zero_page, 4096);
+      }
+      buf->tick(ctr->frame, &s_ct_total, zero_pages*4096, 1);
+      //igprof_debug("resource found, zero pages %d\n", zero_pages);
+    }
+    
     buf->release((IgProfTrace::Address) ptr);
     buf->unlock();
   }
@@ -113,6 +136,8 @@ initialize(void)
 {
   if (s_initialized) return;
   s_initialized = true;
+  
+  memset(s_zero_page, 0, 4096);
 
   const char    *options = igprof_options();
   bool          enable = false;
@@ -194,6 +219,9 @@ domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
 
   if (LIKELY(enabled && result))
     add(result, n);
+  
+  if (result)
+    memset(result, 1, n);
 
   igprof_enable();
   return result;
@@ -220,6 +248,23 @@ dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 
   if (LIKELY(result))
   {
+    if (ptr) {
+      IgProfTrace *buf = igprof_buffer();
+    
+      if (buf) {
+        buf->lock();
+        IgProfTrace::HResource *hres = buf->findResource((IgProfTrace::Address) ptr);
+        ASSERT(! hres || ! hres->record || hres->resource == (IgProfTrace::Address) ptr);
+    
+        if (hres && hres->record) {
+          IgProfTrace::Resource *res = hres->record;
+          size_t size = res->size;
+          if (res->size < n)
+            memset(((char *)result)+res->size, 1, n-res->size);
+        }
+      }
+    }
+    
     if (LIKELY(ptr)) remove(ptr);
     if (LIKELY(enabled && result)) add(result, n);
   }
@@ -236,6 +281,9 @@ domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t
 
   if (LIKELY(enabled && result))
     add(result, size);
+  
+  if (result)
+    memset(result, 1, size);
 
   igprof_enable();
   return result;
@@ -249,6 +297,9 @@ dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 
   if (LIKELY(enabled && result))
     add(result, size);
+  
+  if (result)
+    memset(result, 1, size);
 
   igprof_enable();
   return result;
@@ -263,6 +314,9 @@ dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
 
   if (LIKELY(enabled && ptr && *ptr))
     add(*ptr, size);
+  
+  if (result)
+    memset(*ptr, 1, size);
 
   igprof_enable();
   return result;
@@ -276,6 +330,7 @@ dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
   (*hook.chain)(ptr);
   igprof_enable();
 }
+
 
 // -------------------------------------------------------------------
 static bool autoboot = (initialize(), true);

@@ -94,6 +94,8 @@ static pthread_t        s_dumpthread;
 static char             s_outname[MAX_FNAME];
 static char             s_dumpflag[MAX_FNAME];
 
+static unsigned char s_zero_page2[4096];
+
 /** Return set of currently outstanding profile buffers. */
 static std::set<IgProfTrace *> &
 allTraceBuffers(void)
@@ -154,6 +156,7 @@ freeThreadFlag(void *arg)
 static void
 dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
 {
+  //igprof_debug("dump one profile\n");
   if (info.depth) // No address at root
   {
     IgProfSymCache::Symbol *sym = info.symcache->get(frame->address);
@@ -200,6 +203,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
       }
     }
 
+    //igprof_debug("before COUNTERS loop\n");
     IgProfTrace::Counter **ctr = &frame->counters[0];
     for (int i = 0; i < IgProfTrace::MAX_COUNTERS && *ctr; ++i, ++ctr)
     {
@@ -220,10 +224,24 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
                  .put(",").put(c->peak)
 	         .put(")");
 
-        for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
-	  info.io.put(";LK=(").put((void *) res->hashslot->resource)
-		 .put(",").put(res->size)
-		 .put(")");
+        //for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
+	//  info.io.put(";LK=(").put((void *) res->hashslot->resource)
+	//	 .put(",").put(res->size)
+	//	 .put(")");
+          for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
+          {
+            uint64_t zero_pages = 0;
+            unsigned char *mem_itr = (unsigned char *) res->hashslot->resource;
+            unsigned char *mem_end = mem_itr + res->size;
+            for (; mem_itr < mem_end-4096; mem_itr += 4096) {
+              zero_pages += !memcmp(mem_itr, s_zero_page2, 4096);
+            }
+            //igprof_debug("examining heap\n");
+            if (zero_pages > 0)
+              info.io.put(";LK=(").put((void *) res->hashslot->resource)
+                .put(",").put(zero_pages*4096)
+                .put(")");
+          }
       }
     }
     info.io.put("\n");
@@ -447,6 +465,8 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   }
 
   s_initialized = id;
+  
+  memset(s_zero_page2, 0, 4096);
 
   // The main binary may define some functions which we need. In
   // particular bourne shells tend to redefine getenv(), unsetenv(),
@@ -796,3 +816,4 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
   }
   return hook.chain(pid, sig);
 }
+
