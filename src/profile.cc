@@ -817,19 +817,3 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
   return hook.chain(pid, sig);
 }
 
-
-static void dumpdynamic(int signal,
-                      siginfo_t *siginfo __attribute__((unused)),
-                      void *context)
-{
-  if (igprof_disable())
-  {
-    igprof_disable_globally();
-    igprof_debug("kill(%d) called, dumping state\n", signal);
-    IgProfDumpInfo info = { 0, 0, 0, 0, s_outname, 0, -1, 0, 0,
-      { 0, 0, 0, 0, 0, 0, 0 } };
-    dumpAllProfiles(&info);
-    igprof_enable_globally();
-  }
-  igprof_enable();  
-}
