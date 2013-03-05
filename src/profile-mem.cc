@@ -219,6 +219,9 @@ domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
 
   if (LIKELY(enabled && result))
     add(result, n);
+  
+  if (result)
+    memset(result, 1, n);
 
   igprof_enable();
   return result;
@@ -245,6 +248,23 @@ dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 
   if (LIKELY(result))
   {
+    if (ptr) {
+      IgProfTrace *buf = igprof_buffer();
+    
+      if (buf) {
+        buf->lock();
+        IgProfTrace::HResource *hres = buf->findResource((IgProfTrace::Address) ptr);
+        ASSERT(! hres || ! hres->record || hres->resource == (IgProfTrace::Address) ptr);
+    
+        if (hres && hres->record) {
+          IgProfTrace::Resource *res = hres->record;
+          size_t size = res->size;
+          if (res->size < n)
+            memset(((char *)result)+res->size, 1, n-res->size);
+        }
+      }
+    }
+    
     if (LIKELY(ptr)) remove(ptr);
     if (LIKELY(enabled && result)) add(result, n);
   }
@@ -261,6 +281,9 @@ domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t
 
   if (LIKELY(enabled && result))
     add(result, size);
+  
+  if (result)
+    memset(result, 1, size);
 
   igprof_enable();
   return result;
@@ -274,6 +297,9 @@ dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 
   if (LIKELY(enabled && result))
     add(result, size);
+  
+  if (result)
+    memset(result, 1, size);
 
   igprof_enable();
   return result;
@@ -288,6 +314,9 @@ dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
 
   if (LIKELY(enabled && ptr && *ptr))
     add(*ptr, size);
+  
+  if (result)
+    memset(*ptr, 1, size);
 
   igprof_enable();
   return result;
