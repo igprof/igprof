@@ -16,13 +16,13 @@ static bool s_initialized = false;
 static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1 };
 static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1 };
 //enter time stack for functions in each treads
-__thread uint64_t times[IgProfTrace::MAX_DEPTH];
+uint64_t igprof_times[IgProfTrace::MAX_DEPTH];
 //enter counter
-__thread int callCount;
+int callCount = 0;
 //times spent in child functions
-__thread uint64_t child[IgProfTrace::MAX_DEPTH];
+uint64_t child[IgProfTrace::MAX_DEPTH] = {0};
 
-static void
+static void 
 initialize(void)
 {
   if (s_initialized) return;
@@ -69,6 +69,7 @@ extern "C" void __cyg_profile_func_enter(void *func UNUSED, void *caller UNUSED)
 extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 {
 }
+
 // save TSC value at before entering the real function
 static void 
 do_enter ()
@@ -77,7 +78,7 @@ do_enter ()
   ++callCount;
   child[callCount-1] = 0;
   RDTSC(tstart);
-  times[callCount-1] = -tstart; 
+  igprof_times[callCount-1] = -tstart; 
 }
 
 //stop timer and tick counter
@@ -88,7 +89,7 @@ do_exit ()
     RDTSC(tstop);
     --callCount;
     //diff = time spent in the function subtracted by time spent on childs
-    uint64_t diff = times[callCount] - child[callCount] + tstop;
+    uint64_t diff = igprof_times[callCount] - child[callCount] + tstop;
     void *addresses[IgProfTrace::MAX_DEPTH];
     IgProfTrace *buf = igprof_buffer();
     IgProfTrace::Stack *frame;
@@ -99,17 +100,14 @@ do_exit ()
 
     depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
 
-    buf->lock(); 
     frame = buf->push(addresses+1, depth-1);
     buf->tick(frame, &s_ct_time, diff, 1);
     buf->tick(frame, &s_ct_calls, 1, 1);
-    buf->unlock();
     //if function is child, add time spent on child array for parent
     if (callCount > 0)
     {
-      child[callCount-1] += child[callCount] + diff - tstop;
       RDTSC(texit);
-      child[callCount-1] += texit;
+      child[callCount-1] += child[callCount] + diff + (texit - tstop);
     }
 }
 
