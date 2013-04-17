@@ -601,7 +601,7 @@ def tableSorter(a, b):
 
 # This is only available for the CGI version and provides an html list 
 # containing all the files that can be browsed.
-def printGlobbedListing(p):
+def printGlobbedListing(path):
   counterId = {"PERF_TICKS": 3, 
                "MEM_TOTAL": 2,
                "MEM_MAX": 1,
@@ -612,7 +612,7 @@ def printGlobbedListing(p):
   
   IBMatcher = re.compile("(.*)_(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9])")
   
-  for ref, p, f in profileFilesGenerator(p):
+  for ref, p, f in profileFilesGenerator(path):
     fileInfo = dict()
     if not "/" in f:
       standaloneFiles += (ref, p, f)
