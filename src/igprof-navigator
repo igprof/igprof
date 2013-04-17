@@ -725,7 +725,7 @@ border-style: dashed;
   </style>
   <body>
   <h1>CMSSW Integration Build - IgProf results</h1>
-  <a href="https://twiki.cern.ch/twiki/bin/view/CMS/IgProf">More information about igprof.</a>
+  <a href="http://igprof.org">More information about igprof.</a>
   """
   dateHeader(c["date"])
   tableHeader(c["release"], c["arch"], c["dataset"])
