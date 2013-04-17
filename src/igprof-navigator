@@ -640,6 +640,7 @@ def printGlobbedListing(path):
       fileInfo["counter"] = counter
       fileInfo["events"] = events
     except ValueError, e:
+      print "Warning: Failed to split DB name \"%s\"<p>" % (DB)
       continue
     
     if "_merged" in fileInfo["events"]:
@@ -657,6 +658,13 @@ def printGlobbedListing(path):
     managedFiles.append(fileInfo)
   
   managedFiles.sort(tableSorter)
+  if not managedFiles:
+    print "<h1>Unable to find any acceptable sqlite files</h1>"
+    print "File names are expected to be of the form <em>%s.sql3</em>" % \
+        ("___".join(["dataset", "step", "pileup", "gtag", "t",
+                     ("(%s)" % "|".join(list(sorted(counterId.keys())))), "events"]))
+    exit(1)
+
   c = managedFiles[0]
 
   def dateHeader(d):
