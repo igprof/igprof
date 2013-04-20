@@ -25,7 +25,7 @@ LIBHOOK(3, int, dosigaction, _main,
         "sigaction", 0, 0)
 
 // Data for this profiler module
-static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1, 0 };
 static bool                     s_initialized   = false;
 static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;

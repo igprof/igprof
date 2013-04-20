@@ -13,8 +13,8 @@ static IgHook::TypedData<void()> do_exit_hook = { { 0, "__cyg_profile_func_exit"
        0, 0, &do_exit, 0, 0, 0 } };
 
 static bool s_initialized = false;
-static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1 };
-static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1, 0 };
+static IgProfTrace::CounterDef  s_ct_calls     = { "CALL_COUNT",   IgProfTrace::TICK, -1, 0 };
 //enter time stack for functions in each treads
 uint64_t igprof_times[IgProfTrace::MAX_DEPTH];
 //enter counter
