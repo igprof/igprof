@@ -137,8 +137,9 @@ remove (void *ptr)
     size = res->size;
     ASSERT(ctr);
     IgProfTrace::Value empty_mem = derivedLeakSize(res->hashslot->resource, size);
+    buf->tick(ctr->frame, &s_ct_empty, empty_mem, 1);
     // buf->release() will decrease the counter value by res->size
-    buf->tick(ctr->frame, &s_ct_empty, empty_mem + size, 1);
+    ctr->value += size;
     buf->release((IgProfTrace::Address) ptr);
   }
   buf->unlock();
