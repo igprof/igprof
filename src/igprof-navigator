@@ -201,6 +201,7 @@ def summary(database, out, cumulative):
   out.write(CSS)
   if absPath != ".":
     dummy, arch, ib, f = rsplit(absPath, "/", 3)
+    f = re.sub(r"\.sql3$", "", f)
     out.write("""<body>
                  <h1>%s - %s, %s</h1><a href="../">
                   Back to profiles index</a>
@@ -758,10 +759,12 @@ border-style: dashed;
 
 # Produces a list of possible database paths.
 # The only two possibilities for a url are "<script>/<database-path>"
-# or "<script>/<database-path>/<rank>" and the database can only be in
-# <database-path> + ".sql3"
+# or "<script>/<database-path>/<rank>" and the database can only be
+# <database-path> or <database-path> + ".sql3"
 def possibleDBAndRanks(p):
+  yield ("", p)
   yield ("", p.rstrip("/") + ".sql3")
+  yield (basename(p), dirname(p))
   yield (basename(p), dirname(p).rstrip("/") + ".sql3")
 
 # Main logic to generate CGI pages. 
