@@ -62,6 +62,9 @@ DUAL_HOOK(2, int,  dokill, _main, _libc,
 LIBHOOK(1, int, doclose, _main, (int fd), (fd),
         "close", 0, "libc.so.6")
 
+LIBHOOK(1, int, dofclose, _main, (FILE * stream), (stream),
+        "fclose", 0, "libc.so.6")
+
 LIBHOOK(4, int, dopthread_create, _main,
         (pthread_t *thread, const pthread_attr_t *attr,
          void * (*start_routine)(void *), void *arg),
@@ -572,6 +575,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   IgHook::hook(dokill_hook_main.raw);
   IgHook::hook(dopthread_create_hook_main.raw);
   IgHook::hook(doclose_hook_main.raw);
+  IgHook::hook(dofclose_hook_main.raw);
 #if __linux
   if (doexit_hook_main.raw.chain)  IgHook::hook(doexit_hook_libc.raw);
   if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
@@ -815,3 +819,15 @@ doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
   return hook.chain(fd);
 }
 
+static int
+dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
+{
+  if (stream == stderr)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("fclose(stderr) called in thread 0x%lx. igprof_debug disabled\n", 
+                 (unsigned long) thread);
+    stdErrorClosed = true;
+  }
+  return hook.chain(stream);
+}
