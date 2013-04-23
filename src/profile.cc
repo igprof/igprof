@@ -59,6 +59,9 @@ DUAL_HOOK(2, int,  dokill, _main, _libc,
           (pid_t pid, int sig), (pid, sig),
           "kill", 0, "libc.so.6")
 
+LIBHOOK(1, int, doclose, _main, (int fd), (fd),
+        "close", 0, "libc.so.6")
+
 LIBHOOK(4, int, dopthread_create, _main,
         (pthread_t *thread, const pthread_attr_t *attr,
          void * (*start_routine)(void *), void *arg),
@@ -93,6 +96,7 @@ static pthread_t        s_mainthread;
 static pthread_t        s_dumpthread;
 static char             s_outname[MAX_FNAME];
 static char             s_dumpflag[MAX_FNAME];
+static bool             stdErrorClosed = false;
 
 /** Return set of currently outstanding profile buffers. */
 static std::set<IgProfTrace *> &
@@ -567,6 +571,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   IgHook::hook(doexit_hook_main2.raw);
   IgHook::hook(dokill_hook_main.raw);
   IgHook::hook(dopthread_create_hook_main.raw);
+  IgHook::hook(doclose_hook_main.raw);
 #if __linux
   if (doexit_hook_main.raw.chain)  IgHook::hook(doexit_hook_libc.raw);
   if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
@@ -653,7 +658,7 @@ igprof_debug(const char *format, ...)
   int out = 0;
   int len;
 
-  if (debugging)
+  if (debugging && !stdErrorClosed)
   {
     timeval tv;
     gettimeofday(&tv, 0);
@@ -796,3 +801,17 @@ dokill(IgHook::SafeData<igprof_dokill_t> &hook, pid_t pid, int sig)
   }
   return hook.chain(pid, sig);
 }
+
+static int
+doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
+{
+  if (fd == 2)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("close(2) called in thread 0x%lx. igprof_debug disabled\n", 
+                 (unsigned long) thread);
+    stdErrorClosed = true;
+  }
+  return hook.chain(fd);
+}
+
