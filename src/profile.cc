@@ -35,7 +35,7 @@ HIDDEN bool             s_igprof_activated = false;
 HIDDEN IgProfAtomic     s_igprof_enabled = 0;
 HIDDEN pthread_key_t    s_igprof_bufkey;
 HIDDEN pthread_key_t    s_igprof_flagkey;
-
+HIDDEN int              s_igprof_stderrOpen = true;
 // -------------------------------------------------------------------
 // Used to capture real user start arguments in our custom thread wrapper
 struct HIDDEN IgProfWrappedArg
@@ -653,7 +653,7 @@ igprof_debug(const char *format, ...)
   int out = 0;
   int len;
 
-  if (debugging)
+  if (debugging && s_igprof_stderrOpen)
   {
     timeval tv;
     gettimeofday(&tv, 0);
