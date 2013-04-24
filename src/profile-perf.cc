@@ -2,6 +2,7 @@
 #include "profile-trace.h"
 #include "hook.h"
 #include "walk-syms.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
@@ -32,7 +33,6 @@ static bool                     s_initialized   = false;
 static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;
 static int                      s_itimer        = ITIMER_PROF;
-static bool                     stderrClosed    = false;
 
 /** Convert timeval to seconds. */
 static inline double tv2sec(const timeval &tv)
@@ -379,6 +379,9 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   return ret;
 }
 
+//If the profiled program clses stderr stream the igprof_debug got to be
+//disabled by changing the value of stderrClosed to true. The sterr is declared
+//in profile.h header and defined in profile.cc
 static int
 doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
 {
@@ -390,9 +393,11 @@ doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
   }
   return hook.chain(fd);
 }
-
+//If the profiled program clses stderr stream the igprof_debug got to be
+//disabled by changing the value of stderrClosed to true. The sterr is declared
+//in profile.h header and defined in profile.cc
 static int
-doclose(IgHook::SafeData<igprof_doclose_t> &hook, FILE * stream)
+dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
 {
   if (stream == stderr)
   {
