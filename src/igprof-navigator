@@ -43,6 +43,7 @@ from locale import format
 import os
 import cgi
 import socket
+import shutil
 import thread
 from urlparse import urlparse
 from os.path import join, normpath, exists, basename, isdir, dirname, getsize
@@ -779,6 +780,18 @@ def cgiReply():
   
   relPath = os.environ["PATH_INFO"].replace(os.environ["SCRIPT_FILENAME"], "").lstrip("/")
   path = normpath(join(dataPath, relPath))
+
+  if os.path.isdir(re.sub(r"/(cumulative|self)/?$", "", path)):
+    #
+    # Look for an index file in this directory; if it's there, print it and exit
+    #
+    indexes = [os.path.join(path, index) for index in ["index.html", "index.htm"]]
+    for indexFile in indexes:
+      try:
+        shutil.copyfileobj(open(indexFile), sys.stdout)
+        exit(0)
+      except IOError, e:
+        pass
   
   if not path.startswith(dataPath):
     printGlobbedListing(dataPath)

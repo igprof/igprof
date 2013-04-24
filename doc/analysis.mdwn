@@ -184,4 +184,11 @@ and use URL's like:
 This allows one to organize the data files a bit better than just by
 filename.
 
+The profile pages will have a link, "Back to profiles index", pointing to a file index.html
+or index.htm in the same directory as the .sql3 files.  If there's no such file, the
+directory will be searched for filenames of the format
+"dataset___step___pileup___gtag___t___{PERF_TICKS|MEM_TOTAL|MEM_MAX|MEM_LIVE}___events.sql3"
+and a web page generated for you.  This is deprecated, and will be replaced by a more
+general mechanism at some point in the future.
+
 [CERN]: http://www.cern.ch/
