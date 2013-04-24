@@ -23,6 +23,8 @@ LIBHOOK(3, int, dosigaction, _main,
         (int signum, const struct sigaction *act, struct sigaction *oact),
         (signum, act, oact),
         "sigaction", 0, 0)
+LIBHOOK(1, int, dofclose, _main, (FILE * stream), (stream), "fclose", 0, 0)
+LIBHOOK(1, int, doclose, _main, (int fd), (fd), "close", 0, 0)
 
 // Data for this profiler module
 static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
@@ -30,6 +32,7 @@ static bool                     s_initialized   = false;
 static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;
 static int                      s_itimer        = ITIMER_PROF;
+static bool                     stderrClosed    = false;
 
 /** Convert timeval to seconds. */
 static inline double tv2sec(const timeval &tv)
@@ -188,6 +191,8 @@ initialize(void)
   IgHook::hook(dosystem_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
+  IgHook::hook(doclose_hook_main.raw);
+  IgHook::hook(dofclose_hook_main.raw);
   igprof_debug("performance profiler enabled\n");
 
   enableSignalHandler();
@@ -374,5 +379,28 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   return ret;
 }
 
+static int
+doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
+{
+  if (fd == 2)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("close(2) called in thread %x. Igprof debug disabled.\n",thread);
+    stderrClosed = true;
+  }
+  return hook.chain(fd);
+}
+
+static int
+doclose(IgHook::SafeData<igprof_doclose_t> &hook, FILE * stream)
+{
+  if (stream == stderr)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("fclose(stderr) called in thread %x. Igprof debug disabled.\n",thread);
+    stderrClosed = true;
+  }
+  return hook.chain(stream);
+}
 // -------------------------------------------------------------------
 static bool autoboot = (initialize(), true);
