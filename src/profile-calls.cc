@@ -50,7 +50,7 @@ static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, voi
     dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
       &dodoublelib, 0, 0, 0 } };
 
-static IgProfTrace::CounterDef  s_ct_total      = { "CALLS_TOTAL",    IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_total      = { "CALLS_TOTAL",    IgProfTrace::TICK, -1, 0 };
 static bool                     s_initialized   = false;
 
 /** Records calling a given function (only free for the moment). */

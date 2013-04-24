@@ -28,7 +28,7 @@ LIBHOOK(1, int, dofclose, _main, (FILE * stream), (stream), "fclose", 0, 0)
 LIBHOOK(1, int, doclose, _main, (int fd), (fd), "close", 0, 0)
 
 // Data for this profiler module
-static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1, 0 };
 static bool                     s_initialized   = false;
 static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;
