@@ -2,6 +2,7 @@
 #include "profile-trace.h"
 #include "hook.h"
 #include "walk-syms.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
@@ -23,6 +24,8 @@ LIBHOOK(3, int, dosigaction, _main,
         (int signum, const struct sigaction *act, struct sigaction *oact),
         (signum, act, oact),
         "sigaction", 0, 0)
+LIBHOOK(1, int, dofclose, _main, (FILE * stream), (stream), "fclose", 0, 0)
+LIBHOOK(1, int, doclose, _main, (int fd), (fd), "close", 0, 0)
 
 // Data for this profiler module
 static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1 };
@@ -188,6 +191,8 @@ initialize(void)
   IgHook::hook(dosystem_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
+  IgHook::hook(doclose_hook_main.raw);
+  IgHook::hook(dofclose_hook_main.raw);
   igprof_debug("performance profiler enabled\n");
 
   enableSignalHandler();
@@ -374,5 +379,32 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   return ret;
 }
 
+// If the profiled program closes stderr stream the igprof_debug got to be
+// disabled by changing the value of s_igprof_stderrOpen (declared in profile.h
+// an defined in profile.cc) to false. This is don by instrumenting close and and
+// fclose via the two methods below.
+static int
+doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
+{
+  if (fd == 2)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("close(2) called in thread %x. Igprof debug disabled.\n",thread);
+    s_igprof_stderrOpen = false;
+  }
+  return hook.chain(fd);
+}
+
+static int
+dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
+{
+  if (stream == stderr)
+  {
+    pthread_t thread = pthread_self();
+    igprof_debug("fclose(stderr) called in thread %x. Igprof debug disabled.\n",thread);
+    s_igprof_stderrOpen = false;
+  }
+  return hook.chain(stream);
+}
 // -------------------------------------------------------------------
 static bool autoboot = (initialize(), true);
