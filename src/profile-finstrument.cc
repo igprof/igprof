@@ -99,7 +99,7 @@ do_exit ()
       return;
 
     depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
-     
+
     frame = buf->push(addresses+1, depth-1);
     buf->tick(frame, &s_ct_time, diff, 1);
     buf->tick(frame, &s_ct_calls, 1, 1);
