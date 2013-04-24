@@ -15,6 +15,7 @@ extern pthread_key_t    s_igprof_flagkey;
 extern void             (*igprof_abort) (void) __attribute__((noreturn));
 extern char *           (*igprof_getenv) (const char *);
 extern int              (*igprof_unsetenv) (const char *);
+extern int              stderrClosed;
 
 HIDDEN const char *igprof_options(void);
 HIDDEN void igprof_reset_profiles(void);
