@@ -1,3 +1,4 @@
+#include "config.h"
 #include "analyse.h"
 #include <iostream>
 #include <fstream>
@@ -20,7 +21,9 @@
 #include <unistd.h>
 #include <sstream>
 #include <cassert>
-//#include <pcre.h>
+#ifdef PCRE_FOUND
+#  include <pcre.h>
+#endif
 
 #ifndef iggetc
 # if defined getc_unlocked || defined __GLIBC__
@@ -1497,7 +1500,9 @@ class RegexpFilter : public CollapsingFilter
 {
   struct Regexp
   {
-    //pcre          *re;
+#ifdef PCRE_FOUND
+    pcre          *re;
+#endif
     std::string   with;
   };
 
@@ -1511,10 +1516,15 @@ public:
       m_regexps.resize(m_regexps.size() + 1);
       Regexp &regexp = m_regexps.back();
       const char *errptr = 0;
-      // int erroff = 0;
-      // regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, 0);
+#ifdef PCRE_FOUND
+      int erroff = 0;
+      regexp.re = pcre_compile(specs[i].re.c_str(), 0, &errptr, &erroff, 0);
+#endif
       if (errptr)
-        die("Error while compiling regular expression");
+      {
+        std::cerr << "Error while compiling regular expression" << std::endl;
+        exit(1);
+      }
       regexp.with = specs[i].with;
     }
   }
@@ -1529,29 +1539,32 @@ protected:
 
       FIXME: recode to use PCRE directly!
    */
-  void convertSymbol(NodeInfo */*node*/)
+#ifdef PCRE_FOUND
+  void convertSymbol(NodeInfo *node)
     {
-/*      int reOffsets[1024];
-      int reSizes[1024];
-
       if (m_symbols.find(node->symbol()->NAME) != m_symbols.end())
         return;
 
-      std::string translatedName;
       std::string mutantString;
+      std::string translatedName;
 
       for (size_t i = 0, e = m_regexps.size(); i != e; i++)
       {
         Regexp &regexp = m_regexps[i];
 
-        if (regexp.re->match(node->symbol()->NAME))
-          mutantString = node->symbol()->NAME;
-        else if (node->symbol()->FILE && regexp.re->match(node->symbol()->FILE->NAME))
+        //First try to find matches to regular expression from symbol name. If
+        //no matches, try to find matches from FILE name. If nothig changed
+        //continue to next 
+        mutantString = node->symbol()->NAME;
+        replace(regexp.re, regexp.with, mutantString, translatedName);
+        if (translatedName.compare(mutantString) == 0)
+        {
           mutantString = node->symbol()->FILE->NAME;
-        else
-          continue;
-
-        translatedName = lat::StringOps::replace(mutantString, *(regexp.re), regexp.with);
+          replace(regexp.re, regexp.with, mutantString,
+                                   translatedName);
+          if (translatedName.compare(mutantString) == 0)
+            continue;
+        }
 
         CollapsedSymbols::iterator csi = m_symbols.find(translatedName);
         if (csi != m_symbols.end())
@@ -1565,11 +1578,112 @@ protected:
 
         break;
       }
-*/
+#else
+  void convertSymbol(NodeInfo */*node*/)
+    {
+#endif
     }
+  
   CollapsedSymbols m_symbols;
 private:
   std::vector<Regexp> m_regexps;
+#ifdef PCRE_FOUND
+  //Find regexp match from a string and replace the match with string "with"
+  void replace(const pcre *re, const std::string &with, const std::string &subject,
+               std::string &result)
+  {
+    result.clear();
+    result.reserve(subject.size());
+    int ovector[30];
+    int options = 0;
+    int subjectLength = subject.length();
+    int rc = pcre_exec(re, NULL, subject.c_str(), subjectLength, 0 ,options,
+                       ovector, 30); 
+    
+    //no match or matching error, do nothing
+    if (rc < 0)
+    {
+      result = subject;
+      return;
+    }
+    // construct replacement string
+    std::string replacement;
+    replacement.reserve(with.size());
+    std::string::const_iterator it;
+    for ( it = with.begin(); it != with.end(); ++it)
+    {
+      //If the string with contains \* include the correct substring into
+      //replacement string.
+      //  \0 == ovector[0] to ovector[1]
+      //  \1 == ovector[2] to ovector[3]
+      //  \2 == ovector[4] to ovector[5]
+      //  ...
+      //  \9 == ovector[2*9] to ovector[2*9+1]
+      if (*it == '\\')
+      {
+        ++it;
+        //Check if there is enough substrings
+        if (rc < (*it - '/'))
+          die("Regexp error: Not enough substrings\n");
+        replacement.append(subject.substr(ovector[2*(*it - '0')],
+                           ovector[2*(*it - '0')+1]-ovector[2*(*it - '0')]));
+      }
+      else
+        replacement.push_back(*it);
+    }
+    //construct first part of the result string
+    result.append(subject.substr(0, ovector[0]));
+    result.append(replacement);
+    int endOfMatch = ovector[1];
+
+    //Find posible later matches and contruct the result
+    for(;;)
+    {
+      if (ovector[0] == ovector[1])
+      {
+        if (ovector[0] == subjectLength)
+        {
+          result.append(subject.substr(endOfMatch));
+          break;
+        }
+        options = PCRE_NOTEMPTY | PCRE_ANCHORED;
+      }
+      // Find new matches.
+      rc = pcre_exec(re, NULL, subject.c_str(), subjectLength, endOfMatch,
+                     options, ovector, 30);
+
+      //No new matches. Add the the tail of the subject into result.
+      if (rc < 0)
+      {
+        result.append(subject.substr(endOfMatch));
+        break;
+      }
+      //Add next part of the subject to result
+      result.append(subject.substr(endOfMatch, ovector[0] - endOfMatch));
+
+      //Construct new replacement string and append it to the result
+      replacement.clear();
+      replacement.reserve(with.size());
+      for ( it = with.begin(); it != with.end(); ++it)
+      {
+        if (*it == '\\')
+        {
+          ++it;
+          if (rc < (*it - '/'))
+            die("Regexp error: Not enough substrings\n");
+          replacement.append(subject.substr(ovector[2*(*it - '0')],
+                ovector[2*(*it - '0')+1]-ovector[2*(*it - '0')]));
+        }
+        else
+          replacement.push_back(*it);
+      }
+      result.append(replacement);
+
+      //Mark the endOf this match
+      endOfMatch = ovector[1];
+    }
+  }
+#endif
 };
 
 /** Filter to merge use by C++ std namespace entities to parents.
@@ -4223,7 +4337,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
       m_config->setShowCalls(true);
     else if (is("--merge-regexp", "-mr") && left(arg))
     {
-      die("igprof: --merge-regexp / -mr) is currently unsupported.\n");
+#ifdef PCRE_FOUND
       std::string re = *(++arg);
       const char *regexpOption = re.c_str();
       std::string origRe = re;
@@ -4260,7 +4374,10 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
         RegexpSpec &spec = m_regexps.back();
         spec.re = search;
         spec.with = with;
-      }
+    }
+#else //NO PCRE 
+    die("igprof: --merge-regexp / -mr) igprof built without pcre support.\n");
+#endif
     }
     else if (is("--baseline", "-b") && left(arg))
       m_config->setBaseline(*(++arg));
