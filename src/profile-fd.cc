@@ -34,8 +34,8 @@ DUAL_HOOK(3, int, doaccept, _main, _libc,
           "accept", 0, "libc.so.6")
 
 // Data for this profiling module
-static IgProfTrace::CounterDef  s_ct_used       = { "FD_USED", IgProfTrace::TICK, -1 };
-static IgProfTrace::CounterDef  s_ct_live       = { "FD_LIVE", IgProfTrace::TICK, -1 };
+static IgProfTrace::CounterDef  s_ct_used       = { "FD_USED", IgProfTrace::TICK, -1, 0 };
+static IgProfTrace::CounterDef  s_ct_live       = { "FD_LIVE", IgProfTrace::TICK, -1, 0 };
 static bool                     s_initialized   = false;
 
 /** Record file descriptor.  Increments counters in the tree. */

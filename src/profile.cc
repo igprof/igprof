@@ -220,10 +220,25 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
                  .put(",").put(c->peak)
 	         .put(")");
 
-        for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
-	  info.io.put(";LK=(").put((void *) res->hashslot->resource)
-		 .put(",").put(res->size)
-		 .put(")");
+        if (c->def->derivedLeakSize)
+        {  // Leak size is computed from the live resource
+          for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
+          {
+            IgProfTrace::Value derived_size;
+            derived_size = c->def->derivedLeakSize(res->hashslot->resource, res->size);
+            if (derived_size)
+              info.io.put(";LK=(").put((void *) res->hashslot->resource)
+                     .put(",").put(derived_size)
+                     .put(")");
+          }
+        }
+        else
+        {  // Resource size is the leak size
+          for (IgProfTrace::Resource *res = c->resources; res; res = res->nextlive)
+            info.io.put(";LK=(").put((void *) res->hashslot->resource)
+            .put(",").put(res->size)
+            .put(")");
+        }
       }
     }
     info.io.put("\n");

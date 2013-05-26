@@ -63,6 +63,7 @@ ADD_LIBRARY(igprof SHARED
             src/profile.cc
             src/profile-fd.cc
             src/profile-mem.cc
+            src/profile-empty.cc
             src/profile-perf.cc
             src/profile-trace.cc
             src/profile-calls.cc

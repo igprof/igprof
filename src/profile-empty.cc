@@ -33,20 +33,59 @@ DUAL_HOOK(1, void, dofree, _main, _libc,
           (void *ptr), (ptr),
           "free", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 
-// Data for this profiler module
-static const int                OVERHEAD_NONE   = 0; // Memory use without malloc overheads
-static const int                OVERHEAD_WITH   = 1; // Memory use including malloc overheads
-static const int                OVERHEAD_DELTA  = 2; // Memory use malloc overhead only
+// Checkerboard pattern (binary 10101010).
+// Pages full of a checkerboard patter are considered untouched.
+static const unsigned char      MAGIC_BYTE      = 0xAA;
 
-static IgProfTrace::CounterDef  s_ct_total      = { "MEM_TOTAL",    IgProfTrace::TICK, -1, 0 };
-static IgProfTrace::CounterDef  s_ct_largest    = { "MEM_MAX",      IgProfTrace::MAX, -1, 0 };
-static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK, -1, 0 };
-static int                      s_overhead      = OVERHEAD_NONE;
+HIDDEN unsigned char            s_zero_page[4096];
+HIDDEN unsigned char            s_magic_page[4096];
+static IgProfTrace::CounterDef  s_ct_empty      = { "MEM_LIVE", IgProfTrace::TICK, -1, 0 };
+static bool                     s_init_memory   = false;
+static bool                     s_track_unused  = false;
 static bool                     s_initialized   = false;
 
-/** Record an allocation at @a ptr of @a size bytes.  Increments counters
-    in the tree for the allocations as per current configuration and adds
-    the pointer to current live memory map if we are tracking leaks.  */
+/** Counts zero pages and checkerboard pages in a memory range */
+static void
+CountSpecialPages(IgProfTrace::Address address,
+                  size_t size,
+                  IgProfTrace::Value *num_zero_pages,
+                  IgProfTrace::Value *num_magic_pages)
+{
+  ASSERT(num_zero_pages);
+  ASSERT(num_magic_pages);
+
+  *num_zero_pages = *num_magic_pages = 0;
+  // Align the page iterator at next page boundary
+  unsigned char *page =
+    (unsigned char *)( (address+4095) & ~(size_t)4095 );
+  unsigned char *scan_end = (unsigned char *)address + size;
+  unsigned char *aligned_end = (unsigned char *)((size_t)scan_end & ~(size_t)4095);
+  for (; page < aligned_end; page += 4096)
+  {
+    *num_zero_pages += !page[0] && !memcmp(page+1, s_zero_page, 4096-1);
+    if (s_track_unused)
+    {
+      *num_magic_pages += (page[0] == MAGIC_BYTE) &&
+                          !memcmp(page+1, s_magic_page, 4096-1);
+    }
+  }
+}
+
+static IgProfTrace::Value
+derivedLeakSize(IgProfTrace::Address address, size_t size)
+{
+  IgProfTrace::Value num_zero_pages;
+  IgProfTrace::Value num_magic_pages;
+
+  CountSpecialPages(address, size, &num_zero_pages, &num_magic_pages);
+  if (s_track_unused)
+    return num_magic_pages*4096;
+  return num_zero_pages*4096;
+}
+
+/** Record an allocation at @a ptr of @a size bytes.  Adds a pointer to
+    current live memory map for live-zero checking and in order
+    to match the free().  */
 static void  __attribute__((noinline))
 add(void *ptr, size_t size)
 {
@@ -60,18 +99,6 @@ add(void *ptr, size_t size)
   if (UNLIKELY(! buf))
     return;
 
-  if (UNLIKELY(s_overhead != OVERHEAD_NONE))
-  {
-    size_t actual = malloc_usable_size(ptr);
-    if (s_overhead == OVERHEAD_DELTA)
-    {
-      if ((size = actual - size) == 0)
-        return;
-    }
-    else
-      size = actual;
-  }
-
   RDTSC(tstart);
   depth = IgHookTrace::stacktrace(addresses, IgProfTrace::MAX_DEPTH);
   RDTSC(tend);
@@ -79,30 +106,44 @@ add(void *ptr, size_t size)
   // Drop top two stack frames (me, hook).
   buf->lock();
   frame = buf->push(addresses+2, depth-2);
-  buf->tick(frame, &s_ct_total, size, 1);
-  buf->tick(frame, &s_ct_largest, size, 1);
-  ctr = buf->tick(frame, &s_ct_live, size, 1);
+  // Defer size estimation to free()
+  ctr = buf->tick(frame, &s_ct_empty, 0, 1);
   buf->acquire(ctr, (IgProfTrace::Address) ptr, size);
   buf->traceperf(depth, tstart, tend);
   buf->unlock();
 }
 
-/** Remove knowledge about allocation.  If we are tracking leaks,
-    removes the memory allocation from the live map and subtracts
-    from the live memory counters.  */
-static void
+/** Remove knowledge about allocation.  Removes the memory allocation from the
+    live map and adds the amount of memory in zero pages to the counter.
+    Returns the size of the memory region */
+static size_t
 remove (void *ptr)
 {
-  if (LIKELY(ptr))
-  {
-    IgProfTrace *buf = igprof_buffer();
-    if (UNLIKELY(! buf))
-      return;
+  if (UNLIKELY(! ptr))
+    return 0;
 
-    buf->lock();
+  IgProfTrace *buf = igprof_buffer();
+  if (UNLIKELY(! buf))
+    return 0;
+
+  size_t size = 0;
+  buf->lock();
+  IgProfTrace::HResource *hres = buf->findResource((IgProfTrace::Address) ptr);
+  ASSERT(! hres || ! hres->record || hres->resource == (IgProfTrace::Address) ptr);
+  if (UNLIKELY(hres && hres->record))
+  {  // The free() call is likely to correspond to a small malloc()
+    IgProfTrace::Resource *res = hres->record;
+    IgProfTrace::Counter *ctr = res->counter;
+    size = res->size;
+    ASSERT(ctr);
+    IgProfTrace::Value empty_mem = derivedLeakSize(res->hashslot->resource, size);
+    buf->tick(ctr->frame, &s_ct_empty, empty_mem, 1);
+    // buf->release() will decrease the counter value by res->size
+    ctr->value += size;
     buf->release((IgProfTrace::Address) ptr);
-    buf->unlock();
   }
+  buf->unlock();
+  return size;
 }
 
 // -------------------------------------------------------------------
@@ -114,6 +155,10 @@ initialize(void)
   if (s_initialized) return;
   s_initialized = true;
 
+  memset(s_zero_page, 0, 4096);
+  memset(s_magic_page, MAGIC_BYTE, 4096);
+  s_ct_empty.derivedLeakSize = derivedLeakSize;
+
   const char    *options = igprof_options();
   bool          enable = false;
 
@@ -122,26 +167,22 @@ initialize(void)
     while (*options == ' ' || *options == ',')
       ++options;
 
-    if (! strncmp(options, "mem", 3))
+    if (! strncmp(options, "empty", 5))
     {
       enable = true;
-      options += 3;
+      options += 5;
       while (*options)
       {
-        if (! strncmp(options, ":overhead=none", 14))
+        if (! strncmp(options, ":initmem", 7))
         {
-          s_overhead = OVERHEAD_NONE;
-          options += 14;
+          s_init_memory = true;
+          options += 7;
         }
-        else if (! strncmp(options, ":overhead=include", 17))
+        if (! strncmp(options, ":trackunused", 12))
         {
-          s_overhead = OVERHEAD_WITH;
-          options += 17;
-        }
-        else if (! strncmp(options, ":overhead=delta", 15))
-        {
-          s_overhead = OVERHEAD_DELTA;
-          options += 15;
+          s_track_unused = true;
+          s_init_memory = true;
+          options += 12;
         }
         else
           break;
@@ -157,14 +198,13 @@ initialize(void)
   if (! enable)
     return;
 
-  if (! igprof_init("memory profiler", 0, false))
+  if (! igprof_init("empty memory profiler", 0, false))
     return;
 
   igprof_disable_globally();
-  igprof_debug("memory profiler: reporting %sallocation overhead%s\n",
-               (s_overhead == OVERHEAD_NONE ? "memory use without "
-                : s_overhead == OVERHEAD_WITH ? "memory use with " : ""),
-               (s_overhead == OVERHEAD_DELTA ? " only" : ""));
+  igprof_debug("empty memory profiler%s%s\n",
+               s_init_memory ? ", initialize malloc'd memory with checkerboard" : "",
+               s_track_unused ? ", tracking unused pages" : "tracking zero pages");
 
   IgHook::hook(domalloc_hook_main.raw);
   IgHook::hook(docalloc_hook_main.raw);
@@ -180,7 +220,7 @@ initialize(void)
   if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
 #endif
-  igprof_debug("memory profiler enabled\n");
+  igprof_debug("empty memory profiler enabled\n");
   igprof_enable_globally();
 }
 
@@ -193,7 +233,10 @@ domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
   void *result = (*hook.chain)(n);
 
   if (LIKELY(enabled && result))
+  {
+    if (s_init_memory) memset(result, MAGIC_BYTE, n);
     add(result, n);
+  }
 
   igprof_enable();
   return result;
@@ -220,8 +263,22 @@ dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 
   if (LIKELY(result))
   {
-    if (LIKELY(ptr)) remove(ptr);
+    size_t old_size = 0;
+    if (LIKELY(ptr))
+      old_size = remove(ptr);
     if (LIKELY(enabled && result)) add(result, n);
+    if (s_init_memory)
+    {
+      if (!ptr)
+      {  // realloc is the same as malloc
+        memset(result, MAGIC_BYTE, n);
+      }
+      else
+      {
+        if (old_size && (n > old_size))
+          memset((unsigned char *)result + old_size, MAGIC_BYTE, n-old_size);
+      }
+    }
   }
 
   igprof_enable();
@@ -235,7 +292,10 @@ domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t
   void *result = (*hook.chain)(alignment, size);
 
   if (LIKELY(enabled && result))
+  {
+    if (s_init_memory) memset(result, MAGIC_BYTE, size);
     add(result, size);
+  }
 
   igprof_enable();
   return result;
@@ -248,7 +308,10 @@ dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
   void *result = (*hook.chain)(size);
 
   if (LIKELY(enabled && result))
+  {
+    if (s_init_memory) memset(result, MAGIC_BYTE, size);
     add(result, size);
+  }
 
   igprof_enable();
   return result;
@@ -262,7 +325,10 @@ dopmemalign(IgHook::SafeData<igprof_dopmemalign_t> &hook,
   int result = (*hook.chain)(ptr, alignment, size);
 
   if (LIKELY(enabled && ptr && *ptr))
+  {
+    if (s_init_memory) memset(*ptr, MAGIC_BYTE, size);
     add(*ptr, size);
+  }
 
   igprof_enable();
   return result;

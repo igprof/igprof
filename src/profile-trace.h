@@ -133,6 +133,10 @@ public:
     const char  *name;          //< The name of the counter, for output.
     CounterType type;           //< The behaviour type of the counter.
     int         id;             //< Reference ID for output.
+    /* Allows for leak size computation derived from the memory content
+       of a live resource.  If it is 0, the full resource size is added
+       to the leak counter. */
+    Value (*derivedLeakSize)(Address address, size_t size);
   };
 
   /// Counter value.
@@ -143,9 +147,7 @@ public:
     Value       value;          //< The accumulated counter value.
     Value       peak;           //< The maximum value of the counter at any time.
     Resource    *resources;     //< The live resources linked to this counter.
-#if DEBUG
     Stack       *frame;         //< The stack node owning the counter.
-#endif
   };
 
   /* Both the resource hash and a counter points to a live resource
@@ -198,6 +200,7 @@ public:
   Counter *             tick(Stack *frame, CounterDef *def, Value amount, Value ticks);
   void                  acquire(Counter *ctr, Address resource, Value size);
   void                  release(Address resource);
+  HResource *           findResource(Address resource);
   void                  traceperf(int depth, uint64_t tstart, uint64_t tend);
   void                  mergeFrom(IgProfTrace &other);
   void                  unlock(void);
@@ -208,7 +211,6 @@ public:
 private:
   void                  expandResourceHash(void);
   Stack *               childStackNode(Stack *parent, void *address);
-  HResource *           findResource(Address resource);
   void                  releaseResource(HResource *hres);
   void                  mergeFrom(int depth, Stack *frame, void **callstack);
 
@@ -500,9 +502,7 @@ IgProfTrace::tick(Stack *frame, CounterDef *def, Value amount, Value ticks)
       c->value = 0;
       c->peak = 0;
       c->resources = 0;
-#if DEBUG
       c->frame = frame;
-#endif
       break;
     }
 
