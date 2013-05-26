@@ -137,8 +137,8 @@ the report via some url like:
 
 can be used to open and view the report. The sqlite data file always
 needs to be in a subdirectory "data" of the place where the igprof-navigator 
-script is located. The filename extension should be ".sql3", even if the URL
-will specify the sqlite filename without the extension. The $PATHTOCGIAREA
+script is located. The filename extension should be ".sql3", although the URL
+is allowed to omit the extension. The $PATHTOCGIAREA
 and "http://yoursite/x/y/z/cgi-bin/" will of course depend on the
 precise details of the site where you are working.
 
@@ -166,6 +166,8 @@ and copy in the sqlite file:
 The URL to the report will then be:
 
     http://cern.ch/<username>/cgi-bin/igprof-navigator/foo_perf/
+or
+    http://cern.ch/<username>/cgi-bin/igprof-navigator/foo_perf.sql3/
 
 Note that it is also possible (in any site, not just CERN) to create
 subdirectories under the "data" directory
