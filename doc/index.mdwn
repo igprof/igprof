@@ -3,14 +3,15 @@ title: IgProf, The Ignominous Profiler
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
- - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
- - { name: Project, link: http://sourceforge.net/projects/igprof/ }
+ - { name: Downloads, link: https://github.com/ktf/igprof/tags }
+ - { name: Bugs, link: https://github.com/ktf/igprof/issues }
+ - { name: Project, link: https://github.com/ktf/igprof }
 ---
 Welcome to IgProf, the Ignominous Profiler.  IgProf is a simple nice tool for
 measuring and analysing application memory and performance characteristics.
 IgProf requires no changes to the application or the build process.  It
-currently works on Linux (ia32, x86_64).  Eons ago it worked also on Mac OS X (PPC).
+currently works on Linux (`ia32`, `x86_64`).  Eons ago it worked also on Mac OS X
+(`PPC`).
 
 IgProf is fast, light weight and correctly handles dynamically loaded shared 
 libraries, threads and sub-processes started by the application. We have
@@ -22,18 +23,19 @@ filters.  Results from any number of profiling runs can be included. This
 means you can both dig into the details and see the big picture from combined 
 workloads.
 
-IgProf can be run in one of two modes: as a performance profiler or as a 
-memory profiler. When used as a performance profiler it provides 
-statistical sampling based performance profiles of the application. When used 
-as a
-memory profiler information about both memory leaks and the total
-dynamic memory allocations are available. It can also be used to obtain
-a profile the live memory allocations in the heap at any given instant 
-during the application run, although this requires a small code modification 
-to signal from within your application the appropriate time to obtain the 
-profile. For both profiling modes, one can produce either simple ASCII flat 
-file or web-navigable reports. A complete performance and memory use picture 
-can be obtained by running your application twice, once in each profiling mode.
+IgProf can be run in one of three modes: as a performance profiler, as a
+memory profiler, or in instrumentation mode. When used as a performance
+profiler it provides statistical sampling based performance profiles of the
+application. When used as a memory profiler information about both memory leaks
+and the total dynamic memory allocations are available. It can also be used to
+obtain a profile the live memory allocations in the heap at any given instant
+during the application run, although this requires a small code modification to
+signal from within your application the appropriate time to obtain the profile.
+For both profiling modes, one can produce either simple ASCII flat file or
+web-navigable reports.  A complete performance and memory use picture can be
+obtained by running your application twice, once in each profiling mode.
+When run in instrumentation mode igprof can be used to precisely measure the
+time spent in a given function with the precision of a few ns.
 
 The performance profiling adds negligibly to application run time and 
 typically adds less than 50MB to the memory usage.  The memory profiling 
@@ -50,8 +52,19 @@ callgrind for the job.
 
 ### Other profilers
 
-If developing on a Mac OS X is an option, even if you otherwise develop on Linux, consider using [Shark][].  For very precise but much more expensive profiling you can use [callgrind and valgrind][].  [OProfile][] is another statistical profiler that uses CPU performance counters; it requires system privileges unless you use the snapshot interface developed by Giulio Eulisse.  At present OProfile gives only flat profiles, not call trees, but allows a wide range of very interesting metrics to measure, such as cache miss rate.  It can also profile the whole system, not just one application.  
+Profiling is a craft art, and profilers are just tools. The best undestanding
+of your application is usually achieved by correlating a number of profiling
+result coming from different profilers and QA tools.
+If developing on a Mac OS X is an option, even if you otherwise develop on
+Linux, consider using [Instruments][].  For very precise but much more expensive
+profiling you can use [callgrind and valgrind][]. If you want to get more 
+down-to-the-metal information [OProfile][], Linux [perfctr][], [PAPI][] or
+[perfmon2][] are other statistical profilers that use CPU performance counters;
+they however require system privileges and kernel instrumentation.
 
-[Shark]: http://developer.apple.com/tools/sharkoptimize.html
+[Instruments]: https://developer.apple.com/technologies/tools/
 [callgrind and valgrind]: http://www.valgrind.org
 [oprofile]: http://oprofile.sourceforge.net
+[perfctr]: http://user.it.uu.se/~mikpe/linux/perfctr/
+[perfmon2]: http://perfmon2.sourceforge.net
+[PAPI]: http://icl.cs.utk.edu/PAPI/

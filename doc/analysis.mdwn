@@ -3,9 +3,9 @@ title: Producing IgProf profile reports
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: http://sourceforge.net/projects/igprof/files/ }
- - { name: Bugs, link: http://sourceforge.net/tracker/?group_id=300286&atid=1266520 }
- - { name: Project, link: http://sourceforge.net/projects/igprof/ }
+ - { name: Downloads, link: https://github.com/ktf/igprof/tags }
+ - { name: Bugs, link: https://github.com/ktf/igprof/issues }
+ - { name: Project, link: https://github.com/ktf/igprof/ }
 ---
 Assuming you obtained some profile statistics files [as shown on the running
 page](running.html), the next step is to process these to obtain useful
@@ -182,13 +182,7 @@ and use URL's like:
     http://cern.ch/<username>/cgi-bin/igprof-navigator/new/foo_perf/
 
 This allows one to organize the data files a bit better than just by
-filename.
-
-The profile pages will have a link, "Back to profiles index", pointing to a file index.html
-or index.htm in the same directory as the .sql3 files.  If there's no such file, the
-directory will be searched for filenames of the format
-"dataset___step___pileup___gtag___t___{PERF_TICKS|MEM_TOTAL|MEM_MAX|MEM_LIVE}___events.sql3"
-and a web page generated for you.  This is deprecated, and will be replaced by a more
-general mechanism at some point in the future.
+filename. An example profile can be found [here][example-profile].
 
 [CERN]: http://www.cern.ch/
+[example-profile]: http://eulisse.web.cern.ch/eulisse/performance/navigator/performance-report
