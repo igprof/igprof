@@ -96,6 +96,7 @@ ADD_LIBRARY(igprof SHARED
             src/profile-perf.cc
             src/profile-trace.cc
             src/profile-calls.cc
+            src/profile-multifunctions.cc
             src/profile-finstrument.cc
             src/trace.cc
             src/trace-mem.cc
