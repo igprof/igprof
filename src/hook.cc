@@ -26,6 +26,9 @@
 #elif __ppc__
 # define TRAMPOLINE_JUMP        16      // jump to hook/old code
 # define TRAMPOLINE_SAVED       4       // one prologue instruction to save
+#elif __arm__
+# define TRAMPOLINE_JUMP        8       // jump to hook/old code (2 instructions)
+# define TRAMPOLINE_SAVED       8      // 2 reserved words for possible offsets
 #else
 # error sorry this platform is not supported
 #endif
@@ -154,12 +157,19 @@ release(void *ptr)
     existing code segments, and with @a writable = false after code
     has been edited.  */
 static IgHook::Status
-protect(void *address, bool writable)
+protect(void *address, bool writable, unsigned prologueSize)
 {
   assert(sizeof(address) <= sizeof(unsigned long));
 
+  void *originalAddress = address;
   int pagesize = getpagesize();
   address = (void *) (((unsigned long) address) & ~(pagesize-1));
+
+  // If the function prologueSize is at the edge of
+  // the page change protection also from next page.
+  if (((pagesize - ((unsigned long)originalAddress - (unsigned long)address)))
+        <= prologueSize)
+    pagesize += prologueSize;
 #if __APPLE__
   // (http://lists.apple.com/archives/Darwin-kernel/2005/Feb/msg00045.html)
   // The dynamic loader (dyld) loads pages into unmodifiable system-wide
@@ -243,6 +253,30 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
     sym = v ? dlvsym(program, fn, v) : dlsym(program, fn);
     dlclose(program);
     if (! sym) sym = v ? dlvsym(program, fn, v) : dlsym(RTLD_NEXT, fn);
+    
+#if __arm__
+    if (sym)
+    { 
+      unsigned *insns = (unsigned *)sym;
+      /* If the program is using libpthread. Fork and system functions got to be
+         hooked in libc.so.6 instead
+         dlsym can return address which points to .PLT section. If try to find
+         the real location with RTLD_NEXT option */
+      if (*insns == 0xeaffcbed || *insns == 0xeaffd0a5)
+      {
+        igprof_debug("Function %s hooked in libc.so.6 instead RTLD_NEXT\n",fn);
+        void *handle = dlopen("libc.so.6", RTLD_LAZY | RTLD_GLOBAL);
+        sym = dlsym(handle, fn);
+      }
+      else if ((insns[0] & 0xfffff000) == 0xe28fc000
+            && (insns[1] & 0xfffff000) == 0xe28cc000
+            && (insns[2] & 0xfffff000) == 0xe5bcf000)
+      {
+        igprof_debug("sym pointing to .plt section, trying dlsym(RTLD_NEXT,fn)\n");
+        sym = dlsym(RTLD_NEXT, fn);
+      }
+    }
+#endif
     if (! sym)
     {
       igprof_debug("dlsym(self, '%s'): %s\n", fn, dlerror());
@@ -371,6 +405,72 @@ parse(const char *func, void *address, unsigned *patches)
   }
 
   n = 4;
+#elif __arm__
+  unsigned  *insns = (unsigned *) address;
+  if (insns[0] == 0xe51ff004)
+  {
+    igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                 func, address);
+    return -1;
+  }
+  while (n < 8)
+  { 
+    if ((insns[0] & 0xffff0000) == 0xe59f0000       //ldr r*, [PC + #***]
+     || (insns[0] & 0xffff0000) == 0xe51f0000       //ldr r*, [PC - #***]
+     || (insns[0] == 0xe79fc00c))                    //ldr ip, [PC, ip]
+    {
+      if (n >= 4 && (*patches == 0x0))
+      {
+        *patches++ = 0xffffffff;
+      }
+      n += 4, *patches++ = *insns, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe92d0000) // push {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe1a00000) // mov rd, rn
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe3a00000) // mov rd, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xfff00000) == 0xe3100000) // tst rx, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xfff00000) == 0xe3500000) // cmp rx, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xff000000) == 0xee000000) // mcr
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe52d0000) // push {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe49d0000) // pop {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if (  insns[0] == 0xe1812000   // orr r2, r1, r0
+            || insns[0] == 0xe2504000   // subs r4, r0, #0
+            || insns[0] == 0xe2403020)  // sub r3, r0, #0
+    {
+      n += 4, insns++;
+    }
+    else
+    {
+      igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
+		   func, address, insns - (unsigned *) address,
+		   insns[0]);
+      return -1;
+    }
+  }
 #endif
 
   *patches = 0;
@@ -458,6 +558,13 @@ redirect(void *&from, void *to, IgHook::JumpDirection direction UNUSED)
   *insns++ = 0x48000002 | ((unsigned int) to & 0x3ffffff);
   from = insns;
   return (insns - start) * 4;
+#elif __arm__
+  unsigned *start = (unsigned *) from;
+  unsigned *insns = (unsigned *) from;
+  *insns++ = 0xe51ff004;  // LDR PC, [PC,- 4]
+  *insns++ = (unsigned) to;  // address to jump
+  from = insns;
+  return (insns - start) * 4;
 #endif
 }
 
@@ -501,7 +608,7 @@ prereentry(void *&from, void *to)
 static int
 postreentry(void *&from, void *to)
 {
-#if __i386__ || __x86_64__
+#if __i386__ || __x86_64__ || __arm__
   // Real jump
   return redirect(from, to, IgHook::JumpFromTrampoline);
 #elif __ppc__
@@ -601,6 +708,33 @@ prepare(void *address,
     *((unsigned *)((unsigned char *)start + offset))
       += (unsigned char *)old - (unsigned char *)start - delta;
   }
+#elif __arm__
+  // Patch position independent instruction to use PC + 8 location. Where the
+  // content of the pointed location is copied.
+  if (patches && *patches)
+  {
+    unsigned *insns = (unsigned *)address;
+    for ( ; *patches && patches ; ++patches, ++insns)
+    {
+      if (*patches != 0xffffffff)
+      {
+        insns[-4] = (insns[-4] & 0x0000f000) + 0xe59f0008;
+        if ((*patches & 0xffff0000) == 0xe59f0000)
+        {
+          memcpy(insns, (void *)((unsigned)old + (*patches & 0x00000fff)), 4);
+        }
+        else if ((*patches & 0xffff0000) == 0xe51f0000)
+        {
+          memcpy(insns, (void *)((unsigned)old - (*patches & 0x00000fff)), 4);
+        }
+        else if (*patches == 0xe79fc00c) 
+        {
+          memcpy(insns, (void *)((unsigned)old + insns[-1]), 4);
+        }
+        skip(old,4);
+      }
+    }
+  }
 #endif
 }
 
@@ -613,7 +747,7 @@ static void
 patch(void *address, void *trampoline, int prologue)
 {
   // FIXME: Not atomic, freeze all other threads!
-  unsigned char *insns = (unsigned char *) address;
+  unsigned char *insns UNUSED = (unsigned char *) address;
   int i = redirect(address, trampoline, IgHook::JumpToTrampoline);
   for ( ; i < prologue; ++i)
   {
@@ -679,7 +813,7 @@ IgHook::hook(const char *function,
   prepare(tramp, replacement, chain, sym, prologue, patches);
 
   // Attach trampoline
-  if ((s = protect(sym, true)) != Success)
+  if ((s = protect(sym, true, prologue)) != Success) 
   {
     release(tramp);
     return s;
@@ -689,7 +823,7 @@ IgHook::hook(const char *function,
 
   // Restore privileges and flush caches
   // No: protect(tramp, false); -- segvs on linux, full page might not been allocated?
-  protect(sym, false);
+  protect(sym, false, prologue);
   flush(tramp);
   flush(sym);
 

@@ -1,6 +1,10 @@
 #ifndef MACROS_H
 # define MACROS_H
 
+#if __arm__
+#include "config.h"
+#endif
+
 #define UNUSED       __attribute__((unused))
 #define HIDDEN       __attribute__((visibility("hidden")))
 #define VISIBLE      __attribute__((visibility("default")))
@@ -60,10 +64,19 @@
 # define TRACE(expr) do { ; } while (0)
 #endif
 
+#if __x86_64__ || __i386__
 #define RDTSC(v)							\
   do { unsigned lo, hi;							\
     __asm__ volatile("rdtsc" : "=a" (lo), "=d" (hi));			\
     (v) = ((uint64_t) lo) | ((uint64_t) hi << 32);			\
   } while (0)
-
+#elif __arm__
+  #ifdef USER_CCNT
+    #define RDTSC(v)  \
+      __asm__ volatile ("MRC p15, 0, %0, c9, c13, 0\t\n": "=r"(v));
+  #else // NO USER_CCNT
+    #define RDTSC(v)  \
+      v = 0;
+  #endif // USER_CCNT
+#endif // arch
 #endif // MACROS_H
