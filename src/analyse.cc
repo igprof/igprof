@@ -653,6 +653,14 @@ struct RegexpSpec
   std::string  with;
 };
 
+struct AncestorsSpec
+{
+  // List of ancestos that need to match
+  std::vector<std::string> ancestors;
+  // New symbol name for nodes that has ancestors matching to ancestors list
+  std::string with;
+};
+
 class Configuration
 {
 public:
@@ -756,6 +764,7 @@ public:
   bool     useGdb;
   bool     dumpAllocations;
   std::vector<RegexpSpec>   regexps;
+  AncestorsSpec  ancestors;
 };
 
 Configuration::Configuration()
@@ -1118,6 +1127,7 @@ private:
   const char                    **m_argv;
   std::vector<std::string>      m_inputFiles;
   std::vector<RegexpSpec>       m_regexps;
+  AncestorsSpec                 m_ancestors;
   std::vector<IgProfFilter *>   m_filters;
   std::deque<NodeInfo>          m_nodesStorage;
   std::string                   m_key;
@@ -2889,6 +2899,132 @@ void walk(NodeInfo *first, size_t total, IgProfFilter *filter=0)
   }
 }
 
+#ifdef PCRE_FOUND
+// Modified version of walk function to go trough call tree and implement
+// merge-ancestors filter
+void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
+{
+  typedef std::map<std::string, SymbolInfo *> CollapsedSymbols;
+  CollapsedSymbols m_symbols;
+
+  // Compile regular expressions listed in AncestorsSpec.
+  std::vector<pcre *> ancestor_list;
+  std::string replace = specs.with;
+  ancestor_list.resize(specs.ancestors.size());
+  for (size_t i = 0, end = specs.ancestors.size(); i != end; i++)
+  {
+    const char *errptr = 0;
+    int erroff = 0;
+    ancestor_list[i] = pcre_compile(specs.ancestors[i].c_str(), 0, &errptr, &erroff, 0);
+    if (errptr)
+    {
+      std::cerr << "Error while compiling regular expression" << std::endl;
+      exit(1);
+    }
+  }
+
+  // Add the first node (spontaneous) into call stack
+  std::vector<StackItem> stack;
+  stack.resize(1);
+  StackItem &firstItem = stack.back();
+  firstItem.parent = 0;
+  firstItem.pre = first;
+  firstItem.post = 0;
+  stack.reserve(10000);
+
+  // variables for pcre_exec
+  std::string symbolname; 
+  int ovector[9];
+  int rc = 0;
+
+  // Keeps track matches
+  int control = 0;
+  int limit = ancestor_list.size() - 1;
+
+  // Go trough stack
+  while (!stack.empty())
+  {
+    StackItem &item = stack.back();
+    NodeInfo *parent = item.parent, *pre = item.pre;
+    stack.pop_back();
+
+    // First time all nodes go trough pre.
+    if (pre)
+    {
+
+      // Check if the the node's symbol name matches to ancestor_list
+      symbolname = pre->symbol()->NAME;
+      rc = -1;
+      if (limit >= control)
+      {
+        rc = pcre_exec(ancestor_list[control], NULL, symbolname.c_str(),
+                       strlen(symbolname.c_str()), 0, 0, ovector, 9);
+      }
+      else  // We are in the branch that has match below the match
+      {
+        std::string replace = specs.with.append(":");
+        replace.append(symbolname);
+        CollapsedSymbols::iterator csi = m_symbols.find(replace);
+        if (csi != m_symbols.end())
+          pre->setSymbol(csi->second);
+  
+        SymbolInfo *newInfo = new SymbolInfo(replace.c_str(),
+                                             pre->symbol()->FILE, 0);
+        m_symbols.insert(CollapsedSymbols::value_type(replace.c_str(),
+                                                      newInfo));
+        pre->setSymbol(newInfo);
+      } 
+
+      // Match found
+      if (rc > 0)
+      {
+        ++control;
+
+        // The node is child of all ancestors
+        if (control == (limit + 1))
+        { 
+          CollapsedSymbols::iterator csi = m_symbols.find(specs.with);
+          if (csi != m_symbols.end())
+            pre->setSymbol(csi->second);
+  
+          SymbolInfo *newInfo = new SymbolInfo(specs.with.c_str(),
+                                               pre->symbol()->FILE, 0);
+          m_symbols.insert(CollapsedSymbols::value_type(specs.with.c_str(),
+                                                        newInfo));
+          pre->setSymbol(newInfo);
+        }
+
+        // re add the node to stack with pre = 0
+        StackItem newItem;
+        newItem.parent = parent;
+        newItem.pre = 0;
+        newItem.post = pre;
+        stack.push_back(newItem);
+      }
+
+      // Add all the children of pre as items in the stack.
+      for (size_t ci = 0, ce = pre->CHILDREN.size(); ci != ce; ++ci)
+      {
+        assert(pre);
+        NodeInfo *child = pre->CHILDREN[ci];
+        StackItem newItem;
+        newItem.parent = pre;
+        newItem.pre = child;
+        newItem.post = 0;
+        stack.push_back(newItem);
+      }
+    }
+    // When coming back up the call tree this will be executed in nodes that
+    // were matching some ancestor. 
+    else
+      --control;
+  }
+#else
+void walk_ancestors(NodeInfo */*first*/, AncestorsSpec */specs*/)
+{
+#endif
+}
+
 void
 IgProfAnalyzerApplication::prepdata(ProfileInfo& prof)
 {
@@ -2914,6 +3050,13 @@ IgProfAnalyzerApplication::prepdata(ProfileInfo& prof)
   {
     verboseMessage("Merge nodes using user-provided regular expression");
     walk(prof.spontaneous(), m_nodesStorage.size(), new RegexpFilter(m_regexps, m_keyMax));
+    verboseMessage(0, 0, " done\n");
+  }
+
+  if (m_ancestors.ancestors.size() != 0)
+  {
+    verboseMessage("Merge nodes that has has ancestors matching to given list");
+    walk_ancestors(prof.spontaneous(), m_ancestors);
     verboseMessage(0, 0, " done\n");
   }
 
@@ -4377,6 +4520,41 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
     }
 #else //NO PCRE 
     die("igprof: --merge-regexp / -mr) igprof built without pcre support.\n");
+#endif
+    }
+    else if (is("--merge-ancestors", "-ma") && left(arg))
+    {
+#ifdef PCRE_FOUND
+      // syntax -ma ANCESTOR1>ANCESTOR2...>ANCESTORn/with
+      // where ancestors are regular expressions representing parent function
+      // names. If function has parent that matches all the regular expressions
+      // will be renamded to "with"
+      std::string ancestor = *(++arg);
+      std::vector<std::string> ancestors;
+
+      // Find ancestors from frist to last - 1
+      size_t previous = 0;
+      size_t found = ancestor.find_first_of(">", previous);
+      while (found != std::string::npos)
+      {
+        ancestors.push_back(ancestor.substr(previous, found - previous));
+        previous = found + 1;
+        found = ancestor.find_first_of(">", previous );
+      }
+
+      // Get the replace name. 
+      size_t replace = ancestor.find_first_of('/');
+      if (replace == std::string::npos)
+        die("igprof: --merge-ancestors / -ma) Check the argument form\n");
+
+      // the last ancestor before /
+      ancestors.push_back(ancestor.substr(previous, replace - previous));
+
+      // add ancestors vector and replacement into <AncestorsSpec> vector.
+      m_ancestors.ancestors = ancestors;
+      m_ancestors.with = ancestor.substr(replace + 1);
+#else //NO PCRE
+      die("igprof: --merge-ancestors / -ma) igprof built without pcre support.\n");
 #endif
     }
     else if (is("--baseline", "-b") && left(arg))
