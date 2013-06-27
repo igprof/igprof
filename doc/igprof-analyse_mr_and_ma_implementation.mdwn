@@ -1,0 +1,84 @@
+---
+title: igprof-analyse -mr and -ma implementation
+layout: default
+---
+
+This page describes shortly implementation details of igprof-analyse -ma and -mr
+options. Both options need to have [PCRE](http://www.pcre.org) library. Option
+implementation details are described in order that they are executed.
+
+## -mr option
+-mr option renames nodes in the call tree if their name matches to user given
+regular expression(s).
+
+-mr user arguments are parsed in IgProfAnalyzerApplication::parseArgs function,
+which check that the argument string is the substitution regular expression. In
+other words, the argument starts with character 's'. Character after the 's' is
+used as separator character that separates regex and substitution. Usually the
+separator is '/' and the regex is in form of "s/regex/substitution/". User can
+specify as many regular expressions as he wants by separating options with ';'.
+The parse function assign user options into vector<RegexpSpec> m_regexp. Later
+RegexpFilter is applied if m_regexp is not empty.
+
+IgProfAnalyzerApplication::prepdata calls walk function with RegexpFilter.
+RegexFilter is a class that inherit CollapsingFilter. In constructor, the
+RegexpFilter filter compiles regular expressions stores it in a struct with
+substitution string. The RegexFilter implements convertSymbol function, which
+gets called for every node when the walk function goes down the call tree.
+The convertSymbol function goes trough all given regular expressions and try if
+regular expressions matches to the symbol name of the node or the symbol's file
+name. If no match is found, names are untouched.
+
+RegexpFilter::replace does the regex matching. The replace function takes
+compiled regex, replace string, symbol/file name to be converted and a string
+that will be assigned the new name for the symbol. The replace function first
+clears result string because it may contain garbage from previous nodes.
+
+The replace function executes pcre_exec, which check if the symbol name matches
+to regular expression. If no match the unchanged name string is assigned to
+the result string. If the match is found, replacement string is built. The
+replacement string can contain substrings of the original string, which are
+marked with '\' and a number. For example '\2' in the original substitution
+string, would be replaced by the 2nd substring. The replce function allows up
+to 9  substring substitutions. The replacement string is constructed character
+by character and '\0' - '\9' are replaced by correct substring. The pcre_exec
+marks substring in ovector variable.
+
+Next the replace function construct first part of the resul string and continues
+to check for possible later matches from the symbol name. If no more matches
+found, the end part of the symbol name is appended to the end of the result
+string. New matches are tried as many times as they are found.
+
+When the replace function returns back to convertSymbol function. The result and
+original symbol name are compared. If something was changed, new symbol name is
+set for the node.
+
+## -ma option
+
+-ma option change node name if it has ancestors that matches to given regualr
+expression list. The -ma option implementation differs from other igprof-analyse
+filters that modifies call tree nodes. The merge ancestor filter is not a class
+like other filters. The node filtering is done in modified walk function called
+"walk_ancestors".
+
+First the IgProfAnalyzerApplication::parseArgs function reads user given regular
+expression list separated by '>' and substitution name after '/'. Arguements are
+stored m_ancestors struct. If m_ancestors is set, the ancestor filter is executed.
+
+The walk_ancestors goes trough the call tree similar way as the walk function,
+which is used for all other IgProfFilter classes.
+
+The walk_ancestor function fist compiles all regular expressions in the
+m_ancestors.ancestors vector and then start to go trough call stack node by
+node. Conrtol variable keeps track if ancestors matching to given regular
+expressions are in the current branch of the call tree. The control variable
+woks as index of ancestors vector so correct regular expression is used.
+Everytime the regular expression matches to symbol name of the node control is
+increased. Also if the match is found the node is readded to node stack so that
+it will reduce the counter by one when the walk function is coming up the call
+tree.
+
+The limit variable is the amount of user given regular expressions. The limit
+variable tells the function to rename the node if the control variable is more 
+than the limit. If the rename is done the node gets assigned new symbolInfo
+similar way as it is done in RegexpFilter.

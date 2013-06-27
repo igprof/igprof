@@ -1,0 +1,51 @@
+---
+laytout: default
+title: IgProf multifunction profiler
+---
+
+This page shortly descries implementation details of the IgProf
+multifunction profiler module. The multifunction profiler hooks user given
+functions and count CPU cycles spent in those functions.
+
+## Replacement functions
+
+There are 6 different type of replacemen functions where the measuring code
+before and the after the function call is executed. For time measuring option
+there are replacement function for functions that returns value trough %rax
+register and a replacement function for functions that returns trough %xmm0
+register. The same return type divide is with enter-exit options.
+
+The replacement functions are created by templated class, which makes compiler
+to create enough replacement functions to hook 10 same type of functions. Each
+replacement function has corresponding function pointer, which will be assigned
+value by IgHook during initialation phase.
+
+## Time measuring option
+
+If user gives time measuring option (-fm-int or -fm-float), igprof hooks 
+functions that matches to user given regular expressions. All the functions that
+are hooked increments the same counter. Time is measured in CPU cycles.
+
+Regular expression matching is done in the igprof start script, which uses 'nm'
+command to get symbols from user given libraries and uses grep to try if the
+regular expression match a symbol name.
+
+## Enter-exit option
+
+If user gives enter-exit option (-fm-enter-exit or -fm-enter-exit-float) igprof
+counts calls to enter and exit functions that matches user given regular
+expressions found in user given libraries. All enter functions increment same
+call counter and all exit functions increments same counter.
+
+## Limitations
+
+The module currently works only on x86_64 machines.
+
+The measuring functions are "general hooks", which can measure normal behaving
+functions that pass their arguments trough registers and returns trough
+registers like in the function profiler module.
+
+Max amount of each type of hook is 10.
+
+The timinng is done with CPU cycle counter, which can produce inaccurate results
+if content switching happens while the function is executing.

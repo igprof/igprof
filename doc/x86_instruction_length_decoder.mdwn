@@ -1,0 +1,49 @@
+---
+layout: default
+title: x86 Instruction Length Decoder
+---
+
+When IgHook is initializing a hook it relocates first instructions found in the
+location of the symbol to be hooked. To be able to relocate the instructions the
+IgHook need to know how long the instructions are. Instruction class is designed
+to find out the instruction length. The class also creates patch for
+instructions that are position relative. For example call 4byte offset.
+
+The IgHook creates Instruction class and uses it to call three functions:
+decodeInstruction, getPatch and clear.
+
+Instruction::decodeInstruction(void *sym, int n) function returns the length of
+the instruction. "Sym" is the symbol address where the instructions are looked
+and "n" is number of bytes that are already decoded. The "n" is needed for
+making correct patch for position relative instructions.
+
+Instruction::getPatch() function returns unsigned integer that is used later in
+IgHook to patch the position relative insrtuctions.
+
+Instruction::clear() reset instruction class to the  state where it was right
+after consrtuction and the class can be reused..
+
+## Prefix decoding
+
+Instruction::decodePrefix function is called by decodeInstruction function to
+check if there are possible prefixes in front of the actual op code. Prefixes
+x64 and 0x65 need 4 extra bytes, other prefixes increments the instruction
+length by one.
+
+## Opcode decoding
+Instruction::decodeOpcode function is called after checking the prefixes. First
+the function find out, which opcode map need to be used. In instruction.h file
+there are map tables for different opcodes. For example normal one byte opcodes
+are in one map and two byte op codes are in another map. In the maps, opcodes
+has a group number which tells what kind of opcode it is. For example number 3
+in the map tells that the instruction contains modRM byte but does not need any
+extra bytes. Number 6 in the map means that the instruction is not yet supported
+or can not moved. In those cases Instruction::decodeInstruction returns 0 and
+if igprof is started with debugging option, Unrecognized instruction found error
+message is printed.
+
+Based on the opcode group number, the function determine the length of the
+instruction and creates patch for position relative instructions. Most groups
+are always same length but some need more steps. For example, length of the
+instructions that contains modRM byte is depending on value of modRM byte.
+
