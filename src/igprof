@@ -94,20 +94,19 @@ while [ "$#" != 0 ]; do
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:keep"; shift ;;
 
     -fp* )
-      oldIFS=$IFS; IFS=':'; array=($1); IFS=$oldIFS;
-      FP_MODE=${array[0]};
-      FP_FUNC=${array[1]};
+      FP_MODE=$(echo $1 | cut -f1 -d: -s);
+      FP_FUNC=$(echo $1 | cut -f2 -d: -s);
       if [ -z "$FP_FUNC" ]; then
         echo "No function to profile, quitting";
         exit 1;
       fi
-      FP_LIB=${array[2]}
+      FP_LIB=$(echo $1 | cut -f3 -d: -s)
       [ -z "$FUNC" ] && FUNC="func";
-      if [ $FP_MODE == "-fpi" ]; then
+      if [ x"$FP_MODE" = x"-fpi" ]; then
         FUNC="$FUNC:name=other";
-      elif [ $FP_MODE == "-fpf" ]; then
+      elif [ x"$FP_MODE" = x"-fpf" ]; then
         FUNC="$FUNC:name=otherf";
-      elif [ $FP_MODE == "-fp" ] && [ $FP_FUNC == "malloc" ]; then
+      elif [ x"$FP_MODE" = x"-fp" ] && [ x"$FP_FUNC" == x"malloc" ]; then
         FUNC="$FUNC:name=malloc";
       else
         echo "$1 bad option, expected -fp:malloc:LIB or -fpi:FUNC:LIB or -fpf:FUNC:LIB";
