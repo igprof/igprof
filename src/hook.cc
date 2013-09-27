@@ -300,7 +300,6 @@ static int
 parse(const char *func, void *address, unsigned *patches)
 {
   int n = 0;
-  int temp = 0;
 #if __i386__
   unsigned char *insns = (unsigned char *) address;
   if (insns[0] == 0xe9)
@@ -353,6 +352,7 @@ parse(const char *func, void *address, unsigned *patches)
     }
   }
 #elif __x86_64__
+  int temp = 0;
   unsigned char *insns = (unsigned char *) address;
   modRMByte modRM;
   
