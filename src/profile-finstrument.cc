@@ -6,11 +6,11 @@
 
 static void do_enter();
 static IgHook::TypedData<void()> do_enter_hook = { { 0, "__cyg_profile_func_enter",
-       0, 0, &do_enter, 0, 0, 0 } };
+       0, "libigprof.so" , &do_enter, 0, 0, 0 } };
 
 static void do_exit();
 static IgHook::TypedData<void()> do_exit_hook = { { 0, "__cyg_profile_func_exit",
-       0, 0, &do_exit, 0, 0, 0 } };
+       0, "libigprof.so", &do_exit, 0, 0, 0 } };
 
 static bool s_initialized = false;
 static IgProfTrace::CounterDef  s_ct_time      = { "CALL_TIME",    IgProfTrace::TICK, -1, 0 };
@@ -65,9 +65,18 @@ initialize(void)
 // dummy functions which will be hooked
 extern "C" void __cyg_profile_func_enter(void *func UNUSED, void *caller UNUSED)
 {
+#if __arm__
+  __asm__ ("push {r1}\n"
+           "pop {r1}\n");
+#endif
 }
+
 extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 {
+#if __arm__
+  __asm__ ("push {r1}\n"
+           "pop {r1}\n");
+#endif
 }
 
 // save TSC value at before entering the real function
