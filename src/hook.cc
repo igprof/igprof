@@ -13,6 +13,8 @@
 
 #if __APPLE__
 #include <mach/mach.h>
+#elif __x86_64__
+#include "instruction.h"
 #endif
 
 #if __i386__
@@ -37,18 +39,6 @@
 #if !__linux
 # define dlvsym(h,fn,v) dlsym(h,fn)
 #endif
-
-//struct modRM to help finding out lenght of instruction
-struct modRMBits {
-  unsigned char rm:3;
-  unsigned char reg:3;
-  unsigned char mod:2;
-};
-
-union modRMByte {
-  unsigned char encoded;
-  modRMBits     bits;
-};
 
 /** Allocate a trampoline area into @a ptr.  Returns error code on
     failure, success otherwise.  The memory is allocated into an
@@ -262,29 +252,6 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
 
   return IgHook::Success;
 }
-/*
- * Function to help evaluate instruction lenght. Parse function calls this when
- * modRM byte is part of instruction. Returns lenght of instruction.
- */
-int evalModRM(unsigned char byte, modRMByte &modRM)
-{
-  modRM.encoded = byte;
-  //mod == 00 and rm == 5	opcode, modRM, rip + 32bit
-  //mod == 00                   opcode, modRM,(SIB)
-  //mod == 01                   opcode,modRM,(SIB),1 byte immediate
-  //mod == 10                   opcode,modRM,(SIB),4 byte immeadiate
-  //mod == 11                   opcode,modRM
-  if (modRM.bits.mod == 0 && modRM.bits.rm == 5)
-    return 6;  //caller handles patching
-  else if (modRM.bits.mod == 0)
-    return (modRM.bits.rm) != 4 ? 2 : 3;	//check if SIB byte is needed
-  else if (modRM.bits.mod == 1)
-    return (modRM.bits.rm) != 4 ? 3 : 4;	//check if SIB byte is needed
-  else if (modRM.bits.mod == 2)
-    return (modRM.bits.rm) != 4 ? 6 : 7;	//check if SIB byte is needed
-
-  return 2;
-}
 
 /** Parse function prologue at @a address.  Returns the number of
     instructions understood that need to be moved out to insert a jump
@@ -300,7 +267,6 @@ static int
 parse(const char *func, void *address, unsigned *patches)
 {
   int n = 0;
-  int temp = 0;
 #if __i386__
   unsigned char *insns = (unsigned char *) address;
   if (insns[0] == 0xe9)
@@ -354,7 +320,6 @@ parse(const char *func, void *address, unsigned *patches)
   }
 #elif __x86_64__
   unsigned char *insns = (unsigned char *) address;
-  modRMByte modRM;
   
   if (insns[0] == 0xe9)
   {
@@ -370,143 +335,37 @@ parse(const char *func, void *address, unsigned *patches)
 		   func, address);
   }
 
+  Instruction instruction;
+  int length;
+  unsigned patch;
   while (n < 5)
   {
-    if (insns[0] >= 0x40 && insns[0] <= 0x4f)
+    length = instruction.decodeInstruction(insns, n);
+    // If the instruction length is 0. The instruction was not recognized or can
+    // not be moved to trampiline.
+    if (!length)
     {
-      insns += 1;
-      n += 1;
-    }
-    
-    //one byte instructions
-    if ((insns[0] >= 0x50 && insns[0] <= 0x5f)
-       || (insns[0] >= 0x90 && insns[0] <= 0x97))
-      ++insns, ++n;
-
-    //opcode + one byte
-    else if ((insns[0] >= 0xb0 && insns[0] <= 0xb7)
-      	     || (insns[0] >= 0xd0 && insns[0] <= 0xd3)
-    	     || (insns[0] >= 0xe4 && insns[0] <= 0xe7)
-    	     || insns[0] == 0x04 || insns[0] == 0x14
-    	     || insns[0] == 0x24 || insns[0] == 0x34
-    	     || insns[0] == 0x0c || insns[0] == 0x1c
-    	     || insns[0] == 0x2c || insns[0] == 0x3c
-    	     || insns[0] == 0xa1 || insns[0] == 0xa8
-    	     || insns[0] == 0x6a)
-      insns += 2, n += 2;
-
-    //opcode + 4 bytes
-    else if ((insns[0] >= 0xb8 && insns[0] <= 0xbf)
-    	     || insns[0] == 0x05 || insns[0] == 0x15
-    	     || insns[0] == 0x25 || insns[0] == 0x35
-    	     || insns[0] == 0x0d || insns[0] == 0x1d
-    	     || insns[0] == 0x2d || insns[0] == 0x3d 
-    	     || insns[0] == 0xa9 || insns[0] == 0x68)
-      insns += 5, n += 5;
-    
-    //jmp /call 4bytes offset
-    else if (insns[0] == 0xe8 || insns[0] == 0xe9)
-      *patches++ = (n+0x5)*0x100 + n+1, n += 5, insns += 5;
-
-    // opcode + modRM (no immediate)
-    else if ((insns[0] <= 0x03)
-             || (insns[0] >= 0x08 && insns[0] <= 0x0b)
-             || (insns[0] >= 0x10 && insns[0] <= 0x13)
-             || (insns[0] >= 0x18 && insns[0] <= 0x1b)
-             || (insns[0] >= 0x20 && insns[0] <= 0x23) 
-             || (insns[0] >= 0x28 && insns[0] <= 0x2b)
-             || (insns[0] >= 0x30 && insns[0] <= 0x33)
-             || (insns[0] >= 0x38 && insns[0] <= 0x3b)
-             || (insns[0] >= 0x84 && insns[0] <= 0x8b) 
-             || insns[0] == 0x8d || insns[0] == 0x63
-             || insns[0] == 0xc0 || insns[0] == 0xc1)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (temp == 6 && modRM.bits.mod == 0) //opcode, modRM, rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else	//opcode, modRM,(SIB)
-        insns += temp, n += temp;
-    }
-    //opcode, modRM,(sib),1 or 4 byte immediate
-    else if ((insns[0] >= 0x80 && insns[0] <= 0x83)
-    	     || insns[0] == 0x69 || insns[0] == 0x6b
-    	     || insns[0] == 0xc0 || insns[0] == 0xc1
-	     || insns[0] == 0xd0 || insns[0] == 0xd1
-	     || insns[0] == 0xfe || insns[0] == 0xc6
-	     || insns[0] == 0xc7 || insns[0] == 0xf6
-	     || insns[0] == 0xf7)
-    {
-      if (insns[0] == 0xc6 || insns[0] == 0xc7) //opcode groups
-      {
-        modRM.encoded = insns[1];
-        if(modRM.bits.reg != 0)
-          return -1;
-      }
-      temp = evalModRM(insns[1], modRM);
-    
-      if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      {
-        if (insns[0] == 0x81 || insns[0] == 0x69	//4byte immediate
-	    || insns[0] == 0xc7)
-          *patches++ = (n+0xa)*0x100 + n+2, n += 10, insns += 10;
-        else  //one byte immediate
-          *patches++ = (n+0x7)*0x100 + n+2, n += 7, insns +=7;
-      }
+      // finstrument-functions hook
+      if (insns[0] == 0xf3 && insns[1] == 0xc3
+        && insns[2] == 0x66 && insns[3] == 0x66
+        && insns[4] == 0x66)
+        n = 5;
       else
       {
-        if (insns[0] == 0x81 || insns[0] == 0x69
-            || insns[0] == 0xc7)
-          n += (temp + 4), insns += (temp + 4);
-        else
-          n += (temp + 1), insns += (temp + 1);
-      }
-    }
-    // f6 and f7 group
-    else if (insns[0] == 0xf6 || insns[0] == 0xf7)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (modRM.bits.reg == 0 || modRM.bits.reg == 1) //instruction needs immediate value
-      {
-        if (temp == 6 && modRM.bits.mod == 0)
-        {
-          if (insns[0] == 0xf6)  //one byte immediate
-            *patches++ = (n+0x7)*0x100 + n+2, n += 7, insns += 7;
-          else  //4 byte immediate
-            *patches++ = (n+0xa)*0x100 + n+2, n += 10, insns += 10;
-        }
-      }
-      else if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else
-        n += temp, insns += temp;
-    }
-    //0xff group
-    else if (insns[0] == 0xff)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (modRM.bits.reg == 3 || modRM.bits.reg == 5)
-        return -1;
-      else if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else
-        n += temp, insns += temp;
-    }
-    //syscall
-    else if (insns[0] == 0xf && insns[1] == 0x5)
-      n += 2, insns += 2;
-
-    
-    else if (insns[0] == 0xf3 && insns[1] == 0xc3)
-      n +=5, insns += 5;
-
-    else
-    {
-      igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
+        igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
 		   func, address, insns - (unsigned char *) address,
 		   insns[0], insns[1], insns[2], insns[3]);
-      return -1;
+        return -1;
+      }
     }
-    temp = 0;
+    if ((patch = instruction.getPatch()) != 0)
+    {
+      *patches = patch;
+      patches++;
+    }
+    insns += length;
+    n += length;
+    instruction.clear();
   }
 #elif __ppc__
   // FIXME: check for various branch-relative etc. instructions
