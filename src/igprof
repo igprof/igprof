@@ -160,6 +160,8 @@ fi
 [ X"$FUNC" = X ]  || append IGPROF "$FUNC"
 [ X"$FINST" = X ] || append IGPROF "$FINST"
 
+export UNW_ARM_UNWIND_METHOD=4
+
 case $(uname) in
   Darwin )
     # DYLD_INSERT_LIBRARIES=$LOCALRT/lib/`scramv1 arch`/libIgProf.dylib
