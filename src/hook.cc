@@ -13,6 +13,8 @@
 
 #if __APPLE__
 #include <mach/mach.h>
+#elif __x86_64__
+#include "instruction.h"
 #endif
 
 #if __i386__
@@ -24,6 +26,9 @@
 #elif __ppc__
 # define TRAMPOLINE_JUMP        16      // jump to hook/old code
 # define TRAMPOLINE_SAVED       4       // one prologue instruction to save
+#elif __arm__
+# define TRAMPOLINE_JUMP        8       // jump to hook/old code (2 instructions)
+# define TRAMPOLINE_SAVED       8      // 2 reserved words for possible offsets
 #else
 # error sorry this platform is not supported
 #endif
@@ -37,18 +42,6 @@
 #if !__linux
 # define dlvsym(h,fn,v) dlsym(h,fn)
 #endif
-
-//struct modRM to help finding out lenght of instruction
-struct modRMBits {
-  unsigned char rm:3;
-  unsigned char reg:3;
-  unsigned char mod:2;
-};
-
-union modRMByte {
-  unsigned char encoded;
-  modRMBits     bits;
-};
 
 /** Allocate a trampoline area into @a ptr.  Returns error code on
     failure, success otherwise.  The memory is allocated into an
@@ -164,12 +157,19 @@ release(void *ptr)
     existing code segments, and with @a writable = false after code
     has been edited.  */
 static IgHook::Status
-protect(void *address, bool writable)
+protect(void *address, bool writable, unsigned prologueSize)
 {
   assert(sizeof(address) <= sizeof(unsigned long));
 
+  void *originalAddress = address;
   int pagesize = getpagesize();
   address = (void *) (((unsigned long) address) & ~(pagesize-1));
+
+  // If the function prologueSize is at the edge of
+  // the page change protection also from next page.
+  if (((pagesize - ((unsigned long)originalAddress - (unsigned long)address)))
+        <= prologueSize)
+    pagesize += prologueSize;
 #if __APPLE__
   // (http://lists.apple.com/archives/Darwin-kernel/2005/Feb/msg00045.html)
   // The dynamic loader (dyld) loads pages into unmodifiable system-wide
@@ -253,6 +253,30 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
     sym = v ? dlvsym(program, fn, v) : dlsym(program, fn);
     dlclose(program);
     if (! sym) sym = v ? dlvsym(program, fn, v) : dlsym(RTLD_NEXT, fn);
+    
+#if __arm__
+    if (sym)
+    { 
+      unsigned *insns = (unsigned *)sym;
+      /* If the program is using libpthread. Fork and system functions got to be
+         hooked in libc.so.6 instead
+         dlsym can return address which points to .PLT section. If try to find
+         the real location with RTLD_NEXT option */
+      if (*insns == 0xeaffcbed || *insns == 0xeaffd0a5)
+      {
+        igprof_debug("Function %s hooked in libc.so.6 instead RTLD_NEXT\n",fn);
+        void *handle = dlopen("libc.so.6", RTLD_LAZY | RTLD_GLOBAL);
+        sym = dlsym(handle, fn);
+      }
+      else if ((insns[0] & 0xfffff000) == 0xe28fc000
+            && (insns[1] & 0xfffff000) == 0xe28cc000
+            && (insns[2] & 0xfffff000) == 0xe5bcf000)
+      {
+        igprof_debug("sym pointing to .plt section, trying dlsym(RTLD_NEXT,fn)\n");
+        sym = dlsym(RTLD_NEXT, fn);
+      }
+    }
+#endif
     if (! sym)
     {
       igprof_debug("dlsym(self, '%s'): %s\n", fn, dlerror());
@@ -261,29 +285,6 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
   }
 
   return IgHook::Success;
-}
-/*
- * Function to help evaluate instruction lenght. Parse function calls this when
- * modRM byte is part of instruction. Returns lenght of instruction.
- */
-int evalModRM(unsigned char byte, modRMByte &modRM)
-{
-  modRM.encoded = byte;
-  //mod == 00 and rm == 5	opcode, modRM, rip + 32bit
-  //mod == 00                   opcode, modRM,(SIB)
-  //mod == 01                   opcode,modRM,(SIB),1 byte immediate
-  //mod == 10                   opcode,modRM,(SIB),4 byte immeadiate
-  //mod == 11                   opcode,modRM
-  if (modRM.bits.mod == 0 && modRM.bits.rm == 5)
-    return 6;  //caller handles patching
-  else if (modRM.bits.mod == 0)
-    return (modRM.bits.rm) != 4 ? 2 : 3;	//check if SIB byte is needed
-  else if (modRM.bits.mod == 1)
-    return (modRM.bits.rm) != 4 ? 3 : 4;	//check if SIB byte is needed
-  else if (modRM.bits.mod == 2)
-    return (modRM.bits.rm) != 4 ? 6 : 7;	//check if SIB byte is needed
-
-  return 2;
 }
 
 /** Parse function prologue at @a address.  Returns the number of
@@ -300,7 +301,6 @@ static int
 parse(const char *func, void *address, unsigned *patches)
 {
   int n = 0;
-  int temp = 0;
 #if __i386__
   unsigned char *insns = (unsigned char *) address;
   if (insns[0] == 0xe9)
@@ -354,7 +354,6 @@ parse(const char *func, void *address, unsigned *patches)
   }
 #elif __x86_64__
   unsigned char *insns = (unsigned char *) address;
-  modRMByte modRM;
   
   if (insns[0] == 0xe9)
   {
@@ -370,143 +369,29 @@ parse(const char *func, void *address, unsigned *patches)
 		   func, address);
   }
 
+  Instruction instruction;
+  int length;
+  unsigned patch;
   while (n < 5)
   {
-    if (insns[0] >= 0x40 && insns[0] <= 0x4f)
-    {
-      insns += 1;
-      n += 1;
-    }
-    
-    //one byte instructions
-    if ((insns[0] >= 0x50 && insns[0] <= 0x5f)
-       || (insns[0] >= 0x90 && insns[0] <= 0x97))
-      ++insns, ++n;
-
-    //opcode + one byte
-    else if ((insns[0] >= 0xb0 && insns[0] <= 0xb7)
-      	     || (insns[0] >= 0xd0 && insns[0] <= 0xd3)
-    	     || (insns[0] >= 0xe4 && insns[0] <= 0xe7)
-    	     || insns[0] == 0x04 || insns[0] == 0x14
-    	     || insns[0] == 0x24 || insns[0] == 0x34
-    	     || insns[0] == 0x0c || insns[0] == 0x1c
-    	     || insns[0] == 0x2c || insns[0] == 0x3c
-    	     || insns[0] == 0xa1 || insns[0] == 0xa8
-    	     || insns[0] == 0x6a)
-      insns += 2, n += 2;
-
-    //opcode + 4 bytes
-    else if ((insns[0] >= 0xb8 && insns[0] <= 0xbf)
-    	     || insns[0] == 0x05 || insns[0] == 0x15
-    	     || insns[0] == 0x25 || insns[0] == 0x35
-    	     || insns[0] == 0x0d || insns[0] == 0x1d
-    	     || insns[0] == 0x2d || insns[0] == 0x3d 
-    	     || insns[0] == 0xa9 || insns[0] == 0x68)
-      insns += 5, n += 5;
-    
-    //jmp /call 4bytes offset
-    else if (insns[0] == 0xe8 || insns[0] == 0xe9)
-      *patches++ = (n+0x5)*0x100 + n+1, n += 5, insns += 5;
-
-    // opcode + modRM (no immediate)
-    else if ((insns[0] <= 0x03)
-             || (insns[0] >= 0x08 && insns[0] <= 0x0b)
-             || (insns[0] >= 0x10 && insns[0] <= 0x13)
-             || (insns[0] >= 0x18 && insns[0] <= 0x1b)
-             || (insns[0] >= 0x20 && insns[0] <= 0x23) 
-             || (insns[0] >= 0x28 && insns[0] <= 0x2b)
-             || (insns[0] >= 0x30 && insns[0] <= 0x33)
-             || (insns[0] >= 0x38 && insns[0] <= 0x3b)
-             || (insns[0] >= 0x84 && insns[0] <= 0x8b) 
-             || insns[0] == 0x8d || insns[0] == 0x63
-             || insns[0] == 0xc0 || insns[0] == 0xc1)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (temp == 6 && modRM.bits.mod == 0) //opcode, modRM, rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else	//opcode, modRM,(SIB)
-        insns += temp, n += temp;
-    }
-    //opcode, modRM,(sib),1 or 4 byte immediate
-    else if ((insns[0] >= 0x80 && insns[0] <= 0x83)
-    	     || insns[0] == 0x69 || insns[0] == 0x6b
-    	     || insns[0] == 0xc0 || insns[0] == 0xc1
-	     || insns[0] == 0xd0 || insns[0] == 0xd1
-	     || insns[0] == 0xfe || insns[0] == 0xc6
-	     || insns[0] == 0xc7 || insns[0] == 0xf6
-	     || insns[0] == 0xf7)
-    {
-      if (insns[0] == 0xc6 || insns[0] == 0xc7) //opcode groups
-      {
-        modRM.encoded = insns[1];
-        if(modRM.bits.reg != 0)
-          return -1;
-      }
-      temp = evalModRM(insns[1], modRM);
-    
-      if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      {
-        if (insns[0] == 0x81 || insns[0] == 0x69	//4byte immediate
-	    || insns[0] == 0xc7)
-          *patches++ = (n+0xa)*0x100 + n+2, n += 10, insns += 10;
-        else  //one byte immediate
-          *patches++ = (n+0x7)*0x100 + n+2, n += 7, insns +=7;
-      }
-      else
-      {
-        if (insns[0] == 0x81 || insns[0] == 0x69
-            || insns[0] == 0xc7)
-          n += (temp + 4), insns += (temp + 4);
-        else
-          n += (temp + 1), insns += (temp + 1);
-      }
-    }
-    // f6 and f7 group
-    else if (insns[0] == 0xf6 || insns[0] == 0xf7)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (modRM.bits.reg == 0 || modRM.bits.reg == 1) //instruction needs immediate value
-      {
-        if (temp == 6 && modRM.bits.mod == 0)
-        {
-          if (insns[0] == 0xf6)  //one byte immediate
-            *patches++ = (n+0x7)*0x100 + n+2, n += 7, insns += 7;
-          else  //4 byte immediate
-            *patches++ = (n+0xa)*0x100 + n+2, n += 10, insns += 10;
-        }
-      }
-      else if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else
-        n += temp, insns += temp;
-    }
-    //0xff group
-    else if (insns[0] == 0xff)
-    {
-      temp = evalModRM(insns[1], modRM);
-      if (modRM.bits.reg == 3 || modRM.bits.reg == 5)
-        return -1;
-      else if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
-      	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
-      else
-        n += temp, insns += temp;
-    }
-    //syscall
-    else if (insns[0] == 0xf && insns[1] == 0x5)
-      n += 2, insns += 2;
-
-    
-    else if (insns[0] == 0xf3 && insns[1] == 0xc3)
-      n +=5, insns += 5;
-
-    else
+    length = instruction.decodeInstruction(insns, n);
+    // If the instruction length is 0. The instruction was not recognized or can
+    // not be moved to trampiline.
+    if (!length)
     {
       igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
 		   func, address, insns - (unsigned char *) address,
 		   insns[0], insns[1], insns[2], insns[3]);
       return -1;
     }
-    temp = 0;
+    if ((patch = instruction.getPatch()) != 0)
+    {
+      *patches = patch;
+      patches++;
+    }
+    insns += length;
+    n += length;
+    instruction.clear();
   }
 #elif __ppc__
   // FIXME: check for various branch-relative etc. instructions
@@ -520,6 +405,72 @@ parse(const char *func, void *address, unsigned *patches)
   }
 
   n = 4;
+#elif __arm__
+  unsigned  *insns = (unsigned *) address;
+  if (insns[0] == 0xe51ff004)
+  {
+    igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                 func, address);
+    return -1;
+  }
+  while (n < 8)
+  { 
+    if ((insns[0] & 0xffff0000) == 0xe59f0000       //ldr r*, [PC + #***]
+     || (insns[0] & 0xffff0000) == 0xe51f0000       //ldr r*, [PC - #***]
+     || (insns[0] == 0xe79fc00c))                    //ldr ip, [PC, ip]
+    {
+      if (n >= 4 && (*patches == 0x0))
+      {
+        *patches++ = 0xffffffff;
+      }
+      n += 4, *patches++ = *insns, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe92d0000) // push {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe1a00000) // mov rd, rn
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe3a00000) // mov rd, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xfff00000) == 0xe3100000) // tst rx, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xfff00000) == 0xe3500000) // cmp rx, #imm
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xff000000) == 0xee000000) // mcr
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe52d0000) // push {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if ((insns[0] & 0xffff0000) == 0xe49d0000) // pop {reglist}
+    {
+      n += 4, insns++;
+    }
+    else if (  insns[0] == 0xe1812000   // orr r2, r1, r0
+            || insns[0] == 0xe2504000   // subs r4, r0, #0
+            || insns[0] == 0xe2403020)  // sub r3, r0, #0
+    {
+      n += 4, insns++;
+    }
+    else
+    {
+      igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x)\n",
+		   func, address, insns - (unsigned *) address,
+		   insns[0]);
+      return -1;
+    }
+  }
 #endif
 
   *patches = 0;
@@ -607,6 +558,13 @@ redirect(void *&from, void *to, IgHook::JumpDirection direction UNUSED)
   *insns++ = 0x48000002 | ((unsigned int) to & 0x3ffffff);
   from = insns;
   return (insns - start) * 4;
+#elif __arm__
+  unsigned *start = (unsigned *) from;
+  unsigned *insns = (unsigned *) from;
+  *insns++ = 0xe51ff004;  // LDR PC, [PC,- 4]
+  *insns++ = (unsigned) to;  // address to jump
+  from = insns;
+  return (insns - start) * 4;
 #endif
 }
 
@@ -650,7 +608,7 @@ prereentry(void *&from, void *to)
 static int
 postreentry(void *&from, void *to)
 {
-#if __i386__ || __x86_64__
+#if __i386__ || __x86_64__ || __arm__
   // Real jump
   return redirect(from, to, IgHook::JumpFromTrampoline);
 #elif __ppc__
@@ -750,6 +708,33 @@ prepare(void *address,
     *((unsigned *)((unsigned char *)start + offset))
       += (unsigned char *)old - (unsigned char *)start - delta;
   }
+#elif __arm__
+  // Patch position independent instruction to use PC + 8 location. Where the
+  // content of the pointed location is copied.
+  if (patches && *patches)
+  {
+    unsigned *insns = (unsigned *)address;
+    for ( ; *patches && patches ; ++patches, ++insns)
+    {
+      if (*patches != 0xffffffff)
+      {
+        insns[-4] = (insns[-4] & 0x0000f000) + 0xe59f0008;
+        if ((*patches & 0xffff0000) == 0xe59f0000)
+        {
+          memcpy(insns, (void *)((unsigned)old + (*patches & 0x00000fff)), 4);
+        }
+        else if ((*patches & 0xffff0000) == 0xe51f0000)
+        {
+          memcpy(insns, (void *)((unsigned)old - (*patches & 0x00000fff)), 4);
+        }
+        else if (*patches == 0xe79fc00c) 
+        {
+          memcpy(insns, (void *)((unsigned)old + insns[-1]), 4);
+        }
+        skip(old,4);
+      }
+    }
+  }
 #endif
 }
 
@@ -762,7 +747,7 @@ static void
 patch(void *address, void *trampoline, int prologue)
 {
   // FIXME: Not atomic, freeze all other threads!
-  unsigned char *insns = (unsigned char *) address;
+  unsigned char *insns UNUSED = (unsigned char *) address;
   int i = redirect(address, trampoline, IgHook::JumpToTrampoline);
   for ( ; i < prologue; ++i)
   {
@@ -828,7 +813,7 @@ IgHook::hook(const char *function,
   prepare(tramp, replacement, chain, sym, prologue, patches);
 
   // Attach trampoline
-  if ((s = protect(sym, true)) != Success)
+  if ((s = protect(sym, true, prologue)) != Success) 
   {
     release(tramp);
     return s;
@@ -838,7 +823,7 @@ IgHook::hook(const char *function,
 
   // Restore privileges and flush caches
   // No: protect(tramp, false); -- segvs on linux, full page might not been allocated?
-  protect(sym, false);
+  protect(sym, false, prologue);
   flush(tramp);
   flush(sym);
 
