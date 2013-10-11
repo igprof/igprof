@@ -388,8 +388,7 @@ doclose(IgHook::SafeData<igprof_doclose_t> &hook, int fd)
 {
   if (fd == 2)
   {
-    pthread_t thread = pthread_self();
-    igprof_debug("close(2) called in thread %x. Igprof debug disabled.\n",thread);
+    igprof_debug("close(2) called. Igprof debug disabled.\n");
     s_igprof_stderrOpen = false;
   }
   return hook.chain(fd);
@@ -400,8 +399,7 @@ dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
 {
   if (stream == stderr)
   {
-    pthread_t thread = pthread_self();
-    igprof_debug("fclose(stderr) called in thread %x. Igprof debug disabled.\n",thread);
+    igprof_debug("fclose(stderr) called. Igprof debug disabled.\n");
     s_igprof_stderrOpen = false;
   }
   return hook.chain(stream);
