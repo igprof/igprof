@@ -113,8 +113,7 @@ ADD_LIBRARY(igprof SHARED
             src/trace.cc
             src/trace-mem.cc
             src/trace-mmap.cc
-            src/trace-throw.cc
-            src/instruction.cc)
+            src/trace-throw.cc)
 #SET_TARGET_PROPERTIES(igprof PROPERTIES LINK_FLAGS -Wl,-z,nodefs)
 TARGET_LINK_LIBRARIES(igprof ${UNWIND_LIBRARY} ${IGPROF_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 ADD_EXECUTABLE(igprof-analyse src/analyse.cc)
