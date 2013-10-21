@@ -28,32 +28,36 @@ The build recipe is:
     # Set up one environment variable to simplify the build recipe;
     # no need to 'export' this, it's just a shortcut for path names.
     INSTAREA=/x/y/z   # Wherever you want to install the software
+    IGPROF_VERSION=5.9.9
+    LIBATOMIC_VERSION=7.2alpha4
+    LIBUNWIND_VERSION=1.0.1
+    CMAKE_VERSION=2.8.1
 
     # Get the source tarballs for libatomic_ops, libunwind and igprof
-    wget http://www.hpl.hp.com/research/linux/atomic_ops/download/libatomic_ops-7.2alpha4.tar.gz
-    wget http://download.savannah.gnu.org/releases/libunwind/libunwind-1.0.1.tar.gz
-    wget -Oigprof-5.9.6.tar.gz https://github.com/ktf/igprof/archive/v5.9.6.tar.gz
+    wget http://www.hpl.hp.com/research/linux/atomic_ops/download/libatomic_ops-$LIBATOMIC_VERSION.tar.gz
+    wget http://download.savannah.gnu.org/releases/libunwind/libunwind-$LIBUNWIND_VERSION.tar.gz
+    wget -Oigprof-$IGPROF_VERSION.tar.gz https://github.com/ktf/igprof/archive/v$IGPROF_VERSION.tar.gz
 
     # Get a recent version of cmake
-    wget http://www.cmake.org/files/v2.8/cmake-2.8.1.tar.gz
+    wget http://www.cmake.org/files/v2.8/cmake-$CMAKE_VERSION.tar.gz
 
     # Build libatomic
-    gtar xzvf libatomic_ops-7.2alpha4.tar.gz
-    cd libatomic_ops-7.2alpha4
+    gtar xzvf libatomic_ops-$LIBATOMIC_VERSION.tar.gz
+    cd libatomic_ops-$LIBATOMIC_VERSION
     ./configure --prefix=$INSTAREA
     make -j 10 install
     cd ../
 
     # Build libunwind
-    gtar xzf libunwind-1.0.1.tar.gz
-    cd libunwind-1.0.1
+    gtar xzf libunwind-$LIBUNWIND_VERSION.tar.gz
+    cd libunwind-$LIBUNWIND_VERSION
     ./configure CPPFLAGS="-I$INSTAREA/include" CFLAGS="-g -O3" --prefix=$INSTAREA --disable-block-signals
     make -j 10 install
     cd ../
 
     # Build cmake
-    gtar xzf cmake-2.8.1.tar.gz
-    cd cmake-2.8.1
+    gtar xzf cmake-$CMAKE_VERSION.tar.gz
+    cd cmake-$CMAKE_VERSION
     mkdir -p $INSTAREA/tmpcmake
     ./configure --prefix=$INSTAREA/tmpcmake --parallel=10
     make -j 10
@@ -62,8 +66,8 @@ The build recipe is:
     export PATH=$INSTAREA/tmpcmake/bin:$PATH
 
     # Build igprof
-    gtar xzf igprof-5.9.6.tar.gz
-    cd igprof-5.9.6
+    gtar xzf igprof-$IGPROF_VERSION.tar.gz
+    cd igprof-$IGPROF_VERSION
     cmake -DCMAKE_INSTALL_PREFIX=$INSTAREA -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-g -O3" .
     make -j 10
     make -j 10 install
