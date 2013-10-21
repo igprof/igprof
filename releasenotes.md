@@ -7,9 +7,20 @@ related:
  - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
  - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
+
+## v5.9.9
+
+Minor release with various cleanups and a few new features.
+
+In particular:
+
+- Initial ARM support.
+- `igprof-analyze` now supports merging of nodes via regexp.
+- `igprof-analyze` now supports merging of nodes based on ancestors.
+
 ## v5.9.7
 
-Minor relases with various cleanups and a few new features.
+Minor release with various cleanups and a few new features.
 
 In particular:
 
