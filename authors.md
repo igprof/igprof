@@ -3,9 +3,9 @@ title: We did it!
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: https://github.com/ktf/igprof/tags }
- - { name: Bugs, link: https://github.com/ktf/igprof/issues }
- - { name: Project, link: https://github.com/ktf/igprof/ }
+ - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
+ - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
 IgProf was developed by Lassi Tuura, Giulio Eulisse and Mikko Kurkela in order
 to assist software development projects for the [CMS experiment][cms] at

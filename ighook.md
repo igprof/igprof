@@ -3,9 +3,9 @@ title: IgHook
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: https://github.com/ktf/igprof/tags }
- - { name: Bugs, link: https://github.com/ktf/igprof/issues }
- - { name: Project, link: https://github.com/ktf/igprof/ }
+ - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
+ - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
 IgHook is a dynamic instrumentation library written by Lassi Tuura.  It
 provides functionality to tap into any routine in an existing programme or

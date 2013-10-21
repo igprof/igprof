@@ -3,9 +3,9 @@ title: Installing IgProf
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: https://github.com/ktf/igprof/tags }
- - { name: Bugs, link: https://github.com/ktf/igprof/issues }
- - { name: Project, link: https://github.com/ktf/igprof/ }
+ - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
+ - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
 
 Building igprof requires recent [libatomic_ops][] and [libunwind][], plus recent

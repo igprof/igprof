@@ -3,9 +3,9 @@ title: Famous users
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: https://github.com/ktf/igprof/tags }
- - { name: Bugs, link: https://github.com/ktf/igprof/issues }
- - { name: Project, link: https://github.com/ktf/igprof/ }
+ - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
+ - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
 While igprof was created by [CMS][] for [CMS][] it has been widely used by
 other LHC experiments, in particular ATLAS, and other groups inside CERN

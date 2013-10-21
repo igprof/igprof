@@ -3,9 +3,9 @@ title: IgProf, The Ignominous Profiler
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: https://github.com/ktf/igprof/tags }
- - { name: Bugs, link: https://github.com/ktf/igprof/issues }
- - { name: Project, link: https://github.com/ktf/igprof }
+ - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
+ - { name: Project, link: "https://github.com/ktf/igprof" }
 ---
 Welcome to IgProf, the Ignominous Profiler.  IgProf is a simple nice tool for
 measuring and analysing application memory and performance characteristics.
