@@ -24,8 +24,14 @@ LIBHOOK(3, int, dosigaction, _main,
         (int signum, const struct sigaction *act, struct sigaction *oact),
         (signum, act, oact),
         "sigaction", 0, 0)
+//Looks like the dynamic loader invokes `close` on ARM, which leads to a
+//segfault in the doclose / dofclose hooks. For the moment I just exclude the
+//hook, however given it is actually used to protect an output corruption in
+//case a program closes stderr, we should probably find a better solution.
+#ifndef __arm__
 LIBHOOK(1, int, dofclose, _main, (FILE * stream), (stream), "fclose", 0, 0)
 LIBHOOK(1, int, doclose, _main, (int fd), (fd), "close", 0, 0)
+#endif
 
 // Data for this profiler module
 static IgProfTrace::CounterDef  s_ct_ticks      = { "PERF_TICKS", IgProfTrace::TICK, -1, 0 };
@@ -191,8 +197,10 @@ initialize(void)
   IgHook::hook(dosystem_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
+#ifndef __arm__
   IgHook::hook(doclose_hook_main.raw);
   IgHook::hook(dofclose_hook_main.raw);
+#endif
   igprof_debug("performance profiler enabled\n");
 
   enableSignalHandler();
@@ -379,6 +387,7 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   return ret;
 }
 
+#ifndef __arm__
 // If the profiled program closes stderr stream the igprof_debug got to be
 // disabled by changing the value of s_igprof_stderrOpen (declared in profile.h
 // an defined in profile.cc) to false. This is don by instrumenting close and and
@@ -406,5 +415,6 @@ dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
   }
   return hook.chain(stream);
 }
+#endif
 // -------------------------------------------------------------------
 static bool autoboot = (initialize(), true);
