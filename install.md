@@ -28,7 +28,7 @@ The build recipe is:
     # Set up one environment variable to simplify the build recipe;
     # no need to 'export' this, it's just a shortcut for path names.
     INSTAREA=/x/y/z   # Wherever you want to install the software
-    IGPROF_VERSION=5.9.9
+    IGPROF_VERSION=5.9.10
     LIBATOMIC_VERSION=7.2alpha4
     LIBUNWIND_VERSION=1.0.1
     CMAKE_VERSION=2.8.1
