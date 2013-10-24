@@ -271,7 +271,7 @@ dumpAllProfiles(void *arg)
 {
   // Use C locale when printing out, to avoid weird formatting of floating
   // point numbers and similar amenities.
-  char * old_locale = setlocale(LC_ALL, "C");
+  char *old_locale = setlocale(LC_ALL, "C");
   IgProfDumpInfo *info = (IgProfDumpInfo *) arg;
   IgProfTrace::PerfStat &perf = info->perf;
   itimerval stopped = { { 0, 0 }, { 0, 0 } };

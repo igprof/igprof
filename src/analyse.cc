@@ -3020,7 +3020,7 @@ void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
       --control;
   }
 #else
-void walk_ancestors(NodeInfo */*first*/, AncestorsSpec */specs*/)
+void walk_ancestors(NodeInfo * /*first*/, AncestorsSpec * /*specs*/)
 {
 #endif
 }
@@ -3053,12 +3053,14 @@ IgProfAnalyzerApplication::prepdata(ProfileInfo& prof)
     verboseMessage(0, 0, " done\n");
   }
 
+#ifdef PCRE_FOUND
   if (m_ancestors.ancestors.size() != 0)
   {
     verboseMessage("Merge nodes that has has ancestors matching to given list");
     walk_ancestors(prof.spontaneous(), m_ancestors);
     verboseMessage(0, 0, " done\n");
   }
+#endif // PCRE_FOUND
 
   verboseMessage("Summing counters");
   walk(prof.spontaneous(), m_nodesStorage.size(), new AddCumulativeInfoFilter(m_keyMax));
