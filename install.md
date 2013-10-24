@@ -68,6 +68,9 @@ The build recipe is:
     # Build igprof
     gtar xzf igprof-$IGPROF_VERSION.tar.gz
     cd igprof-$IGPROF_VERSION
+    # In case you want to develop:
+    # git clone https://github.com/ktf/igprof.git
+    # cd igprof
     cmake -DCMAKE_INSTALL_PREFIX=$INSTAREA -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-g -O3" .
     make -j 10
     make -j 10 install
