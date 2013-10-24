@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <cxxabi.h>
+#include <locale.h>
 
 #ifdef __APPLE__
 # include <crt_externs.h>
@@ -268,6 +269,9 @@ dumpResetIDs(IgProfTrace::Stack *frame)
 static void *
 dumpAllProfiles(void *arg)
 {
+  // Use C locale when printing out, to avoid weird formatting of floating
+  // point numbers and similar amenities.
+  char *old_locale = setlocale(LC_ALL, "C");
   IgProfDumpInfo *info = (IgProfDumpInfo *) arg;
   IgProfTrace::PerfStat &perf = info->perf;
   itimerval stopped = { { 0, 0 }, { 0, 0 } };
@@ -369,6 +373,7 @@ dumpAllProfiles(void *arg)
 	       depthAvg, sqrt((1. * perf.sum2Depth) / perf.ntraces - depthAvg * depthAvg),
 	       ticksAvg, sqrt((1. * perf.sum2Ticks) / perf.ntraces - ticksAvg * ticksAvg),
 	       tperdAvg, sqrt((1./16/16 * perf.sum2TPerD) / perf.ntraces - tperdAvg * tperdAvg));
+  setlocale(LC_ALL, old_locale);
   return 0;
 }
 
