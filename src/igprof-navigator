@@ -208,7 +208,7 @@ def summary(database, out, cumulative):
                  <h2>Counter: %s, first 1000 entries</h2>\n""" % (f.split("__")[0], ib, arch, counter))
   if cumulative:
     summaryType = "Cumulative"
-    out.write("""<h2>Sorted by cumulatative cost</h2><br/>
+    out.write("""<h2>Sorted by cumulative cost</h2><br/>
                  <a href='%s/self'>(Sort by self cost)</a><br/>""" % absPath)
   else:
     summaryType = "Self"
