@@ -1,0 +1,17 @@
+env:
+  - LIBATOMIC_VERSION=7.2alpha4 LIBUNWIND_VERSION=1.0.1
+before_install: 
+  - sudo apt-get install -y libpcre3-dev 
+  - sudo add-apt-repository ppa:ubuntu-cloud-archive/icehouse-staging
+  - sudo apt-get install -y libunwind
+#
+#  - wget http://www.hpl.hp.com/research/linux/atomic_ops/download/libatomic_ops-$LIBATOMIC_VERSION.tar.gz
+#  - tar xzvf libatomic_ops-$LIBATOMIC_VERSION.tar.gz
+#  - cd libatomic_ops-$LIBATOMIC_VERSION && ./configure --prefix=/usr && sudo make -j 3 install
+#  - cd .. 
+#  - wget http://download.savannah.gnu.org/releases/libunwind/libunwind-$LIBUNWIND_VERSION.tar.gz
+#  - tar xzf libunwind-$LIBUNWIND_VERSION.tar.gz
+#  - cd libunwind-$LIBUNWIND_VERSION
+#  - ./configure CPPFLAGS="-I$INSTAREA/include" CFLAGS="-g -O3" --prefix=/usr --disable-block-signals && sudo make -j 3 install
+  
+install: cmake . && make && make install
