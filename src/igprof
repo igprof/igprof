@@ -22,14 +22,73 @@ usage() {
   echo -e "-pu, --user-time            \tmeasure user time in performance profiler"
   echo -e "-pk, --keep-on-fork         \tdo not reset performance profile in fork child"
   echo -e "-fd, --file-descriptor      \tstart the file descriptor profile"
-  echo -e "-fp:malloc:LIB	       \tprofile cpu cycles spent in malloc like functions"
-  echo -e "-fpi:FUNC:LIB	       \tprofile cpu cycles spent in function X which returns integer or pointer"
-  echo -e "-fpf:FUNC:LIB	       \tprofile cpu cycles spent in function X which returns floating point number"
-  echo -e "-j, --jemalloc	       \tuse libjemalloc.so library instead of libc.so.6"
+  echo -e "-fp:malloc:LIB              \tprofile cpu cycles spent in malloc like functions"
+  echo -e "-fpi:FUNC:LIB               \tprofile cpu cycles spent in function X which returns integer or pointer"
+  echo -e "-fpf:FUNC:LIB               \tprofile cpu cycles spent in function X which returns floating point number"
+  echo -e "--fm-int LIB_LIST REGEX_LIST \tmeasure time spent in given functions up to 10 functions"     
+  echo -e "--fm-float LIB_LIST REGEX_LIST \tmeasure time spent in given functions, which returns value trough %XMM0 register"
+  echo -e "--fenter-exit LIB_LIST REGEX1_LIST REGEX2_LIST \tcounts calls to given functions"
+  echo -e "--fenter-exit-float LIB_LIST REGEX1_LIST REGEX2_LIST \tcounts calls to given functions which returns value trough %XMM0 register"
+  echo -e "-j, --jemalloc              \tuse libjemalloc.so library instead of libc.so.6"
   echo -e "[--] cmd [args...]          \tcommand arguments to execute"
 }
 
 append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
+
+make_hook_list() {
+  IGPROF_MULTIFUNCTION=
+  OLDIFS=$IFS
+  IFS=':'
+  for SOURCE in $SOURCES; do
+    IFS=$OLDIFS
+    nm -D $SOURCE > /tmp/nmout
+    while read -r OFFSET TYPE FUNCTION_NAME; do
+      if [ $TYPE = 'T' ] || [ $TYPE = 't' ]; then
+        IFS=':'
+        for EXPRESSION in $REGEXP; do
+          if [ `echo $FUNCTION_NAME | grep "^${EXPRESSION}$"` ]; then
+            IGPROF_MULTIFUNCTION="$IGPROF_MULTIFUNCTION,$FUNCTION_NAME:$SOURCE"
+          fi
+        done
+        IFS=$OLDIFS
+      fi
+    done < /tmp/nmout
+    IFS=':'
+  done
+  IFS=$OLDIFS
+  export eval IGPROF_MULTIFUNCTION_${MULTIFUNCTION_TYPE}=$IGPROF_MULTIFUNCTION
+}
+
+make_enter_exit_hook_list() {
+  OLDIFS=$IFS
+  IFS=':'
+  MULTIFUNCTION_ENTER=
+  MULTIFUNCTION_EXIT=
+  for SOURCE in $SOURCES; do
+    IFS=$OLDIFS
+    nm -D $SOURCE > /tmp/nmout
+    while read -r OFFSET TYPE FUNCTION_NAME; do
+      if [ $TYPE = 'T' ] || [ $TYPE = 't' ]; then
+        IFS=':'
+        for EXPRESSION1 in $REGEXP1; do
+          if [ `echo $FUNCTION_NAME | grep "^${EXPRESSION1}&"` ]; then
+            MULTIFUNCTION_ENTER="$MULTIFUNCTION_ENTER,$FUNCTION_NAME:$SOURCE"
+          fi
+        done
+        for EXPRESSION2 in $REGEXP2; do
+          if [ `echo $FUNCTION_NAME | grep "^${EXPRESSION2}$"` ]; then
+            MULTIFUNCTION_EXIT="$MULTIFUNCTION_EXIT,$FUNCTION_NAME:$SOURCE"
+          fi
+        done
+        IFS=$OLDIFS
+      fi
+    done < /tmp/nmout
+    IFS=':'
+  done
+  IFS=$OLDIFS
+  export eval IGPROF_MULTIFUNCTION_ENTER_${MULTIFUNCTION_TYPE}=$MULTIFUNCTION_ENTER
+  export eval IGPROF_MULTIFUNCTION_EXIT_${MULTIFUNCTION_TYPE}=$MULTIFUNCTION_EXIT
+}
 
 SORT= MEM= EMPTY= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS= IGPROF_MALLOC_LIB='libc.so.6'
 FINST=
@@ -116,6 +175,40 @@ while [ "$#" != 0 ]; do
       export IGPROF_FP_LIB=$FP_LIB;
       shift ;;
 
+    --fm-int )
+      MFUNC="mfunc"
+      SOURCES=$2
+      REGEXP=$3
+      MULTIFUNCTION_TYPE="INT"
+      make_hook_list; 
+      shift; shift; shift;;
+
+    --fm-float )
+      MFUNC="mfunc"
+      SOURCES=$2
+      REGEXP=$3
+      MULTIFUNCTION_TYPE="FLOAT"
+      make_hook_list; 
+      shift; shift; shift;;
+
+    --fenter-exit )
+      MFUNC="mfenter-exit"
+      SOURCES=$2
+      REGEXP1=$3
+      REGEXP2=$4
+      MULTIFUNCTION_TYPE="INT"
+      make_enter_exit_hook_list
+      shift; shift; shift; shift;;
+
+    --fenter-exit-float )
+      MFUNC="mfenter-exit"
+      SOURCES=$2
+      REGEXP1=$3
+      REGEXP2=$4
+      MULTIFUNCTION_TYPE="FLOAT"
+      make_enter_exit_hook_list
+      shift; shift; shift; shift;;
+
     -finst )
       [ -z "$FINST" ] && FINST="finst"; shift ;;
 
@@ -137,7 +230,7 @@ done
 
 export IGPROF_MALLOC_LIB
 
-[ X"$MEM" = X -a X"$EMPTY" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X -a X"$FINST" = X ] && PERF=perf
+[ X"$MEM" = X -a X"$EMPTY" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X -a X"$MFUNC" = X -a X"$FINST" = X ] && PERF=perf
 
 if $OUTZ; then
   [ X"$OUT" = X ] && OUT="igprof.$$.gz"
@@ -158,6 +251,7 @@ fi
 [ X"$FD" = X ]    || append IGPROF "$FD"
 [ X"$PERF" = X ]  || append IGPROF "$PERF"
 [ X"$FUNC" = X ]  || append IGPROF "$FUNC"
+[ X"$MFUNC" = X ] || append IGPROF "$MFUNC"
 [ X"$FINST" = X ] || append IGPROF "$FINST"
 
 export UNW_ARM_UNWIND_METHOD=4
