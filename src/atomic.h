@@ -1,7 +1,7 @@
 #ifndef ATOMIC_H
 # define ATOMIC_H
 
-# if __i386__ || __x86_64__ || __ppc__ || __arm__
+# if __i386__ || __x86_64__ || __ppc__ || __arm__ || __aarch64__ 
 # else
 #  error Sorry this platform is not supported.
 # endif
@@ -44,6 +44,16 @@ IgProfAtomicInc (volatile IgProfAtomic *val)
                       : "r" (val), "r" (modified)
                       : "cc", "memory");
   return result;
+# elif __aarch64__
+  IgProfAtomic result, modified = 0;
+  __asm__ __volatile__ ("1: ldaxr %0,[%1]     \n"
+                        "   add   %0,%0,#1    \n"
+                        "   stlxr %w2,%0,[%1] \n"
+                        "   cbnz  %w2,1b      \n"
+                      : "=&r" (result)
+                      : "r" (val), "r" (modified)
+                      : "cc", "memory");
+  return result;
 # endif
 }
 
@@ -79,6 +89,16 @@ IgProfAtomicDec (volatile IgProfAtomic *val)
                         "   strex %2,%0,[%1]  \n"
                         "   cmp   %2,#0       \n"
                         "   bne   1b          \n"
+                      : "=&r" (result)
+                      : "r" (val), "r" (modified)
+                      : "cc", "memory");
+  return result;
+# elif __aarch64__
+  IgProfAtomic result, modified = 0;
+  __asm__ __volatile__ ("1: ldaxr %0,[%1]     \n"
+                        "   add   %0,%0,#-1   \n"
+                        "   stlxr %w2,%0,[%1] \n"
+                        "   cbnz  %w2,1b      \n"
                       : "=&r" (result)
                       : "r" (val), "r" (modified)
                       : "cc", "memory");
