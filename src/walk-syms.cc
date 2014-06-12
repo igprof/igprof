@@ -10,7 +10,7 @@
 # include <execinfo.h>
 # include <ucontext.h>
 # include <sys/syscall.h>
-# if __x86_64__ || __arm__
+# if __x86_64__ || __arm__ || __aarch64__
 #  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
 # endif
@@ -171,7 +171,7 @@ IgHookTrace::stacktrace(void **addresses, int nmax)
   }
 
   return depth;
-#elif __linux && __x86_64__ || __arm__
+#elif __linux && __x86_64__ || __arm__ || __aarch64__
   return unw_backtrace(addresses, nmax);
 #if 0 // Debug code for tracking unwind failures.
   if (addresses[depth-1] != (void *) 0x40cce9)

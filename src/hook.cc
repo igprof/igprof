@@ -15,6 +15,10 @@
 #include <mach/mach.h>
 #endif
 
+#if __aarch64__
+#include <stdint.h>
+#endif
+
 #if __i386__
 # define TRAMPOLINE_JUMP        5       // jump to hook/old code
 # define TRAMPOLINE_SAVED       10      // 5+margin for saved prologue
@@ -26,7 +30,10 @@
 # define TRAMPOLINE_SAVED       4       // one prologue instruction to save
 #elif __arm__
 # define TRAMPOLINE_JUMP        8       // jump to hook/old code (2 instructions)
-# define TRAMPOLINE_SAVED       8      // 2 reserved words for possible offsets
+# define TRAMPOLINE_SAVED       8       // 2 reserved words for possible offsets
+#elif __aarch64__
+# define TRAMPOLINE_JUMP        4       // jump to hook/old code (short jump)
+# define TRAMPOLINE_SAVED       32      // long jump+patch area
 #else
 # error sorry this platform is not supported
 #endif
@@ -81,15 +88,21 @@ allocate(void *&ptr, void *target UNUSED)
   do retcode = vm_allocate(mach_task_self(), &address, pagesize, FALSE);
   while (retcode != KERN_SUCCESS && (address += pagesize) < limit);
   void *addr = (address < limit ? (void *) address : MAP_FAILED);
-#elif __linux__ && __x86_64__
+#elif __linux__ && __x86_64__ || __aarch64__
+#if __x86_64__
   // Find a memory page we can allocate in the same 32-bit section.
   // JMP instruction doesn't have an 8-byte address version, and in
   // any case we don't want to use that long instruction sequence:
   // we'd have to use at least 10-12 bytes of the function prefix,
   // which frequently isn't location independent so we'd have to
   // parse and rewrite the code if we copied it.
+  const unsigned long mask = 0xffffffff00000000;
+#else //__aarch64__
+  // Find a memory page close enough we can jump to using a B instruction.
+  const unsigned long mask = 0xfffffffff8000000;
+#endif
   unsigned long address = (unsigned long) target;
-  unsigned long baseaddr = (address & 0xffffffff00000000);
+  unsigned long baseaddr = (address & mask);
   unsigned long freepage = address + 1;
 
   FILE *maps = fopen("/proc/self/maps", "r");
@@ -114,7 +127,7 @@ allocate(void *&ptr, void *target UNUSED)
       if (sscanf(range, "%lx-%lx", &low, &high) != 2)
 	continue;
 
-      if ((low & 0xffffffff00000000) == baseaddr
+      if ((low & mask) == baseaddr
 	  && freepage >= low
 	  && freepage < high)
 	freepage = high;
@@ -123,7 +136,7 @@ allocate(void *&ptr, void *target UNUSED)
     fclose(maps);
   }
 
-  if ((freepage & 0xffffffff00000000) != baseaddr)
+  if ((freepage & mask) != baseaddr)
   {
     ptr = 0;
     return IgHook::ErrAllocateTrampoline;
@@ -620,6 +633,50 @@ parse(const char *func, void *address, unsigned *patches)
       return -1;
     }
   }
+#elif __aarch64__
+  uint32_t *insns = (uint32_t *) address;
+  
+  if (insns[0] == ENCODE_LDR(TEMP_REG, 8) // LDR X16, .+8
+      && insns[1] == ENCODE_BR(TEMP_REG)) // BR X16
+  {
+    igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                 func, address);
+    return -1;
+  }
+  else if ((insns[0] & 0xfc000000) == 0x14000000) // B instruction
+  {
+    if ((((insns[0] << 2) + (uint64_t)insns) & 0xfff) == 0x004)
+    {
+      igprof_debug("%s (%p): hook trampoline already installed, ignoring\n",
+                   func, address);
+      return -1;
+    }
+    else
+    {
+      igprof_debug("%s (%p): branch instruction found, but not a hook target\n",
+                   func, address);
+    }
+  }
+  
+  while (n < TRAMPOLINE_JUMP)
+  {
+    // Each patch entry contains one's complement of the offset (in bytes)
+    // to an instruction that needs to be patched because of PC-relative
+    // addressing. The patch list is terminated by 0 (not in one's complement).
+    // This allows a distinction between offset 0 and the end of the patch
+    // list.
+    if ((insns[0] & 0x1f000000) == 0x10000000 // ADR(P) instruction
+        || (insns[0] & 0xff000010) == 0x54000000 // B.cond instruction
+        || (insns[0] & 0x5c000000) == 0x14000000 // B(L), CB(N)Z or TB(N)Z
+        || ((insns[0] & 0x3b000000) == 0x18000000 // LDR(SW) instruction
+            && (insns[0] & 0xc0000000) != 0xc0000000))
+    {
+      *patches++ = ~n;
+    }
+
+    n += 4;
+    ++insns;
+  }
 #endif
 
   *patches = 0;
@@ -714,6 +771,30 @@ redirect(void *&from, void *to, IgHook::JumpDirection direction UNUSED)
   *insns++ = (unsigned) to;  // address to jump
   from = insns;
   return (insns - start) * 4;
+#elif __aarch64__
+  uint32_t *start = (uint32_t *) from;
+  uint32_t *insns = (uint32_t *) from;
+  int64_t diff = (uint64_t)to - (uint64_t)from;
+
+  switch(direction)
+  {
+  // short jump
+  case IgHook::JumpToTrampoline:
+    assert(diff >= -(1 << 27) && diff < (1 << 27));
+    *insns++ = ENCODE_B(diff);
+    break;
+
+  // long jump
+  case IgHook::JumpFromTrampoline:
+    *insns++ = ENCODE_LDR(TEMP_REG, 8);  // LDR X16, .+8
+    *insns++ = ENCODE_BR(TEMP_REG);  // BR X16
+    *(uint64_t *)insns = (uint64_t)to;  // address to jump to
+    insns += 2;
+    break;
+  }
+
+  from = insns;
+  return (insns - start) * 4; // each instruction is 32 bits wide
 #endif
 }
 
@@ -757,7 +838,7 @@ prereentry(void *&from, void *to)
 static int
 postreentry(void *&from, void *to)
 {
-#if __i386__ || __x86_64__ || __arm__
+#if __i386__ || __x86_64__ || __arm__ || __aarch64__
   // Real jump
   return redirect(from, to, IgHook::JumpFromTrampoline);
 #elif __ppc__
@@ -792,7 +873,7 @@ prepare(void *address,
   // Second part: old function prologue + jump to post-prolugue code
   if (chain) *chain = address;
   prereentry(address, ((unsigned char *) old) + prologue);
-#if __x86_64__
+#if __x86_64__ || __aarch64__
   void *start = address;
 #endif
   memcpy(address, old, prologue);
@@ -839,6 +920,13 @@ prepare(void *address,
     skip(old, prologue);
     postreentry(address, old);
   }
+#elif __aarch64__
+  skip(address, prologue);
+  skip(old, prologue);
+  // Use a short jump when jumping from the trampoline to the instrumented
+  // function. IgHook::JumpToTrampoline is used in order to generate a short
+  // jump, even if the jump is away from the trampoline.
+  redirect(address, old, IgHook::JumpToTrampoline);
 #else
   skip(address, prologue);
   skip(old, prologue);
@@ -883,6 +971,126 @@ prepare(void *address,
         skip(old,4);
       }
     }
+  }
+#elif __aarch64__
+  // Patch PC-relative instructions
+  if (patches)
+  {
+    uint32_t *patch_insns = (uint32_t *)address;
+    uint8_t *old_prologue_start = (uint8_t *)old - prologue;
+        
+    for( ; *patches; ++patches)
+    {
+      unsigned int offset = ~*patches;
+      uint32_t *insns = (uint32_t *)((uint8_t *)start + offset);
+      uint8_t *old_pc = old_prologue_start + offset;
+
+      if ((*insns & 0x1f000000) == 0x10000000)
+      {
+        // ADR or ADRP instruction
+        int op = (*insns >> 31) & 0x1;
+        // ADR (op == 0) calculate address in bytes
+        // ADRP (op == 1) calculate address in 4096-byte pages
+        // shift is either 0 or 12
+        int shift = op * 12;
+        int dest_reg = *insns & 0x0000001f;
+        // the relative address is in bits 23..5 and 30..29
+        int64_t rel_addr = SIGN_EXTEND(((*insns >> 3) & 0x001ffffc) 
+                                       | ((*insns >> 29) & 0x00000003), 21)
+                           << shift;
+        uint64_t base_addr = (uint64_t)old_pc & ~((1ull << shift) - 1);
+        uint64_t abs_addr = base_addr + rel_addr;
+        igprof_debug("patching adr%s r%d, .%+d at %p\n", op ? "p" : "",
+                     dest_reg, rel_addr, insns);
+        // replace the ADR(P) instruction with a LDR instruction
+        *insns = ENCODE_LDR(dest_reg, (patch_insns - insns) * 4);
+        *(uint64_t *)patch_insns = (uint64_t)abs_addr;
+        patch_insns += 2;
+      }
+      else if ((*insns & 0x3b000000) == 0x18000000 
+               && (*insns & 0xc0000000) != 0xc0000000)
+      {
+        // LDR or LDRSW instruction
+        // get the opc and V fields to determine the length of the literal
+        int opc = (*insns >> 30) & 0x3;
+        int v = (*insns >> 26) & 0x1;
+        // length of literal in 32-bit words (1, 2 or 4)
+        int literal_len = 1 << opc;
+        if (opc == 2 && v == 0) //LDRSW
+          literal_len = 1;
+        // the relative address is in bits 23..5
+        int64_t rel_addr = SIGN_EXTEND((*insns >> 3) & 0x001ffffc, 21);
+        igprof_debug("patching ldr%s r%d, .%+d at %p\n",
+                     opc == 2 && v == 0 ? "sw" : "", *insns & 0x1f, rel_addr,
+                     insns);
+        // patch the relative address to the patch area of the trampoline
+        *insns &= 0xff80001f;
+        *insns |= ((patch_insns - insns) << 5) & 0x00ffffe0;
+		
+        // copy the literal to the patch area
+        memcpy((void *)patch_insns, (void *)(old_pc + rel_addr),
+               literal_len * 4);
+        patch_insns += literal_len;
+      }
+      else if ((*insns & 0x7c000000) == 0x14000000)
+      {
+        // B or BL instruction
+        // the relative address is in bits 25..0
+        int64_t rel_addr = SIGN_EXTEND((*insns << 2) & 0x0ffffffc, 28);
+        igprof_debug("patching b%s, .%+d at %p\n",
+                     *insns & 0x80000000 ? "l" : "", rel_addr, insns);
+        // patch the relative address to the patch area of the trampoline
+        *insns &= 0xfc000000;
+        *insns |= (patch_insns - insns) & 0x03ffffff;
+        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr),
+                 IgHook::JumpToTrampoline);
+      }
+      else if ((*insns & 0xff000010) == 0x54000000)
+      {
+        // B.cond instruction
+        // the relative address is in bits 23..5
+        int64_t rel_addr = SIGN_EXTEND((*insns >> 3) & 0x001ffffc, 21);
+        const char *cond[] = {"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+                              "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"};
+        igprof_debug("patching b.%s .%+d at %p\n", cond[*insns & 0xf],
+                     rel_addr, insns);
+        // patch the relative address to the patch area of the trampoline
+        *insns &= 0xff80001f;
+        *insns |= ((patch_insns - insns) << 5) & 0x00ffffe0;
+        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr),
+                 IgHook::JumpToTrampoline);
+      }
+      else if ((*insns & 0x7e000000) == 0x34000000)
+      {
+        // CBZ or CBNZ instruction
+        // the relative address is in bits 23..5
+        int64_t rel_addr = SIGN_EXTEND((*insns >> 3) & 0x001ffffc, 21);
+        igprof_debug("patching cb%sz r%d, .%+d at %p\n",
+                     *insns & 0x01000000 ? "n" : "", *insns & 0x1f, rel_addr,
+                     insns);
+        // patch the relative address to the patch area of the trampoline
+        *insns &= 0xff80001f;
+        *insns |= ((patch_insns - insns) << 5) & 0x00ffffe0;
+        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr),
+                 IgHook::JumpToTrampoline);
+      }
+      else if ((*insns & 0x7e000000) == 0x36000000)
+      {
+        // TBZ or TBNZ instruction
+        // the relative address is in bits 18..5
+        int64_t rel_addr = SIGN_EXTEND((*insns >> 3) & 0x0000fffc, 16);
+        igprof_debug("patching tb%sz r%d, #%d, .%+d at %p\n",
+                     *insns & 0x01000000 ? "n" : "", *insns & 0x1f,
+                     ((*insns >> 25) & 0x20) | ((*insns >> 19) & 0x1f),
+                     rel_addr, insns);
+        // patch the relative address to the patch area of the trampoline
+        *insns &= 0xfffc001f;
+        *insns |= ((patch_insns - insns) << 5) & 0x0007ffe0;
+        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr), 
+                 IgHook::JumpToTrampoline);
+      }
+    }
+    address = patch_insns;
   }
 #endif
 }

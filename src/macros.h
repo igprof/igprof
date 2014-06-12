@@ -1,7 +1,7 @@
 #ifndef MACROS_H
 # define MACROS_H
 
-#if __arm__
+#if __arm__ || __aarch64_
 #include "config.h"
 #endif
 
@@ -78,5 +78,30 @@
     #define RDTSC(v)  \
       v = 0;
   #endif // USER_CCNT
+#elif __aarch64__
+  #ifdef USER_CCNT
+    #define RDTSC(v)  \
+      __asm__ volatile ("MRS %0, PMCCNTR_EL0\t\n": "=r"(v));
+  #else // NO USER_CCNT
+    #define RDTSC(v)  \
+      v = 0;
+  #endif // USER_CCNT
 #endif // arch
+
+#if __aarch64__
+// sign extend o from n bits
+#define SIGN_EXTEND_MASK(n) (1ull << ((n) - 1))
+#define SIGN_EXTEND(o, n) ((((o) & ((1ull << (n)) - 1)) ^ SIGN_EXTEND_MASK(n)) \
+                           - SIGN_EXTEND_MASK(n))
+// encode the "load PC-relative literal" LDR instruction
+// n is the number of the Xn register
+// o is the PC-relative offset of the literal
+#define ENCODE_LDR(n, o) (0x58000000 | (((o) << 3) & 0x001ffffc) | ((n) & 31))
+// encode the "branch to register" BR instruction
+#define ENCODE_BR(n) (0xd61f0000 | (((n) & 31) << 5))
+// encode the "branch" B instruction
+#define ENCODE_B(o) (0x14000000 | (((o) >> 2) & 0x03ffffff))
+#define TEMP_REG 16
+#endif
+
 #endif // MACROS_H
