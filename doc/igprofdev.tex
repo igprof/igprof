@@ -500,6 +500,8 @@ will need to make some changes to allow a ``fast path'' for obtaining the
 call stack. We believe that the changes should be very similar to those for
 x86-64, but they are currently not available for ARM.
 
+{\it Aug. 2014 - ARMv8 support is currently being added and tested by 
+a GSoC-supported MSc student at Aalto University, Filip Nyback.}
 
 \subsubsection{IgProf and MacOSX}
 
@@ -557,7 +559,39 @@ generic instrumentation capabilities of IgProf. This should provide
 sufficient information to allow for construction of a complete and
 seamless source-level profile of combined Python and C++ applications.
 
+\subsubsection{Profiling heterogeneous architectures}
 
+A use case which we expect will become more important over time for
+HEP is profiling applications which run on heterogeneous architectures,
+e.g.\ both general purpose cores and accelerator technologies.
+We would like to allow for a complete profiling of applications running both 
+on CPU cores and accelerator 
+technologies within a single job.  This can be done using the binary
+instrumentation capabilities of IgProf. There are hooks in common
+parallel programming frameworks like CUDA~\cite{PROFCUDA},
+OpenCL~\cite{PROFOPENCL} and Intel's TBB~\cite{PROFTBB} which can be used
+to obtain profiling information. The results from both the standard
+IgProf profiling and the parallel programming frameworks can be combined 
+into a single visualization of the profile.
+
+\subsubsection{Application specific profile extensions}
+
+Most profilers, including IgProf, are stacktrace-oriented. While mapping
+computing time to specific functions is a very useful and direct way
+to understand the performance, there are also application specific
+quantities that can be of interest. For example in the Geant4~\cite{GEANT4} 
+simulation,
+understanding where computing time is being spent relative to location
+in the geometry, particle type, physics list, etc. Today this is
+understood in a rather ad-hoc fashion. Rather than develop and extend
+Geant4-specific profiling tools, we propose to create ``application
+specific profiling extensions'' in IgProf (using its binary
+instrumentation capabilities) to allow for direct collection of both
+stacktrace-oriented profiles and simultaneous specific information
+about geometry, particle types, etc. 
+While an initial (useful) example deliverable would be based on Geant4, the 
+extensions in IgProf can be done in a general fashion that permits other such 
+application specific profile extensions, e.g. tracking reconstruction, etc.
 
 \subsubsection{Additional usability features}
 
@@ -834,6 +868,12 @@ an important contribution to the worldwide software cyberinfrastructure.
 \bibitem{CACHEGRIND} \url{http://valgrind.org/docs/manual/cg-manual.html\#cg-manual.impl-details.file-format}
 
 \bibitem{PYROOT} \url{http://root.cern.ch/drupal/category/package-context/pyroot}
+
+\bibitem{PROFCUDA} \url{http://docs.nvidia.com/cuda/cupti/index.html}
+
+\bibitem{PROFOPENCL} \url{http://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/clGetEventProfilingInfo.html}
+
+\bibitem{PROFTBB} \url{https://www.threadingbuildingblocks.org/}
 
 \bibitem{GEANT4} \url{http://geant4.cern.ch}
 
