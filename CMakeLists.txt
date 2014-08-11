@@ -36,6 +36,24 @@ IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES arm)
   ENDIF()
 ENDIF()
 
+# Find PAPI library
+IF(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+  SET(PAPI_FOUND TRUE)
+ELSE(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+  FIND_PATH(PAPI_INCLUDE_DIR NAMES papi.h
+            PATHS /usr/include /usr/local/include)
+  FIND_LIBRARY(PAPI_LIBRARY NAMES papi
+               PATHS /usr/lib /usr/local/lib)
+  IF(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+    SET(PAPI_FOUND TRUE)
+  ELSE(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+    SET(PAPI_FOUND FALSE)
+  ENDIF(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+ENDIF(PAPI_INCLUDE_DIR AND PAPI_LIBRARY)
+IF(PAPI_FOUND)
+  SET(IGPROF_LIBS ${IGPROF_LIBS} ${PAPI_LIBRARY})
+ENDIF(PAPI_FOUND)
+
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/config.h.cmake
   ${CMAKE_CURRENT_SOURCE_DIR}/src/config.h)
 
@@ -97,6 +115,12 @@ IF(PCRE_FOUND)
 ELSE()
   INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR} ${UNWIND_INCLUDE_DIR})
 ENDIF()
+IF(PAPI_FOUND)
+  # Treat the directory containing papi.h as a system include directory in
+  # order to suppress the "comma at end of enumerator list" error. The PAPI
+  # header file does not conform to ANSI C.
+  INCLUDE_DIRECTORIES(SYSTEM ${PAPI_INCLUDE_DIR})
+ENDIF()
 ADD_LIBRARY(igprof SHARED
             src/hook.cc
             src/buffer.cc
@@ -110,11 +134,13 @@ ADD_LIBRARY(igprof SHARED
             src/profile-trace.cc
             src/profile-calls.cc
             src/profile-finstrument.cc
+            src/profile-energy.cc
             src/trace.cc
             src/trace-mem.cc
             src/trace-mmap.cc
             src/trace-throw.cc)
 #SET_TARGET_PROPERTIES(igprof PROPERTIES LINK_FLAGS -Wl,-z,nodefs)
+
 TARGET_LINK_LIBRARIES(igprof ${UNWIND_LIBRARY} ${IGPROF_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 ADD_EXECUTABLE(igprof-analyse src/analyse.cc)
 IF(PCRE_FOUND)

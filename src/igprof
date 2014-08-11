@@ -26,12 +26,13 @@ usage() {
   echo -e "-fpi:FUNC:LIB	       \tprofile cpu cycles spent in function X which returns integer or pointer"
   echo -e "-fpf:FUNC:LIB	       \tprofile cpu cycles spent in function X which returns floating point number"
   echo -e "-j, --jemalloc	       \tuse libjemalloc.so library instead of libc.so.6"
+  echo -e "-np, --energy-profiler      \tstart the energy profiler"
   echo -e "[--] cmd [args...]          \tcommand arguments to execute"
 }
 
 append() { eval "if [ -z \"\$$1\" ]; then $1=\"\$2\"; else $1=\"\$$1 \$2\"; fi"; }
 
-SORT= MEM= EMPTY= FD= PERF= FUNC= ALL= OUT= OUTZ=false OPTS= IGPROF_MALLOC_LIB='libc.so.6'
+SORT= MEM= EMPTY= FD= PERF= FUNC= NRG= ALL= OUT= OUTZ=false OPTS= IGPROF_MALLOC_LIB='libc.so.6'
 FINST=
 
 while [ "$#" != 0 ]; do
@@ -122,6 +123,9 @@ while [ "$#" != 0 ]; do
     -j | --jemalloc )
        IGPROF_MALLOC_LIB='libjemalloc.so.1'; shift ;;
 
+    -np | --energy-profiler )
+      [ -z "$NRG" ] && NRG="nrg"; shift ;;
+
     -- )
       shift; break ;;
 
@@ -137,7 +141,7 @@ done
 
 export IGPROF_MALLOC_LIB
 
-[ X"$MEM" = X -a X"$EMPTY" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X -a X"$FINST" = X ] && PERF=perf
+[ X"$MEM" = X -a X"$EMPTY" = X -a X"$FD" = X -a X"$PERF" = X -a X"$FUNC" = X -a X"$FINST" = X -a X"$NRG" = X ] && PERF=perf
 
 if $OUTZ; then
   [ X"$OUT" = X ] && OUT="igprof.$$.gz"
@@ -159,6 +163,7 @@ fi
 [ X"$PERF" = X ]  || append IGPROF "$PERF"
 [ X"$FUNC" = X ]  || append IGPROF "$FUNC"
 [ X"$FINST" = X ] || append IGPROF "$FINST"
+[ X"$NRG" = X ]   || append IGPROF "$NRG"
 
 export UNW_ARM_UNWIND_METHOD=4
 

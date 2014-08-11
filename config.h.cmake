@@ -3,5 +3,6 @@
 
 #cmakedefine PCRE_FOUND
 #cmakedefine USER_CCNT
+#cmakedefine PAPI_FOUND
 
 #endif // CONFIG_H

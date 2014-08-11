@@ -1107,7 +1107,7 @@ public:
 
     if (strstr(m_key.c_str(), "_MAX") == m_key.c_str() + m_key.size() - 4)
       m_keyMax = true;
-    if (m_key == "PERF_TICKS")
+    if (m_key == "PERF_TICKS" || m_key.find("NRG_") == 0)
       m_isPerfTicks = true;
 
     if (m_disableFilters)
