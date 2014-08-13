@@ -69,3 +69,9 @@ the first case but leave foobar unchanged at the second case.
 Node doesn't need to be direct child of ancestor. For example `-ma
 "foo>foobar/foobar: has foo ancestor"` would rename foobar if foo is ancestor of
 the foobar.
+
+## Experimental energy profiling.
+
+Experimental energy profiling is available if you build igprof on a machine
+which has PAPI available. You can enable it by passing `-ng` as an option at
+profile time.
