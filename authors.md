@@ -7,7 +7,7 @@ related:
  - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
  - { name: Project, link: "https://github.com/ktf/igprof/" }
 ---
-IgProf was developed by Lassi Tuura, Giulio Eulisse and Mikko Kurkela in order
+IgProf was developed by Lassi Tuura, Giulio Eulisse, Mikko Kurkela and Filip Nybäck in order
 to assist software development projects for the [CMS experiment][cms] at
 [CERN][].
 

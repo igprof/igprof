@@ -60,7 +60,11 @@ trapping calls from all manner of operating system bowels while all kinds of
 interesting pthread mutexes are being held!
 
 Lately, initial support for generic instrumentation and precise profiling of
-applications has been introduced, thanks to the work done by Mikko Kurkela.
+applications has been introduced, thanks to the work done by Mikko Kurkela. 
+
+In 2014 IgProf was accepted as GSoC project within CERN SFT organization. In
+such a context Filip Nybäck implemented initial support for ARM64 (aarch64) and
+PAPI based energy profiling.
 
 [gprof]: http://sourceware.org/binutils/docs/gprof/index.html
 [jprof]: http://www.mozilla.org/performance/jprof.html
