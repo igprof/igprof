@@ -60,6 +60,31 @@ DUAL_HOOK(2, int,  dokill, _main, _libc,
           (pid_t pid, int sig), (pid, sig),
           "kill", 0, "libc.so.6")
 
+// Trap vDSO wrappers in glibc and disable IgProf in such code
+// paths. Details below.
+// TODO: These should be DUAL_HOOK, otherwise we have ~1% failure rate
+#if defined(__aarch64__)
+LIBHOOK(2, int, dogettimeofday, _main,
+        (struct timeval *tv, struct timezone *tz),
+        (tv, tz),
+        "gettimeofday", 0, "libc.so.6")
+
+LIBHOOK(2, int, doclock_gettime, _main,
+        (clockid_t clk_id, struct timespec *tp),
+        (clk_id, tp),
+        "clock_gettime", 0, "libc.so.6")
+
+LIBHOOK(2, int, doclock_getres, _main,
+        (clockid_t clk_id, struct timespec *res),
+        (clk_id, res),
+        "clock_getres", 0, "libc.so.6")
+
+LIBHOOK(1, int, dosigreturn, _main,
+        (unsigned long __unused),
+        (__unused),
+        "sigreturn", 0, "libc.so.6")
+#endif /* defined(__aarch64__) */
+
 LIBHOOK(4, int, dopthread_create, _main,
         (pthread_t *thread, const pthread_attr_t *attr,
          void * (*start_routine)(void *), void *arg),
@@ -77,6 +102,7 @@ LIBHOOK(4, int, dopthread_create, _pthread21,
          void * (*start_routine)(void *), void *arg),
         (thread, attr, start_routine, arg),
         "pthread_create", "GLIBC_2.1", 0)
+
 
 // Data for this profiler module
 static const int        MAX_FNAME       = 1024;
@@ -591,6 +617,22 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   if (doexit_hook_main.raw.chain)  IgHook::hook(doexit_hook_libc.raw);
   if (doexit_hook_main2.raw.chain) IgHook::hook(doexit_hook_libc2.raw);
   if (dokill_hook_main.raw.chain)  IgHook::hook(dokill_hook_libc.raw);
+// TODO: This should be done only for -pp mode
+#if defined(__aarch64__)
+  igprof_debug("IgProf will be disabled in code paths with vDSO symbols.\n");
+  IgHook::Status s_gettimeofday = IgHook::hook(dogettimeofday_hook_main.raw);
+  if (s_gettimeofday != IgHook::Success)
+    igprof_debug("failed to hook 'gettimeofday' (status: %i). IgProf profiling might fail.\n", s_gettimeofday);
+  IgHook::Status s_clock_gettime = IgHook::hook(doclock_gettime_hook_main.raw);
+  if (s_clock_gettime != IgHook::Success)
+    igprof_debug("failed to hook 'clock_gettime' (status: %i). IgProf profiling might fail.\n", s_clock_gettime);
+  IgHook::Status s_clock_getres = IgHook::hook(doclock_getres_hook_main.raw);
+  if (s_clock_getres != IgHook::Success)
+    igprof_debug("failed to hook 'clock_getres' (status: %i). IgProf profiling might fail.\n", s_clock_getres);
+  IgHook::Status s_sigreturn = IgHook::hook(dosigreturn_hook_main.raw);
+  if (s_sigreturn != IgHook::Success)
+    igprof_debug("failed to hook 'sigreturn' (status: %i). IgProf profiling might fail.\n", s_sigreturn);
+#endif /* defined(__aarch64__) */
   IgHook::hook(dopthread_create_hook_pthread20.raw);
   IgHook::hook(dopthread_create_hook_pthread21.raw);
 #endif
@@ -601,6 +643,61 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   igprof_enable();
   return true;
 }
+
+// Trap glibc wrappers for vDSO symbols on AArch64 and disable
+// IgProf profiling in such code paths. The vDSO on AArch64
+// is handwritten in assembly and does not provide needed
+// unwind information for libunwind.
+// vDSO symbols:
+//  __kernel_rt_sigreturn  (sigreturn)
+//  __kernel_gettimeofday  (gettimeofday)
+//  __kernel_clock_gettime (clock_gettime)
+//  __kernel_clock_getres  (clock_getres)
+#if defined(__aarch64__)
+static int
+dogettimeofday(IgHook::SafeData<igprof_dogettimeofday_t> &hook,
+               struct timeval *tv, struct timezone *tz)
+{
+  igprof_disable();
+  int ret = hook.chain(tv, tz);
+  igprof_enable();
+
+  return ret;
+}
+
+static int
+doclock_gettime(IgHook::SafeData<igprof_doclock_gettime_t> &hook,
+               clockid_t clk_id, struct timespec *tp)
+{
+  igprof_disable();
+  int ret = hook.chain(clk_id, tp);
+  igprof_enable();
+
+  return ret;
+}
+
+static int
+doclock_getres(IgHook::SafeData<igprof_doclock_getres_t> &hook,
+               clockid_t clk_id, struct timespec *res)
+{
+  igprof_disable();
+  int ret = hook.chain(clk_id, res);
+  igprof_enable();
+
+  return ret;
+}
+
+static int
+dosigreturn(IgHook::SafeData<igprof_dosigreturn_t> &hook,
+               unsigned long __unused)
+{
+  igprof_disable();
+  int ret = hook.chain(__unused);
+  igprof_enable();
+
+  return ret;
+}
+#endif /* defined(__aarch64__) */
 
 /** Get user-provided profiling options.  */
 const char *
