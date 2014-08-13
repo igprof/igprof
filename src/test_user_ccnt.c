@@ -4,6 +4,12 @@
 int main()
 {
   unsigned v;
+  
+#if __arm__
   __asm__ volatile ("MRC p15, 0, %0, c9, c13, 0\t\n": "=r"(v));
+#elif __aarch64__
+  __asm__ volatile ("MRS %0, PMCCNTR_EL0\t\n": "=r"(v));
+#endif
+
   return v;
 }
