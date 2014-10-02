@@ -18,7 +18,8 @@ Elmer.
 The authors can be reached at [igprof-developers@googlegroups.com][igprof-developers].
 
 The development was funded by the United States [National Science
-Foundation][nsf] and [Department of Energy][doe].
+Foundation][nsf] and [Department of Energy][doe]. Additional features have also
+been funded through Google Summer of Code (GSoC 2014).
 
 [cms]: http://cms.cern.ch
 [CERN]: http://www.cern.ch
