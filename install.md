@@ -35,13 +35,13 @@ The build recipe itself is:
     INSTAREA=/x/y/z   # Wherever you want to install the software
     IGPROF_VERSION=5.9.10
     LIBATOMIC_VERSION=7.2alpha4
-    LIBUNWIND_VERSION=1.0.1
+    LIBUNWIND_VERSION=1.1
     CMAKE_VERSION=2.8.1
 
     # Get the source tarballs for libatomic_ops, libunwind and igprof
     wget http://www.hpl.hp.com/research/linux/atomic_ops/download/libatomic_ops-$LIBATOMIC_VERSION.tar.gz
     wget http://download.savannah.gnu.org/releases/libunwind/libunwind-$LIBUNWIND_VERSION.tar.gz
-    wget -Oigprof-$IGPROF_VERSION.tar.gz https://github.com/ktf/igprof/archive/v$IGPROF_VERSION.tar.gz
+    wget -Oigprof-$IGPROF_VERSION.tar.gz https://github.com/igprof/igprof/archive/v$IGPROF_VERSION.tar.gz
 
     # Get a recent version of cmake
     wget http://www.cmake.org/files/v2.8/cmake-$CMAKE_VERSION.tar.gz
