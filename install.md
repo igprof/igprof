@@ -25,7 +25,10 @@ verified this.
  * [Scientific Linux 6](https://www.scientificlinux.org/) - a RHEL6 rebuild
    * 64bit, with gcc 4.5.1, 4.6.x and 4.7.x, 4.8.x compiler
 
-The build recipe is:
+If you are a [docker](http://docker.io) fan, you can try to use the prebuild
+docker image at [igprof/igprof](https://registry.hub.docker.com/u/igprof/igprof).
+
+The build recipe itself is:
 
     # Set up one environment variable to simplify the build recipe;
     # no need to 'export' this, it's just a shortcut for path names.
