@@ -21,7 +21,9 @@ verified this.
  * [Scientific Linux 5](https://www.scientificlinux.org/) - a RHEL5 rebuild
    * 32 bit and 64bit, with gcc 4.1.2 system compiler
    * 32 bit and 64bit, with gcc 4.3.4 compiler
-   * 64bit, with gcc 4.5.1, 4.6.x and 4.7.x, compiler
+   * 64bit, with gcc 4.5.1, 4.6.x and 4.7.x, 4.8.x compiler
+ * [Scientific Linux 6](https://www.scientificlinux.org/) - a RHEL6 rebuild
+   * 64bit, with gcc 4.5.1, 4.6.x and 4.7.x, 4.8.x compiler
 
 The build recipe is:
 
