@@ -465,7 +465,12 @@ IgProfTrace::push(void **stack, int depth)
   for (int i = 0, valid = 1; i < depth && i < MAX_DEPTH; ++i)
   {
     void *address = stack[depth-i-1];
-    if (valid && cache[i].address == address)
+    // This is needed because apparently unw_backtrace fills the last entry of
+    // the stack array with a 0 in case we are talking about the stacktrace of
+    // a (non-main) thread, resulting in a subsequent crash in childStackNode.
+    if (address == 0)
+      break;
+    else if (valid && cache[i].address == address)
       frame = cache[i].frame;
     else
     {
