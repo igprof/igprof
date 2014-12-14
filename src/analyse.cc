@@ -668,7 +668,8 @@ public:
     TEXT=0,
     XML=1,
     HTML=2,
-    SQLITE=3
+    SQLITE=3,
+    JSON=4
   };
   enum Ordering {
     DESCENDING=-1,
@@ -4303,6 +4304,189 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
                  "CREATE INDEX totalCountIndex ON mainrows(cumulative_count);\n"
               << std::endl;
   }
+  else if (m_config->outputType() == Configuration::JSON)
+  {
+    // Format for the output:
+    // {
+    //   "summary": {
+    //      "counter": <counter>,
+    //      "total_counts": <total-counts>,
+    //      "total_freq": <total-counts>,
+    //      "tick_period": <tick_period>
+    //   }
+    //   "mainrows": []
+    //   "symbols": []
+    //   "files": []
+    //   "callers": []
+    //   "callees": []
+    // }
+
+    // Print summary information.
+    puts("{");
+    const char *extraKey = "";
+    if (m_showLocalityMetrics)
+      extraKey = "@SPREAD_FACTOR";
+    else if (m_showPageRanges)
+      extraKey = "@RANGES";
+    else if (m_showPages)
+      extraKey = "@PAGES";
+
+    printf("\"summary\": {\n"
+           "   \"counter\": \"%s%s\",\n"
+           "   \"total_counts\": %" PRId64 ",\n"
+           "   \"total_freq\": %" PRId64 ",\n"
+           "   \"tick_period\": %f\n"
+           "},\n", m_key.c_str(), extraKey, totals, totfreq, m_tickPeriod);
+
+    // We first print out the mainrows, then the filenames, then the symbols.
+    // Notice we keep track of the order in which files and symbols appear, so
+    // that we do not need an extra index to get them.
+    puts("\"mainrows\": [");
+    std::map<int, int> symbolsMap, filesMap;
+    int symbolCount = 0, fileCount = 0;
+    bool first = true;
+
+    for (FinalTable::const_iterator i = table.begin(); i != table.end(); i++)
+    {
+      MainGProfRow &mainRow = **i;
+      std::map<int,int>::const_iterator si = symbolsMap.find(mainRow.symbolId());
+      std::map<int,int>::const_iterator fi = filesMap.find(mainRow.fileId());
+      int symbolIndex, fileIndex;
+
+      if (si != symbolsMap.end())
+        symbolIndex = si->second;
+      else
+      {
+        symbolIndex = symbolCount++;
+        symbolsMap.insert(std::make_pair<int, int>(mainRow.symbolId(), symbolIndex));
+      }
+
+      if (fi != filesMap.end())
+        fileIndex = fi->second;
+      else
+      {
+        fileIndex = fileCount++;
+        filesMap.insert(std::make_pair<int, int>(mainRow.fileId(), fileIndex));
+      }
+
+      if (first)
+        first = false;
+      else
+        puts(",");
+
+      printf("[%d, %d, %d, %"PRId64", %"PRId64", %"PRId64", %"PRId64", "
+              "%"PRId64", %"PRId64", %"PRId64", ",
+                mainRow.rank(), symbolIndex, fileIndex,
+                mainRow.SELF, mainRow.CUM, mainRow.KIDS,
+                mainRow.SELF_ALL[1], mainRow.CUM_ALL[1],
+                mainRow.SELF_ALL[2], mainRow.CUM_ALL[2]);
+      // In case we are showing page related information,
+      // percentages do not really make sense.
+      if (m_showLocalityMetrics || m_showPageRanges)
+        printPercentage(0.0);
+      else
+        printPercentage(mainRow.PCT, "%7.2f", "-101");
+      putchar(']');
+    }
+
+    // Then we print files, as they appear.
+    puts("],\n\"files\": [");
+    int lastSeen = -1;
+    for (FinalTable::const_iterator i = table.begin(); i != table.end(); i++)
+    {
+      MainGProfRow &mainRow = **i;
+      int id = filesMap[mainRow.fileId()];
+      // Already printed.
+      if (lastSeen >= id)
+        continue;
+      // Should increase one-by-one
+      assert(lastSeen + 1 == id);
+      lastSeen = id;
+      if (lastSeen > 0)
+        puts(",");
+      printf("\"%s\"", mainRow.filename());
+    }
+
+    puts("],\n \"symbols\": [");
+
+    // Then we print symbols, as they appear.
+    lastSeen = -1;
+    for (FinalTable::const_iterator i = table.begin(); i != table.end(); i++)
+    {
+      MainGProfRow &mainRow = **i;
+      int id = symbolsMap[mainRow.symbolId()];
+
+      // Already printed.
+      if (lastSeen >= id)
+        continue;
+      // Should increase one-by-one
+      assert(lastSeen + 1 == id);
+      lastSeen = id;
+      if (lastSeen > 0)
+        puts(",");
+      printf("\"%s\"", mainRow.name());
+    }
+
+    // We print out information for each caller and foreach callee,
+    // even if they are substantially the same edges.
+    // The information is printed in rank order, so that we can quickly find
+    // it. We could even store two indices to find them more easily.
+    puts("],\n\"callers\": [");
+    first = true;
+    for (FinalTable::const_iterator i = table.begin(); i != table.end(); i++)
+    {
+      MainGProfRow &mainRow = **i;
+      for (MainGProfRow::Callers::const_iterator c = mainRow.CALLERS.begin();
+           c != mainRow.CALLERS.end();
+           c++)
+      {
+        OtherGProfRow &row = **c;
+        if (first)
+          first = false;
+        else
+          puts(",");
+        printf("[%d, %d, %"PRId64", %"PRId64", %"PRId64", ",
+               mainRow.rank(), row.rank(),
+               row.SELF_COUNTS, row.SELF_CALLS, row.SELF_PATHS);
+
+        // In case we are showing page related information,
+        // percentages do not really make sense.
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0.0);
+        else
+          printPercentage(row.PCT, "%7.2f", "-101");
+        putchar(']');
+      }
+    }
+    puts("],\n\"callees\": [");
+    first = true;
+    for (FinalTable::const_iterator i = table.begin(); i != table.end(); i++)
+    {
+      MainGProfRow &mainRow = **i;
+      for (MainGProfRow::Calls::const_iterator c = mainRow.CALLS.begin();
+           c != mainRow.CALLS.end();
+           c++)
+      {
+        OtherGProfRow &row = **c;
+        if (first)
+          first = false;
+        else
+          puts(",");
+        printf("[%d, %d, %"PRId64", %"PRId64", %"PRId64", ",
+               mainRow.rank(), row.rank(),
+               row.SELF_COUNTS, row.SELF_CALLS, row.SELF_PATHS);
+
+        // In case we are showing page related information,
+        // percentages do not really make sense.
+        if (m_showLocalityMetrics || m_showPageRanges)
+          printPercentage(0.0);
+        else
+          printPercentage(row.PCT, "%7.2f", "-101");
+        putchar(']');
+      }
+    }
+    puts("]\n}");
+  }
   else
   {
     assert(false);
@@ -4468,6 +4652,8 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
       m_config->setOutputType(Configuration::TEXT);
     else if (is("--sqlite", "-s"))
       m_config->setOutputType(Configuration::SQLITE);
+    else if (is("--json", "-js"))
+      m_config->setOutputType(Configuration::JSON);
     else if (is("--top", "-tn"))
       m_topN = parseOptionToInt(*(++arg), "--top / -tn");
     else if (is("--tree", "-T"))
