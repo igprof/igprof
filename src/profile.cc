@@ -33,7 +33,7 @@ HIDDEN void             (*igprof_abort)(void) __attribute__((noreturn)) = &abort
 HIDDEN char *           (*igprof_getenv)(const char *) = &getenv;
 HIDDEN int              (*igprof_unsetenv)(const char *) = &unsetenv;
 HIDDEN bool             s_igprof_activated = false;
-HIDDEN IgProfAtomic     s_igprof_enabled = 0;
+       IgProfAtomic     s_igprof_enabled = 0;
 HIDDEN pthread_key_t    s_igprof_bufkey;
 HIDDEN pthread_key_t    s_igprof_flagkey;
 HIDDEN int              s_igprof_stderrOpen = true;
