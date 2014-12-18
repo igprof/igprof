@@ -37,14 +37,14 @@ igprof_buffer(void)
 }
 
 /** Enable the profiling system globally. Safe to call from anywhere. */
-HIDDEN inline void
+inline void
 igprof_enable_globally(void)
 {
   IgProfAtomicInc(&s_igprof_enabled);
 }
 
 /** Disable the profiling system globally. Safe to call from anywhere. */
-HIDDEN inline void
+inline void
 igprof_disable_globally(void)
 {
   IgProfAtomicDec(&s_igprof_enabled);

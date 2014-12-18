@@ -21,6 +21,7 @@ usage() {
   echo -e "-pr, --real-time            \tmeasure real time in performance profiler"
   echo -e "-pu, --user-time            \tmeasure user time in performance profiler"
   echo -e "-pk, --keep-on-fork         \tdo not reset performance profile in fork child"
+  echo -e "-pd, --disable-on-start     \tdo not enable during startup"
   echo -e "-fd, --file-descriptor      \tstart the file descriptor profile"
   echo -e "-fp:malloc:LIB	       \tprofile cpu cycles spent in malloc like functions"
   echo -e "-fpi:FUNC:LIB	       \tprofile cpu cycles spent in function X which returns integer or pointer"
@@ -93,6 +94,8 @@ while [ "$#" != 0 ]; do
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:user"; shift ;;
     -pk | --keep-on-fork )
       [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:keep"; shift ;;
+    -pd | --disable-on-start )
+      [ -z "$PERF" ] && PERF="perf"; PERF="$PERF:nostart"; shift ;;
 
     -fp* )
       FP_MODE=$(echo $1 | cut -f1 -d: -s);
