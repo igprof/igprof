@@ -3,9 +3,9 @@ title: Installing IgProf
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
- - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
- - { name: Project, link: "https://github.com/ktf/igprof/" }
+ - { name: Downloads, link: "https://github.com/igprof/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/igprof/igprof/issues" }
+ - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 
 Building igprof requires recent [libatomic_ops][] and [libunwind][], plus recent
@@ -74,7 +74,7 @@ The build recipe itself is:
     gtar xzf igprof-$IGPROF_VERSION.tar.gz
     cd igprof-$IGPROF_VERSION
     # In case you want to develop:
-    # git clone https://github.com/ktf/igprof.git
+    # git clone https://github.com/igprof/igprof.git
     # cd igprof
     cmake -DCMAKE_INSTALL_PREFIX=$INSTAREA -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-g -O3" .
     make -j 10

@@ -3,9 +3,9 @@ title: IgProf papers, presentations and documents
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
- - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
- - { name: Project, link: "https://github.com/ktf/igprof/" }
+ - { name: Downloads, link: "https://github.com/igprof/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/igprof/igprof/issues" }
+ - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 L. Tuura: _Efficient memory management,_ First INFN International School on architectures, tools and methodologies for developing efficient large scale scientific computing applications ([ESC09](http://web.infn.it/esc09/)), Bertinoro, Italy, 2009 ([slides](http://agenda.infn.it/getFile.py/access?contribId=20&amp;sessionId=2&amp;resId=0&amp;materialId=slides&amp;confId=1387)).
 

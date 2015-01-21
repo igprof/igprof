@@ -3,9 +3,9 @@ title: IgProf text output description
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
- - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
- - { name: Project, link: "https://github.com/ktf/igprof/" }
+ - { name: Downloads, link: "https://github.com/igprof/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/igprof/igprof/issues" }
+ - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 IgProf output resembles that of gprof so its output conventions documentation
 may be helpful to read first.

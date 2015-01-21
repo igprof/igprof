@@ -3,9 +3,9 @@ title: IgProf html output description
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
- - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
- - { name: Project, link: "https://github.com/ktf/igprof/" }
+ - { name: Downloads, link: "https://github.com/igprof/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/igprof/igprof/issues" }
+ - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 If you have access to some web area with CGI support, the easiest way to
 navigate igprof reports is to use the `igprof-navigator` script. Have a look

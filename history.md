@@ -3,9 +3,9 @@ title: IgProf history
 layout: default
 related:
  - { name: Top, link: . }
- - { name: Downloads, link: "https://github.com/ktf/igprof/tags" }
- - { name: Bugs, link: "https://github.com/ktf/igprof/issues" }
- - { name: Project, link: "https://github.com/ktf/igprof/" }
+ - { name: Downloads, link: "https://github.com/igprof/igprof/tags" }
+ - { name: Bugs, link: "https://github.com/igprof/igprof/issues" }
+ - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 While the current version of IgProf is entirely the work of Lassi Tuura and
 Giulio Eulisse, it borrows most of the ideas from several other projects.  Our
