@@ -455,6 +455,10 @@ parse(const char *func, void *address, unsigned *patches)
     else if (insns[0] == 0xe8 || insns[0] == 0xe9)
       *patches++ = (n+0x5)*0x100 + n+1, n += 5, insns += 5;
 
+    // je <32bit offset>
+    else if (insns[0] == 0x0f && insns[1] == 0x84)
+      *patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
+
     // opcode + modRM (no immediate)
     else if ((insns[0] <= 0x03)
              || (insns[0] >= 0x08 && insns[0] <= 0x0b)
