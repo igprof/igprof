@@ -4358,7 +4358,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       else
       {
         symbolIndex = symbolCount++;
-        symbolsMap.insert(std::make_pair<int, int>(mainRow.symbolId(), symbolIndex));
+        symbolsMap.insert(std::make_pair(mainRow.symbolId(), symbolIndex));
       }
 
       if (fi != filesMap.end())
@@ -4366,7 +4366,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       else
       {
         fileIndex = fileCount++;
-        filesMap.insert(std::make_pair<int, int>(mainRow.fileId(), fileIndex));
+        filesMap.insert(std::make_pair(mainRow.fileId(), fileIndex));
       }
 
       if (first)
