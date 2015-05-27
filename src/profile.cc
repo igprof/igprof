@@ -29,7 +29,7 @@
 #endif
 
 // Global variables initialised once here.
-HIDDEN void             (*igprof_abort)(void) __attribute__((noreturn)) = &abort;
+HIDDEN IgProfAbortFunc *igprof_abort = &abort;
 HIDDEN char *           (*igprof_getenv)(const char *) = &getenv;
 HIDDEN int              (*igprof_unsetenv)(const char *) = &unsetenv;
 HIDDEN bool             s_igprof_activated = false;
@@ -501,7 +501,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   if (void *libc = dlopen("libc.so.6", RTLD_LAZY | RTLD_GLOBAL))
   {
     if (void *sym = dlsym(libc, "abort"))
-      igprof_abort = __extension__ (void(*)()) sym;
+      igprof_abort = __extension__ (IgProfAbortFunc *) sym;
 
     if (void *sym = dlsym(libc, "getenv"))
       igprof_getenv = __extension__ (char *(*)(const char *)) sym;
