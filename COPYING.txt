@@ -1,7 +1,8 @@
 IgProf, the ignominious performance and memory profiler.
-Copyright (C) 2003-2010
+Copyright (C) 2003-2015
  Lassi Tuura <lat@iki.fi> and
- Giulio Eulisse <giulio.eulisse@gmail.com>.
+ Giulio Eulisse <giulio.eulisse@gmail.com> and
+ Google Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
