@@ -7,9 +7,42 @@
 #include <cstdio>
 #include <pthread.h>
 #include <malloc.h>
+#include <unistd.h>
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
+LIBHOOK(1, void *, donew, _tc,
+        (size_t n), (n),
+        "tc_new", 0, 0)
+LIBHOOK(1, void *, domalloc, _tc,
+        (size_t n), (n),
+        "tc_malloc", 0, 0)
+LIBHOOK(2, void *, docalloc, _tc,
+        (size_t n, size_t m), (n, m),
+        "tc_calloc", 0, 0)
+LIBHOOK(2, void *, dorealloc, _tc,
+        (void *ptr, size_t n), (ptr, n),
+        "tc_realloc", 0, 0)
+LIBHOOK(3, int, dopmemalign, _tc,
+        (void **ptr, size_t alignment, size_t size),
+        (ptr, alignment, size),
+        "tc_posix_memalign", 0, 0)
+LIBHOOK(2, void *, domemalign, _tc,
+        (size_t alignment, size_t size), (alignment, size),
+        "tc_memalign", 0, 0)
+LIBHOOK(1, void *, dopvalloc, _tc,
+        (size_t size), (size),
+        "tc_pvalloc", 0, 0)
+LIBHOOK(1, void *, dovalloc, _tc,
+        (size_t size), (size),
+        "tc_valloc", 0, 0)
+LIBHOOK(1, void, dofree, _tc,
+        (void *ptr), (ptr),
+        "tc_free", 0, 0)
+LIBHOOK(2, void, dodelsize, _tc,
+        (void *ptr, size_t n), (ptr, n),
+        "tc_delete_sized", 0, 0)
+
 DUAL_HOOK(1, void *, domalloc, _main, _libc,
           (size_t n), (n),
           "malloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
@@ -26,6 +59,9 @@ DUAL_HOOK(3, int, dopmemalign, _main, _libc,
 DUAL_HOOK(2, void *, domemalign, _main, _libc,
           (size_t alignment, size_t size), (alignment, size),
           "memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
+DUAL_HOOK(1, void *, dopvalloc, _main, _libc,
+          (size_t size), (size),
+          "pvalloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(1, void *, dovalloc, _main, _libc,
           (size_t size), (size),
           "valloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
@@ -43,6 +79,7 @@ static IgProfTrace::CounterDef  s_ct_largest    = { "MEM_MAX",      IgProfTrace:
 static IgProfTrace::CounterDef  s_ct_live       = { "MEM_LIVE",     IgProfTrace::TICK, -1, 0 };
 static int                      s_overhead      = OVERHEAD_NONE;
 static bool                     s_initialized   = false;
+static size_t                   pagesize        = 0;
 
 /** Record an allocation at @a ptr of @a size bytes.  Increments counters
     in the tree for the allocations as per current configuration and adds
@@ -171,21 +208,51 @@ initialize(void)
   IgHook::hook(dorealloc_hook_main.raw);
   IgHook::hook(dopmemalign_hook_main.raw);
   IgHook::hook(domemalign_hook_main.raw);
+  IgHook::hook(dopvalloc_hook_main.raw);
   IgHook::hook(dovalloc_hook_main.raw);
   IgHook::hook(dofree_hook_main.raw);
+
+  IgHook::hook(donew_hook_tc.raw);
+  IgHook::hook(domalloc_hook_tc.raw);
+  IgHook::hook(docalloc_hook_tc.raw);
+  IgHook::hook(dorealloc_hook_tc.raw);
+  IgHook::hook(dopmemalign_hook_tc.raw);
+  IgHook::hook(domemalign_hook_tc.raw);
+  IgHook::hook(dopvalloc_hook_tc.raw);
+  IgHook::hook(dovalloc_hook_tc.raw);
+  IgHook::hook(dofree_hook_tc.raw);
+  IgHook::hook(dodelsize_hook_tc.raw);
+
 #if __linux
   if (domalloc_hook_main.raw.chain)    IgHook::hook(domalloc_hook_libc.raw);
   if (docalloc_hook_main.raw.chain)    IgHook::hook(docalloc_hook_libc.raw);
+  if (dorealloc_hook_main.raw.chain)   IgHook::hook(dorealloc_hook_libc.raw);
+  if (dopmemalign_hook_main.raw.chain) IgHook::hook(dopmemalign_hook_libc.raw);
   if (domemalign_hook_main.raw.chain)  IgHook::hook(domemalign_hook_libc.raw);
+  if (dopvalloc_hook_main.raw.chain)   IgHook::hook(dopvalloc_hook_libc.raw);
   if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   if (dofree_hook_main.raw.chain)      IgHook::hook(dofree_hook_libc.raw);
 #endif
+
   igprof_debug("memory profiler enabled\n");
   igprof_enable_globally();
 }
 
 // -------------------------------------------------------------------
 // Traps for this profiler module.  Track memory allocation routines.
+static void *
+donew(IgHook::SafeData<igprof_donew_t> &hook, size_t n)
+{
+  bool enabled = igprof_disable();
+  void *result = (*hook.chain)(n);
+
+  if (LIKELY(enabled && result))
+    add(result, n);
+
+  igprof_enable();
+  return result;
+}
+
 static void *
 domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t n)
 {
@@ -242,6 +309,27 @@ domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t
 }
 
 static void *
+dopvalloc(IgHook::SafeData<igprof_dopvalloc_t> &hook, size_t size)
+{
+  if (!pagesize)
+    pagesize = getpagesize();
+
+  if (!size)
+    size = pagesize;
+
+  size = (size + pagesize - 1) & ~(pagesize-1);
+
+  bool enabled = igprof_disable();
+  void *result = (*hook.chain)(size);
+
+  if (LIKELY(enabled && result))
+    add(result, size);
+
+  igprof_enable();
+  return result;
+}
+
+static void *
 dovalloc(IgHook::SafeData<igprof_dovalloc_t> &hook, size_t size)
 {
   bool enabled = igprof_disable();
@@ -274,6 +362,15 @@ dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
   igprof_disable();
   remove(ptr);
   (*hook.chain)(ptr);
+  igprof_enable();
+}
+
+static void
+dodelsize(IgHook::SafeData<igprof_dodelsize_t> &hook, void *ptr, size_t n)
+{
+  igprof_disable();
+  remove(ptr);
+  (*hook.chain)(ptr, n);
   igprof_enable();
 }
 
