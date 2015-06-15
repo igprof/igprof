@@ -8,8 +8,15 @@
 #include <cassert>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <sys/stat.h>
+
+#if __linux
+#include <link.h>
+#endif
 
 #if __APPLE__
 #include <mach/mach.h>
@@ -58,6 +65,13 @@ struct modRMBits {
 union modRMByte {
   unsigned char encoded;
   modRMBits     bits;
+};
+
+struct IgHookFindSym {
+  struct stat *st;
+  const char *fn;
+  const char *lib;
+  void *sym;
 };
 
 /** Allocate a trampoline area into @a ptr.  Returns error code on
@@ -243,6 +257,429 @@ skip(void *&ptr, int n)
 { ptr = (unsigned char *) ptr + n; return ptr; }
 
 //////////////////////////////////////////////////////////////////////
+#define ELFM2_(n,t)             ELF ## n ## _ ## t
+#define ELFM_(n, t)             ELFM2_(n,t)
+#define ELFM(t)                 ELFM_(__ELF_NATIVE_CLASS,t)
+#define ELF_R_SYM(x)            ELFM(R_SYM)(x)
+#define ELF_ST_BIND(x)          ELFM(ST_BIND)(x)
+#define ELF_ST_TYPE(x)          ELFM(ST_TYPE)(x)
+#define ELF_ST_VISIBILITY(x)    ELFM(ST_VISIBILITY)(x)
+
+/** Locate and map in the binary. */
+static int
+findAndMapBinary(dl_phdr_info *info,
+                 char *&objname,
+                 char *&objrname,
+                 char *&freeobjname,
+                 const char *&objimg,
+                 off_t &size,
+                 IgHookFindSym *match,
+                 struct stat &st)
+{
+  int fd = -1;
+  int ret = 0;
+  void *addr;
+
+  if (info->dlpi_name
+      && *info->dlpi_name == '/'
+      && (fd = open(info->dlpi_name, O_RDONLY)) >= 0)
+  {
+    objname = (char *) info->dlpi_name;
+    ret = 1;
+  }
+  else
+  {
+    // Pick an address we'll know we'll be looking for.
+    unsigned long address = 0;
+    for (int j = 0; j < info->dlpi_phnum; ++j)
+      if (info->dlpi_phdr[j].p_type == PT_LOAD)
+        address = info->dlpi_addr + info->dlpi_phdr[j].p_vaddr;
+
+    // Scan address map for a range around 'address'.
+    // Read memory address map.
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (! maps || ferror(maps))
+    {
+      if (maps)
+        fclose(maps);
+      return -1;
+    }
+
+    // Scan address map for a range around 'address'.
+    while (! feof(maps))
+    {
+      // Get mapping parameters.
+      int c;
+      char prot[5];
+      unsigned long begin, end, offset;
+      long devmajor, devminor, inode;
+      if (fscanf(maps, "%lx-%lx %4s %lx %lx:%lx %ld",
+                 &begin, &end, prot, &offset,
+                 &devmajor, &devminor, &inode)
+          != 7)
+        break;
+
+      // Skip if this range is not of interest.
+      if (! (address >= begin && address < end))
+      {
+        while ((c = fgetc(maps)) != EOF && c != '\n')
+          /* empty */;
+
+        continue;
+      }
+
+      // Extract file name part (if any) after skipping space.
+      while ((c = fgetc(maps)) != EOF && (c == ' ' || c == '\t'))
+        /* empty */;
+
+      size_t n = 0;
+      size_t len = 0;
+      while (c != EOF && c != '\n')
+      {
+        if (! len || n == len-1)
+        {
+          len = len * 2 + 1024;
+          char *b = (char *) realloc(objname, len);
+          if (! b)
+          {
+            fclose(maps);
+            free(objname);
+            objname = 0;
+            return -1;
+          }
+          objname = b;
+        }
+
+        objname[n++] = c;
+        c = fgetc(maps);
+      }
+
+      if (objname)
+      {
+        assert(len > 0);
+        assert(n < len);
+        objname[n++] = 0;
+        fd = open(objname, O_RDONLY);
+        freeobjname = objname;
+        ret = 1;
+      }
+
+      break;
+    }
+
+    fclose(maps);
+  }
+
+  if (fd >= 0)
+  {
+    if (fstat(fd, &st) == 0)
+    {
+      if (! match->st || (match->st->st_dev == st.st_dev
+                          && match->st->st_ino == st.st_ino))
+      {
+        size = st.st_size;
+        if ((addr = mmap(0, size, PROT_READ, MAP_SHARED, fd, 0)) != MAP_FAILED)
+          objimg = (const char *) addr;
+      }
+      else
+      {
+        igprof_debug("%s candidate object %s is not a match for %s,"
+                     " dev:ino mismatch %ld:%ld vs. %ld:%ld, skipping\n",
+                     match->sym, objname, match->lib,
+                     (long) st.st_dev, (long) st.st_ino,
+                     (long) match->st->st_dev, (long) match->st->st_ino);
+        objname = 0;
+        ret = 0;
+      }
+    }
+
+    close(fd);
+  }
+
+  if (objname)
+    objrname = realpath(objname, 0);
+
+  assert(! objname || ret > 0);
+  assert(! objimg || objname);
+  assert(! objrname || objname);
+  return ret;
+}
+
+/** Try locating a symbol in a table. */
+void *
+findSymInTable(const char *symbol,
+               const char *object,
+               const char *section,
+               const ElfW(Shdr) *shdr,
+               const ElfW(Sym) *syms,
+               const char *strs,
+               const ElfW(Word) *xsndx,
+               uint32_t nsyms,
+               ElfW(Addr) vmaslide,
+               ElfW(Addr) vmabase)
+{
+  if (! syms || ! strs)
+    return 0;
+
+  for (uint32_t i = 0; i < nsyms; ++i)
+  {
+    const ElfW(Shdr) *sect = 0;
+    switch (syms[i].st_shndx)
+    {
+    case SHN_UNDEF:
+    case SHN_BEFORE:
+    case SHN_AFTER:
+    case SHN_ABS:
+    case SHN_COMMON:
+      break;
+
+    case SHN_XINDEX:
+      sect = shdr && xsndx ? shdr + xsndx[i] : 0;
+      break;
+
+    default:
+      sect = shdr ? shdr + syms[i].st_shndx : 0;
+      break;
+    }
+
+    unsigned type = ELF_ST_TYPE(syms[i].st_info);
+    ElfW(Addr) addr = vmaslide + syms[i].st_value;
+    ElfW(Addr) offset = vmaslide + syms[i].st_value - vmabase;
+    if (syms[i].st_shndx == SHN_UNDEF)
+      addr = offset = 0;
+    else if (! addr
+             || type == STT_TLS
+             || (sect && ! (sect->sh_flags & SHF_ALLOC)))
+      offset = syms[i].st_value;
+
+    if (addr && ! strcmp(symbol, strs + syms[i].st_name))
+    {
+      igprof_debug("%s found at address 0x%lx, offset 0x%lx in %s section of %s\n",
+                   symbol, addr, offset, section, object ? object : "(unknown)");
+      return (void *) addr;
+    }
+  }
+
+  return 0;
+}
+
+
+
+/** Try locating a symbol by name in a binary. */
+static int
+maybeFindSymbolInBinary(dl_phdr_info *info, size_t /* size */, void *ptr)
+{
+  struct stat st;
+  IgHookFindSym *match = (IgHookFindSym *) ptr;
+  if (match->sym)
+    return 0;
+
+  bool vmafound = false;
+  ElfW(Addr) vmaslide = info->dlpi_addr;
+  ElfW(Addr) vmabase = 0;
+  const ElfW(Dyn) *dyn = 0;
+  char *objname = 0;
+  char *objrname = 0;
+  char *freeobjname = 0;
+  const char *objimg = 0;
+  off_t objsize = 0;
+  int ret = findAndMapBinary(info, objname, objrname, freeobjname, objimg, objsize, match, st);
+
+  if (ret <= 0)
+  {
+    if (freeobjname)
+      free(freeobjname);
+    return 0;
+  }
+
+  for (int i = 0; i < info->dlpi_phnum; ++i)
+  {
+    const ElfW(Phdr) &phdr = info->dlpi_phdr[i];
+    ElfW(Addr) addr = vmaslide + phdr.p_vaddr;
+    switch (phdr.p_type)
+    {
+    case PT_DYNAMIC:
+      dyn = (const ElfW(Dyn) *) addr;
+      break;
+
+    case PT_PHDR:
+    case PT_LOAD:
+      if (! vmafound)
+      {
+        vmabase = addr - phdr.p_offset;
+        vmafound = true;
+      }
+      break;
+    }
+  }
+
+  // Maybe locate data for interpreting dynamic symbol tables.
+  if (vmafound && dyn)
+  {
+    const uint32_t *oldhash = 0;
+    const uint32_t *gnuhash = 0;
+    const ElfW(Sym) *dsyms = 0;
+    const char *dstrs = 0;
+    uint32_t ndsyms = 0;
+    ElfW(Addr) slide = (!strcmp(objname, "[vdso]") ? vmaslide : 0);
+
+    for (int i = 0; dyn[i].d_tag != DT_NULL; ++i)
+    {
+      switch (dyn[i].d_tag)
+      {
+      case DT_SYMTAB:
+        dsyms = (const ElfW(Sym) *) (dyn[i].d_un.d_ptr + slide);
+        break;
+
+      case DT_STRTAB:
+        dstrs = (const char *) (dyn[i].d_un.d_ptr + slide);
+        break;
+
+      case DT_GNU_HASH:
+        gnuhash = (const uint32_t *) (dyn[i].d_un.d_ptr + slide);
+        break;
+
+      case DT_HASH:
+        oldhash = (const uint32_t *) (dyn[i].d_un.d_ptr + slide);
+        break;
+      }
+    }
+
+    // Figure out from hash tables how many dynamic symbols there are.
+    if (dsyms && dstrs && gnuhash)
+    {
+      bool ok = true;
+      uint32_t nbuckets = *gnuhash++;
+      uint32_t minidx = *gnuhash++;
+      uint32_t maskwords = *gnuhash++;
+      const uint32_t *buckets =
+          gnuhash + 1 + maskwords * (sizeof(ElfW(Addr)) / sizeof(uint32_t));
+      const uint32_t *chains = buckets + nbuckets - minidx;
+      uint32_t maxidx = 0xffffffff;
+
+      for (uint32_t i = 0; i < nbuckets; ++i)
+        if (buckets[i] == 0)
+          ;
+        else if (buckets[i] < minidx)
+        {
+          ok = false;
+          break;
+        }
+        else if (maxidx == 0xffffffff || buckets[i] > maxidx)
+          maxidx = buckets[i];
+
+      if (ok && maxidx != 0xffffffff)
+      {
+        while ((chains[maxidx] & 1) == 0)
+          ++maxidx;
+
+        ndsyms = maxidx + 1;
+      }
+    }
+
+    if (ndsyms == 0 && dsyms && dstrs && oldhash)
+      ndsyms = oldhash[1];
+
+    // Look for the symbol.
+    match->sym = findSymInTable(match->fn, objname, "dynsym",
+                                0, dsyms, dstrs, 0,
+                                ndsyms, vmaslide, vmabase);
+  }
+
+  // Maybe locate data for interpreting the regular symbol tables.
+  if (! match->sym && objimg)
+  {
+    const ElfW(Ehdr) *ehdr = (const ElfW(Ehdr) *) objimg;
+    const ElfW(Shdr) *shdr = (const ElfW(Shdr) *) (objimg + ehdr->e_shoff);
+    const ElfW(Sym) *syms = 0;
+    const ElfW(Word) *xsndx = 0;
+    uint32_t nsyms = 0;
+    const char *strs = 0;
+
+    for (unsigned i = 0, e = ehdr->e_shnum; i != e && ! match->sym; ++i)
+    {
+      if (shdr[i].sh_type == SHT_SYMTAB)
+      {
+        strs = objimg + shdr[shdr[i].sh_link].sh_offset;
+        syms = (const ElfW(Sym) *) (objimg + shdr[i].sh_offset);
+        nsyms = shdr[i].sh_size / shdr[i].sh_entsize;
+
+        // Look for SHT_SYMTAB_SHNDX; should not really be present in DSOs.
+        for (unsigned j = i+1; j != e && ! xsndx; ++j)
+          if (shdr[j].sh_type == SHT_SYMTAB_SHNDX && shdr[j].sh_link == i)
+            xsndx = (const ElfW(Word) *) (objimg + shdr[j].sh_offset);
+        for (unsigned j = 0; j != i && ! xsndx; ++j)
+          if (shdr[j].sh_type == SHT_SYMTAB_SHNDX && shdr[j].sh_link == i)
+            xsndx = (const ElfW(Word) *) (objimg + shdr[j].sh_offset);
+
+        match->sym = findSymInTable(match->fn, objname, "symtab",
+                                    shdr, syms, strs, xsndx,
+                                    nsyms, vmaslide, vmabase);
+      }
+    }
+  }
+
+  // If we mapped in the object, release it now.
+  if (objimg)
+    munmap((void *) objimg, objsize);
+
+  // Free object name if we pulled it from scanning /proc/self/maps.
+  if (freeobjname)
+    free(freeobjname);
+
+  // Release true path if we have one.
+  if (objrname)
+    free(objrname);
+
+  return 0;
+}
+
+/** Find a symbol by name, if it couldn't be found dynamically.
+
+    This loads the ELF object and parses the symbol tables to locate
+    the address for the requested symbol. */
+static IgHook::Status
+findsym(const char *fn, const char *v, const char *lib,
+        void *&sym, IgHook::Status errcode)
+{
+  // We don't do versions (at least not yet).
+  if (v)
+    return errcode;
+
+  IgHookFindSym info = { 0, fn, lib, 0 };
+  struct stat st;
+
+  // If a specific library was requested, speed things up by statting it.
+  if (lib)
+  {
+    if (stat(lib, &st) != 0)
+    {
+      igprof_debug("findsym: no such library '%s' for '%s' (errno %d)\n",
+                   lib, fn, errno);
+      return IgHook::ErrSymbolNotFoundInLibrary;
+    }
+    else
+      info.st = &st;
+  }
+
+  // Now look for the symbol. We don't really care about symbol lookup
+  // order here since we can only come here if dynamic lookup already failed.
+  dl_iterate_phdr(&maybeFindSymbolInBinary, &info);
+
+  // If we found the symbol, return it with success, otherwise return failure.
+  if (info.sym)
+  {
+    sym = info.sym;
+    return IgHook::Success;
+  }
+  else
+  {
+    igprof_debug("findsym('%s', '%s', %d): symbol not found\n",
+                 fn, lib, (int) errcode);
+    return errcode;
+  }
+}
+
 /** Find @a fn and assign it's address into @a sym.  If @a lib is
     non-null, the library is dynamically loaded and looked up in that
     library.  Otherwise looks for the symbol in already loaded
@@ -267,7 +704,7 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
     if (! sym)
     {
       igprof_debug("dlsym('%s', '%s'): %s\n", lib, fn, dlerror());
-      return IgHook::ErrSymbolNotFoundInLibrary;
+      return findsym(fn, v, lib, sym, IgHook::ErrSymbolNotFoundInLibrary);
     }
   }
   else
@@ -276,7 +713,7 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
     sym = v ? dlvsym(program, fn, v) : dlsym(program, fn);
     dlclose(program);
     if (! sym) sym = v ? dlvsym(program, fn, v) : dlsym(RTLD_NEXT, fn);
-    
+
 #if __arm__
     if (sym)
     { 
@@ -300,15 +737,17 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
       }
     }
 #endif
+
     if (! sym)
     {
       igprof_debug("dlsym(self, '%s'): %s\n", fn, dlerror());
-      return IgHook::ErrSymbolNotFoundInSelf;
+      return findsym(fn, v, 0, sym, IgHook::ErrSymbolNotFoundInSelf);
     }
   }
 
   return IgHook::Success;
 }
+
 /*
  * Function to help evaluate instruction lenght. Parse function calls this when
  * modRM byte is part of instruction. Returns lenght of instruction.
