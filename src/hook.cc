@@ -311,8 +311,8 @@ findAndMapBinary(dl_phdr_info *info,
       // Get mapping parameters.
       int c;
       char prot[5];
-      unsigned long begin, end, offset;
-      long devmajor, devminor, inode;
+      long inode;
+      unsigned long begin, end, offset, devmajor, devminor;
       if (fscanf(maps, "%lx-%lx %4s %lx %lx:%lx %ld",
                  &begin, &end, prot, &offset,
                  &devmajor, &devminor, &inode)
