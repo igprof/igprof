@@ -7,14 +7,21 @@
 # include <pthread.h>
 
 class IgProfTrace;
+#if __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wattributes"
+#endif
 typedef void IgProfAbortFunc (void) __attribute__((noreturn));
+#if __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 extern bool             s_igprof_activated;
 extern IgProfAtomic     s_igprof_enabled;
 extern pthread_key_t    s_igprof_bufkey;
 extern pthread_key_t    s_igprof_flagkey;
 extern int              s_igprof_stderrOpen;
-extern IgProfAbortFunc  *igprof_abort;
+extern void             (*igprof_abort) (void) __attribute__((noreturn));
 extern char *           (*igprof_getenv) (const char *);
 extern int              (*igprof_unsetenv) (const char *);
 
