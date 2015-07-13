@@ -74,7 +74,7 @@ while [ "$#" != 0 ]; do
 
     -* )
       echo "$0: unrecognised option $1"
-      usage 
+      usage
       exit 1 ;;
 
     * )

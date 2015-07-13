@@ -1,7 +1,7 @@
 #ifndef ATOMIC_H
 # define ATOMIC_H
 
-# if __i386__ || __x86_64__ || __ppc__ || __arm__ || __aarch64__ 
+# if __i386__ || __x86_64__ || __ppc__ || __arm__ || __aarch64__
 # else
 #  error Sorry this platform is not supported.
 # endif

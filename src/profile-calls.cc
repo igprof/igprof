@@ -34,19 +34,19 @@ static void *doothermain(void *a, void *b, void *c, void *d, void *e, void *f);
 static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
        doother_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
        &doothermain, 0, 0, 0 } };
- 
+
 static void *dootherlib(void *a, void *b, void *c, void *d, void *e, void *f);
 static IgHook::TypedData<void*(void *a, void *b, void *c, void *d, void *e, void *f)>
     doother_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
       &dootherlib, 0, 0, 0 } };
 
 static double dodoublemain(void *a, void *b, void *c, void *d, void *e, void *f);
-static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)>
     dodouble_hook_main = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, 0,
       &dodoublemain, 0, 0, 0 } };
 
-static double dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f); 
-static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)> 
+static double dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f);
+static IgHook::TypedData<double(void *a, void *b, void *c, void *d, void *e, void *f)>
     dodouble_hook_lib = { { 0, igprof_getenv("IGPROF_FP_FUNC"), 0, igprof_getenv("IGPROF_FP_LIB"),
       &dodoublelib, 0, 0, 0 } };
 
@@ -164,7 +164,7 @@ initialize(void)
   else if (trace_other)
     IgHook::hook(doother_hook_main.raw);
   else
-    IgHook::hook(dodouble_hook_main.raw); 
+    IgHook::hook(dodouble_hook_main.raw);
 
 #if __linux
   if (trace_malloc)

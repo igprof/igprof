@@ -1,32 +1,32 @@
 #!/usr/bin/env python
 #
 # Web GUI for igprof-analyse sqlite databases.
-# 
+#
 # The GUI has to modes, either standalone or as a CGI script.
 #
 # Standalone mode
 # ===============
 #
 # Simply start with script passing the sqlite database as commandline input
-# pointing then the browser to the url reported. Use --help to see available 
+# pointing then the browser to the url reported. Use --help to see available
 # options.
 #
 # CGI mode
 # ========
 #
-# Copy the script in your web area, making sure that your web server is 
+# Copy the script in your web area, making sure that your web server is
 # configured to execute cgi scripts in that directory. For personal CERN web
-# sites, please have a look at 
-# 
+# sites, please have a look at
+#
 # http://webservices.web.cern.ch/webservices/Help/?kbid=210100&mode=print
 #
-# Create a "data" directory in the same directory where your script is (or 
+# Create a "data" directory in the same directory where your script is (or
 # symlink a directory which is readable by the web server), make sure "data"
 # cannot contain any cgi script (again have a look at the url above if you are
 # using CERN infrastructure).
 #
-# Only databases matching the following expressions: 
-# 
+# Only databases matching the following expressions:
+#
 # data/*.sql3
 # data/*/*/*.sql3
 #
@@ -94,7 +94,7 @@ def doQuery(query, database):
 
 # Helper to get the high level summary information for the profile.
 def getSummaryInfo(database):
-  summary_query="""SELECT counter, total_count, total_freq, tick_period 
+  summary_query="""SELECT counter, total_count, total_freq, tick_period
                    FROM summary;"""
   error, output = doQuery(summary_query, database)
   if error or not output or output.count("\n") > 1:
@@ -137,7 +137,7 @@ tbody.parents {
 }
 
 tbody.children {
-  background-color: #d8f3c9;  
+  background-color: #d8f3c9;
 }
 
 tbody.mainrow {
@@ -153,19 +153,19 @@ a {
 
 def summaryColumnNames(cumulative):
   yield cumulative and ("cumulative_count", "total_calls") or ("self_count", "self_calls")
-# This method is responsible for writing to "out" the summary tables for the 
+# This method is responsible for writing to "out" the summary tables for the
 # profile to be found in database.
-# In CGI mode it determines the actual path to use from the PATH_INFO / 
-# SCRIPT_NAME variables which should protect the html against various 
+# In CGI mode it determines the actual path to use from the PATH_INFO /
+# SCRIPT_NAME variables which should protect the html against various
 # combinations of trailing slashes.
-# 
+#
 # @a database
-# 
+#
 # path to the database to actually use for the query.
 #
 # @a out
 #
-# the output stream to which the output is written (so that we can use this 
+# the output stream to which the output is written (so that we can use this
 # method unchanged in the standalone server mode).
 #
 # @a cumulative
@@ -174,11 +174,11 @@ def summaryColumnNames(cumulative):
 # false otherwise.
 def summary(database, out, cumulative):
   count, freq = cumulative and ("cumulative_count", "total_calls") or ("self_count", "self_calls")
-  self_query="""SELECT mr.id, sym.name, mr.%s, mr.%s 
+  self_query="""SELECT mr.id, sym.name, mr.%s, mr.%s
                 FROM mainrows mr
                 INNER JOIN symbols sym ON sym.id in (mr.symbol_id)
                 ORDER BY mr.%s DESC
-                LIMIT 1000;""" % (count, freq, count) 
+                LIMIT 1000;""" % (count, freq, count)
   counter, total_count, total_freq, tick_period = getSummaryInfo(database)
 
   if "PATH_INFO" in os.environ and "SCRIPT_NAME" in os.environ:
@@ -214,7 +214,7 @@ def summary(database, out, cumulative):
     summaryType = "Self"
     out.write("""<h2>Sorted by self cost</h2><br/>
                  <a href='%s/cumulative'>Sort by cumulative cost</a><br/>""" % absPath)
-  
+
   out.write("""<table><tr>
                <th>Rank</th>
                <th>Total %% </th>
@@ -224,7 +224,7 @@ def summary(database, out, cumulative):
     out.write("""<th>Calls</th>""")
   out.write("""<th class='sn'>Symbol name</th>
                </tr>""")
-  
+
   error, output = doQuery(self_query, database)
   if error:
     die(output)
@@ -250,7 +250,7 @@ def summary(database, out, cumulative):
       out.write("""<td>%s</td>""" % calls)
     out.write("""<td class="s"><a href="%s">%s</a></td>
                  </tr>\n""" % (path, name))
-    
+
   out.write("</table></body></html>")
 
 def column(value, isInt):
@@ -258,7 +258,7 @@ def column(value, isInt):
     return "<td>%s</td>" % format("%d", int(value), True)
   return "<td>%s</td>" % format("%.2f", float(value), True)
 
-# Helper method which formats a number of numeric columns with thousands 
+# Helper method which formats a number of numeric columns with thousands
 # separator and so on.
 def prepareColumns(*args):
   return "".join([column(x, t) for (x, t, e) in args if e])
@@ -268,19 +268,19 @@ def prepareColumns(*args):
 # the method of rank "rank".
 #
 # @a database
-# 
+#
 # path to the database to actually use for the query.
 #
 # @a out
 #
-# the output stream to which the output is written (so that we can use this 
+# the output stream to which the output is written (so that we can use this
 # method unchanged in the standalone server mode).
 #
 # @the rank
-# 
+#
 # the rank of the method when sorted by cumulative counts.
 def flatProfile(database, out, rank):
-  parent_query="""SELECT p.self_id, sym.name, 
+  parent_query="""SELECT p.self_id, sym.name,
                          p.to_child_count, myself.cumulative_count,
                          p.to_child_calls, myself.total_calls,
                          p.to_child_paths, myself.total_paths,
@@ -293,8 +293,8 @@ def flatProfile(database, out, rank):
                   WHERE p.child_id = %s
                   ORDER BY p.to_child_count;
                   """ % rank
-  
-  main_query="""SELECT mr.id, sym.name, 
+
+  main_query="""SELECT mr.id, sym.name,
                        mr.self_count, mr.cumulative_count,
                        mr.kids,
                        mr.self_calls, mr.total_calls,
@@ -304,8 +304,8 @@ def flatProfile(database, out, rank):
                 INNER JOIN symbols sym ON sym.id IN (mr.symbol_id)
                 WHERE mr.id = %s;
                 """ % rank
-  
-  child_query="""SELECT c.self_id, sym.name, 
+
+  child_query="""SELECT c.self_id, sym.name,
                         c.from_parent_count, myself.cumulative_count,
                         c.from_parent_calls, myself.total_calls,
                         c.from_parent_paths, myself.total_paths,
@@ -318,7 +318,7 @@ def flatProfile(database, out, rank):
                  WHERE c.parent_id = %s
                  ORDER BY c.from_parent_count DESC;
                  """ % rank
-                 
+
   counter, total_count, total_freq, tick_period = getSummaryInfo(database)
   error, output = doQuery(parent_query, database)
   if error:
@@ -328,7 +328,7 @@ def flatProfile(database, out, rank):
     total_count = int(total_count) * float(tick_period)
   else:
     isPerfTicks = False
-  
+
   out.write("<html>")
   out.write(CSS)
   out.write("""<body><h1>Counter: %s</h1>
@@ -338,7 +338,7 @@ def flatProfile(database, out, rank):
                <colgroup class="counts" span="2">
                <colgroup class="freq" span="2">
                <colgroup class="paths" span="2">
-               <colgroup class="symbol">               
+               <colgroup class="symbol">
                <tr>
                <th rowspan="2">Rank</th>
                <th rowspan="2">% total</th>
@@ -359,7 +359,7 @@ def flatProfile(database, out, rank):
                </tr>
                """)
   out.write("<tbody class='parents'>")
-  
+
   tick_period = float(tick_period)
 
   for l in output.split("\n"):
@@ -373,42 +373,42 @@ def flatProfile(database, out, rank):
     if isPerfTicks:
       to_child_counts = int(to_child_counts) * tick_period
       cumulative_counts = int(cumulative_counts) * tick_period
-    
+
     percent = format("%.2f", float(percent), True)
     if percent == "-101.00":
       percent = "new"
     name = cgi.escape(name)
-    
+
     out.write("""<tr class="parentrow">
                  <td></td>
                  <td class="num">%s</td>
                  %s
                  <td class="s"><a href="./%s">%s</a></td>
-                 </tr>\n""" % (percent, 
+                 </tr>\n""" % (percent,
                                prepareColumns((to_child_counts, not isPerfTicks, True),
                                               (cumulative_counts, not isPerfTicks, True),
                                               (to_child_calls, True, not isPerfTicks),
                                               (total_calls, True, not isPerfTicks),
                                               (to_child_paths, True, True),
-                                              (total_paths, True, True)), 
+                                              (total_paths, True, True)),
                                rank, name))
 
   out.write("</tbody>")
-  
+
   error, output = doQuery(main_query, database)
   if error or not output or output.count("\n") > 1:
     die(output)
-  
+
   (rank, name, self_count, cumulative_count, kids, self_calls, total_calls,
    self_paths, total_paths, percent) = output.split("@@@")
-  
+
   name = cgi.escape(name)
-  
+
   if isPerfTicks:
     self_count = int(self_count) * tick_period
     kids = int(kids) * tick_period
     cumulative_count = int(cumulative_count) * tick_period
-  
+
   percent = format("%.2f", float(percent), True)
   if percent == "-101.00":
     percent = "new"
@@ -420,25 +420,25 @@ def flatProfile(database, out, rank):
                <td class="s">%s</td>
                </tr>""" % (rank, percent,
                            prepareColumns((self_count, not isPerfTicks, True),
-                                          (kids, not isPerfTicks, True), 
+                                          (kids, not isPerfTicks, True),
                                           (self_calls, True, not isPerfTicks),
                                           (total_calls, True, not isPerfTicks),
-                                          (self_paths, True, True), 
+                                          (self_paths, True, True),
                                           (total_paths, True, True)), name))
   out.write("</tbody>")
-  
+
   error, output = doQuery(child_query, database)
   if error:
     die(output)
-  
+
   out.write("<tbody class='children'>")
   for l in output.split("\n"):
     if not l:
       continue
     (rank, name,
-     from_parent_counts, cumulative_counts, 
+     from_parent_counts, cumulative_counts,
      from_parent_calls, total_calls,
-     from_parent_paths, total_paths, 
+     from_parent_paths, total_paths,
      cumulative_count, percent) = l.split("@@@")
     name = cgi.escape(name)
     if isPerfTicks:
@@ -450,8 +450,8 @@ def flatProfile(database, out, rank):
     out.write("""<tr class="childrow"><td></td><td>%s</td>
                  %s
                  <td class="s"><a href="./%s">%s</a></td>
-                 </tr>""" % (percent, 
-                             prepareColumns((from_parent_counts, not isPerfTicks, True), 
+                 </tr>""" % (percent,
+                             prepareColumns((from_parent_counts, not isPerfTicks, True),
                                             (cumulative_counts, not isPerfTicks, True),
                                             (from_parent_calls, True, not isPerfTicks),
                                             (total_calls, True, not isPerfTicks),
@@ -465,16 +465,16 @@ def flatProfile(database, out, rank):
 # This methods is the main logic for constructing the web page.
 # rank can either be the rank of a method
 #
-# * if rank is greater than 0 we show the flat profile for the associated 
-#   method. Only exception being rank "1", which is always is always 
-#   "<spontaneous>" and since that one is not saved in the database for the 
+# * if rank is greater than 0 we show the flat profile for the associated
+#   method. Only exception being rank "1", which is always is always
+#   "<spontaneous>" and since that one is not saved in the database for the
 #   moment we simply show the cumulative summary. rank "0" does not exists and
 #   again shows the cumulative summary.
 # * favicon.ico is simply now handled.
 # * If rank is "self", we show the "by self" summary
-# * If the rank is "cumulative" or it is not set, we show the "cumulative" 
+# * If the rank is "cumulative" or it is not set, we show the "cumulative"
 #   summary.
-# * All other values for rank trigger an error. 
+# * All other values for rank trigger an error.
 def buildReply(rank, database, out):
   if rank.isdigit():
     if int(rank) < 2:
@@ -529,11 +529,11 @@ class TimeOutHTTPServer(HTTPServer):
   def __init__(self, opts, handler, t):
     self.__timeout = t
     HTTPServer.__init__(self, opts, handler)
-  
+
   def server_bind(self):
     HTTPServer.server_bind(self)
     self.socket.settimeout(self.__timeout)
-  
+
   def get_request(self):
     try:
       sock, addr = self.socket.accept()
@@ -549,7 +549,7 @@ class TimeOutHTTPServer(HTTPServer):
 def runServer(database, opts):
   try:
     SimpleServerHandler.database = database
-    server = TimeOutHTTPServer(('', opts.port), 
+    server = TimeOutHTTPServer(('', opts.port),
                                SimpleServerHandler,
                                opts.timeout)
     from socket import gethostname
@@ -561,11 +561,11 @@ def runServer(database, opts):
     server.socket.close()
   exit(0)
 
-# Helper to generates the list of database files which are available for 
+# Helper to generates the list of database files which are available for
 # browsing. It yields values as expected by printGlobbedListing.
 def profileFilesGenerator(p):
   scriptPath = os.environ["SCRIPT_NAME"]
-  globbed = [glob.glob(join(p, pattern)) 
+  globbed = [glob.glob(join(p, pattern))
              for pattern in ["*.sql3", "*/*/*.sql3"]]
   for g in globbed:
     for f in [h for h in g if getsize(h)]:
@@ -600,25 +600,25 @@ def tableSorter(a, b):
   return 0
 
 
-# This is only available for the CGI version and provides an html list 
+# This is only available for the CGI version and provides an html list
 # containing all the files that can be browsed.
 def printGlobbedListing(path):
-  counterId = {"PERF_TICKS": 3, 
+  counterId = {"PERF_TICKS": 3,
                "MEM_TOTAL": 2,
                "MEM_MAX": 1,
                "MEM_LIVE": 0}
 
   standaloneFiles = []
   managedFiles = []
-  
+
   IBMatcher = re.compile("(.*)_(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9])")
-  
+
   for ref, p, f in profileFilesGenerator(path):
     fileInfo = dict()
     if not "/" in f:
       standaloneFiles += (ref, p, f)
       continue
-    
+
     # Skip files that do not match the agreed structure where each field
     # is separated by ___
     try:
@@ -643,7 +643,7 @@ def printGlobbedListing(path):
     except ValueError, e:
       print "Warning: Failed to split DB name \"%s\"<p>" % (DB)
       continue
-    
+
     if "_merged" in fileInfo["events"]:
       fileInfo["events"] = fileInfo["events"].split("_merged")[0]
       fileInfo["reportType"] = "(Merged By Library)"
@@ -657,7 +657,7 @@ def printGlobbedListing(path):
       fileInfo["reportType"] = ""
 
     managedFiles.append(fileInfo)
-  
+
   managedFiles.sort(tableSorter)
   if not managedFiles:
     print "<h1>Unable to find any acceptable sqlite files</h1>"
@@ -688,11 +688,11 @@ def printGlobbedListing(path):
              <th>PERF_TICKS</th>
              </tr>
           """ % (display, title)
-          
+
   def stepHeader(s, pileup, gtag):
     string = "%s<br/>(%s, %s)" % (s.replace(",", ", "), pileup, gtag)
     print "<tr><td style='border:0px;white-space:nowrap;'>%s</td><td>" % string
-  
+
   print """<html>
   <meta name="keywords" content="CMS, CMSSW, profiling, igprof, software performance, high energy physics" />
   <style>
@@ -736,7 +736,7 @@ border-style: dashed;
     if c["step"] != i["step"]:
       previousCounter = 0
       print """</td></tr>"""
-    
+
     if c["release"] != i["release"] or c["arch"] != i["arch"] or c["dataset"] != i["dataset"] or c["date"] != i["date"]:
       print """</table>"""
     if c["date"] != i["date"]:
@@ -747,12 +747,12 @@ border-style: dashed;
       stepHeader(i["step"], i["pileup"], i["gtag"])
     counterDiff = counterId[i["counter"]] - previousCounter
     previousCounter = counterId[i["counter"]]
-    
+
     for x in xrange(0, counterDiff):
       print "</td><td>"
     print """<a href="%(href)s/">%(events)s %(reportType)s</a><br/>""" % i
     c = i
-  
+
   print """</tr></table>
            For more information about this pages, please ask Giulio Eulisse or Lassi Tuura (both at CERN).
            </body><html>"""
@@ -765,7 +765,7 @@ def possibleDBAndRanks(p):
   yield ("", p.rstrip("/") + ".sql3")
   yield (basename(p), dirname(p).rstrip("/") + ".sql3")
 
-# Main logic to generate CGI pages. 
+# Main logic to generate CGI pages.
 # We first make sure we can build a valid path to a database. We construct all
 # the possible options of paths, if any of those actually points to a valid
 # database, we build the page as requested, if not we simply print out a list
@@ -777,7 +777,7 @@ def cgiReply():
   if not "PATH_INFO" in os.environ or not "SCRIPT_FILENAME" in os.environ:
     printGlobbedListing(dataPath)
     exit(0)
-  
+
   relPath = os.environ["PATH_INFO"].replace(os.environ["SCRIPT_FILENAME"], "").lstrip("/")
   path = normpath(join(dataPath, relPath))
 
@@ -792,20 +792,20 @@ def cgiReply():
         exit(0)
       except IOError, e:
         pass
-  
+
   if not path.startswith(dataPath):
     printGlobbedListing(dataPath)
     exit(0)
-  
+
   for rank, database in possibleDBAndRanks(path):
     if exists(database):
       buildReply(rank, database, sys.stdout)
       exit(0)
-  
+
   printGlobbedListing(dataPath)
   exit(0)
 
-# The script can work in two modes, as a standalone server and as a CGI 
+# The script can work in two modes, as a standalone server and as a CGI
 # script. The standalone script expects an sql file to be passed as argument
 # while the CGI version will pick up all its arguments (including the
 # database) from the environment set by the web server.
@@ -823,24 +823,24 @@ if __name__ == "__main__":
     locale.setlocale(locale.LC_NUMERIC, "en_US.UTF-8")
 
   parser = OptionParser(usage="igprof-navigator [file [options]] ")
-  parser.add_option("--port", "-p", dest="port", default=8080, type="int") 
+  parser.add_option("--port", "-p", dest="port", default=8080, type="int")
   parser.add_option("--timeout", "-t", dest="timeout", default=60*15, type="int")
   opts, args = parser.parse_args()
-  
+
   if not args and "SCRIPT_NAME" in os.environ:
     cgiReply()
   elif not args:
     parser.error("You need to specify at least a db file.")
-    
+
 
   if opts.timeout > 60*60:
     print "Maximum timeout period is 1h."
     exit(1)
-  
+
   if opts.timeout < 60:
     print "Minimum timeout period is 1m."
     exit(1)
-  
+
   if opts.port < 1024 or opts.port > 65535:
     print "Please specify a valid user port (1024-65535)."
     exit(1)
