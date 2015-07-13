@@ -716,7 +716,7 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
 
 #if __arm__
     if (sym)
-    { 
+    {
       unsigned *insns = (unsigned *)sym;
       /* If the program is using libpthread. Fork and system functions got to be
          hooked in libc.so.6 instead
@@ -775,7 +775,7 @@ int evalModRM(unsigned char byte, modRMByte &modRM)
 /** Parse function prologue at @a address.  Returns the number of
     instructions understood that need to be moved out to insert a jump
     to the trampoline, or -1 if a sufficiently long safe sequence was
-    not found.  
+    not found.
 
     Other prefixes but rex prefixes(4*), opcodes 0F group, 6C-6F, 8C, 8E, 98-9F,
     A0-A7, AA-AF, C2-C5, D6-DF, E0-E3,EC-EF,F0-FD are not supported.
@@ -841,7 +841,7 @@ parse(const char *func, void *address, unsigned *patches)
   int temp = 0;
   unsigned char *insns = (unsigned char *) address;
   modRMByte modRM;
-  
+
   if (insns[0] == 0xe9)
   {
     unsigned long target = (unsigned long) insns + *(int *)(insns+1) + 5;
@@ -863,7 +863,7 @@ parse(const char *func, void *address, unsigned *patches)
       insns += 1;
       n += 1;
     }
-    
+
     //one byte instructions
     if ((insns[0] >= 0x50 && insns[0] <= 0x5f)
        || (insns[0] >= 0x90 && insns[0] <= 0x97))
@@ -886,10 +886,10 @@ parse(const char *func, void *address, unsigned *patches)
     	     || insns[0] == 0x05 || insns[0] == 0x15
     	     || insns[0] == 0x25 || insns[0] == 0x35
     	     || insns[0] == 0x0d || insns[0] == 0x1d
-    	     || insns[0] == 0x2d || insns[0] == 0x3d 
+    	     || insns[0] == 0x2d || insns[0] == 0x3d
     	     || insns[0] == 0xa9 || insns[0] == 0x68)
       insns += 5, n += 5;
-    
+
     //jmp /call 4bytes offset
     else if (insns[0] == 0xe8 || insns[0] == 0xe9)
       *patches++ = (n+0x5)*0x100 + n+1, n += 5, insns += 5;
@@ -903,11 +903,11 @@ parse(const char *func, void *address, unsigned *patches)
              || (insns[0] >= 0x08 && insns[0] <= 0x0b)
              || (insns[0] >= 0x10 && insns[0] <= 0x13)
              || (insns[0] >= 0x18 && insns[0] <= 0x1b)
-             || (insns[0] >= 0x20 && insns[0] <= 0x23) 
+             || (insns[0] >= 0x20 && insns[0] <= 0x23)
              || (insns[0] >= 0x28 && insns[0] <= 0x2b)
              || (insns[0] >= 0x30 && insns[0] <= 0x33)
              || (insns[0] >= 0x38 && insns[0] <= 0x3b)
-             || (insns[0] >= 0x84 && insns[0] <= 0x8b) 
+             || (insns[0] >= 0x84 && insns[0] <= 0x8b)
              || insns[0] == 0x8d || insns[0] == 0x63
              || insns[0] == 0xc0 || insns[0] == 0xc1)
     {
@@ -933,7 +933,7 @@ parse(const char *func, void *address, unsigned *patches)
           return -1;
       }
       temp = evalModRM(insns[1], modRM);
-    
+
       if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
       {
         if (insns[0] == 0x81 || insns[0] == 0x69	//4byte immediate
@@ -985,7 +985,7 @@ parse(const char *func, void *address, unsigned *patches)
     else if (insns[0] == 0xf && insns[1] == 0x5)
       n += 2, insns += 2;
 
-    
+
     else if (insns[0] == 0xf3 && insns[1] == 0xc3)
       n +=5, insns += 5;
 
@@ -1019,7 +1019,7 @@ parse(const char *func, void *address, unsigned *patches)
     return -1;
   }
   while (n < 8)
-  { 
+  {
     if ((insns[0] & 0xffff0000) == 0xe59f0000       //ldr r*, [PC + #***]
      || (insns[0] & 0xffff0000) == 0xe51f0000       //ldr r*, [PC - #***]
      || (insns[0] == 0xe79fc00c))                    //ldr ip, [PC, ip]
@@ -1078,7 +1078,7 @@ parse(const char *func, void *address, unsigned *patches)
   }
 #elif __aarch64__
   uint32_t *insns = (uint32_t *) address;
-  
+
   if (insns[0] == ENCODE_LDR(TEMP_REG, 8) // LDR X16, .+8
       && insns[1] == ENCODE_BR(TEMP_REG)) // BR X16
   {
@@ -1100,7 +1100,7 @@ parse(const char *func, void *address, unsigned *patches)
                    func, address);
     }
   }
-  
+
   while (n < TRAMPOLINE_JUMP)
   {
     // Each patch entry contains one's complement of the offset (in bytes)
@@ -1407,7 +1407,7 @@ prepare(void *address,
         {
           memcpy(insns, (void *)((unsigned)old - (*patches & 0x00000fff)), 4);
         }
-        else if (*patches == 0xe79fc00c) 
+        else if (*patches == 0xe79fc00c)
         {
           memcpy(insns, (void *)((unsigned)old + insns[-1]), 4);
         }
@@ -1421,7 +1421,7 @@ prepare(void *address,
   {
     uint32_t *patch_insns = (uint32_t *)address;
     uint8_t *old_prologue_start = (uint8_t *)old - prologue;
-        
+
     for( ; *patches; ++patches)
     {
       unsigned int offset = ~*patches;
@@ -1438,7 +1438,7 @@ prepare(void *address,
         int shift = op * 12;
         int dest_reg = *insns & 0x0000001f;
         // the relative address is in bits 23..5 and 30..29
-        int64_t rel_addr = SIGN_EXTEND(((*insns >> 3) & 0x001ffffc) 
+        int64_t rel_addr = SIGN_EXTEND(((*insns >> 3) & 0x001ffffc)
                                        | ((*insns >> 29) & 0x00000003), 21)
                            << shift;
         uint64_t base_addr = (uint64_t)old_pc & ~((1ull << shift) - 1);
@@ -1450,7 +1450,7 @@ prepare(void *address,
         *(uint64_t *)patch_insns = (uint64_t)abs_addr;
         patch_insns += 2;
       }
-      else if ((*insns & 0x3b000000) == 0x18000000 
+      else if ((*insns & 0x3b000000) == 0x18000000
                && (*insns & 0xc0000000) != 0xc0000000)
       {
         // LDR or LDRSW instruction
@@ -1469,7 +1469,7 @@ prepare(void *address,
         // patch the relative address to the patch area of the trampoline
         *insns &= 0xff80001f;
         *insns |= ((patch_insns - insns) << 5) & 0x00ffffe0;
-		
+
         // copy the literal to the patch area
         memcpy((void *)patch_insns, (void *)(old_pc + rel_addr),
                literal_len * 4);
@@ -1529,7 +1529,7 @@ prepare(void *address,
         // patch the relative address to the patch area of the trampoline
         *insns &= 0xfffc001f;
         *insns |= ((patch_insns - insns) << 5) & 0x0007ffe0;
-        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr), 
+        redirect((void *&)patch_insns, (void *)(old_pc + rel_addr),
                  IgHook::JumpToTrampoline);
       }
     }
@@ -1613,7 +1613,7 @@ IgHook::hook(const char *function,
   prepare(tramp, replacement, chain, sym, prologue, patches);
 
   // Attach trampoline
-  if ((s = protect(sym, true, prologue)) != Success) 
+  if ((s = protect(sym, true, prologue)) != Success)
   {
     release(tramp);
     return s;

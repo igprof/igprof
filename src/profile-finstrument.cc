@@ -22,16 +22,16 @@ int callCount = 0;
 //times spent in child functions
 uint64_t child[IgProfTrace::MAX_DEPTH] = {0};
 
-static void 
+static void
 initialize(void)
 {
   if (s_initialized) return;
   s_initialized = true;
-  
+
   const char* options = igprof_options();
   bool enable = false;
 
-  
+
   while (options && *options)
   {
     while (*options == ' ' || *options == ',')
@@ -39,7 +39,7 @@ initialize(void)
     if (! strncmp(options, "finst", 5))
     {
       options = options + 5;
-      enable = true; 
+      enable = true;
     }
     else
       options++;
@@ -80,18 +80,18 @@ extern "C" void __cyg_profile_func_exit(void *func UNUSED, void *caller UNUSED)
 }
 
 // save TSC value at before entering the real function
-static void 
+static void
 do_enter ()
 {
   uint64_t tstart;
   ++callCount;
   child[callCount-1] = 0;
   RDTSC(tstart);
-  igprof_times[callCount-1] = -tstart; 
+  igprof_times[callCount-1] = -tstart;
 }
 
 //stop timer and tick counter
-static void 
+static void
 do_exit ()
 {
     uint64_t tstop,texit;

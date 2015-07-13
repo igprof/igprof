@@ -1565,7 +1565,7 @@ protected:
 
         //First try to find matches to regular expression from symbol name. If
         //no matches, try to find matches from FILE name. If nothig changed
-        //continue to next 
+        //continue to next
         mutantString = node->symbol()->NAME;
         replace(regexp.re, regexp.with, mutantString, translatedName);
         if (translatedName.compare(mutantString) == 0)
@@ -1594,7 +1594,7 @@ protected:
     {
 #endif
     }
-  
+
   CollapsedSymbols m_symbols;
 private:
   std::vector<Regexp> m_regexps;
@@ -1609,8 +1609,8 @@ private:
     int options = 0;
     int subjectLength = subject.length();
     int rc = pcre_exec(re, NULL, subject.c_str(), subjectLength, 0 ,options,
-                       ovector, 30); 
-    
+                       ovector, 30);
+
     //no match or matching error, do nothing
     if (rc < 0)
     {
@@ -2934,7 +2934,7 @@ void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
   stack.reserve(10000);
 
   // variables for pcre_exec
-  std::string symbolname; 
+  std::string symbolname;
   int ovector[9];
   int rc = 0;
 
@@ -2968,13 +2968,13 @@ void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
         CollapsedSymbols::iterator csi = m_symbols.find(replace);
         if (csi != m_symbols.end())
           pre->setSymbol(csi->second);
-  
+
         SymbolInfo *newInfo = new SymbolInfo(replace.c_str(),
                                              pre->symbol()->FILE, 0);
         m_symbols.insert(CollapsedSymbols::value_type(replace.c_str(),
                                                       newInfo));
         pre->setSymbol(newInfo);
-      } 
+      }
 
       // Match found
       if (rc > 0)
@@ -2983,11 +2983,11 @@ void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
 
         // The node is child of all ancestors
         if (control == (limit + 1))
-        { 
+        {
           CollapsedSymbols::iterator csi = m_symbols.find(specs.with);
           if (csi != m_symbols.end())
             pre->setSymbol(csi->second);
-  
+
           SymbolInfo *newInfo = new SymbolInfo(specs.with.c_str(),
                                                pre->symbol()->FILE, 0);
           m_symbols.insert(CollapsedSymbols::value_type(specs.with.c_str(),
@@ -3016,7 +3016,7 @@ void walk_ancestors(NodeInfo *first, AncestorsSpec specs)
       }
     }
     // When coming back up the call tree this will be executed in nodes that
-    // were matching some ancestor. 
+    // were matching some ancestor.
     else
       --control;
   }
@@ -4706,7 +4706,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
         spec.re = search;
         spec.with = with;
     }
-#else //NO PCRE 
+#else //NO PCRE
     die("igprof: --merge-regexp / -mr) igprof built without pcre support.\n");
 #endif
     }
@@ -4730,7 +4730,7 @@ IgProfAnalyzerApplication::parseArgs(const ArgsList &args)
         found = ancestor.find_first_of(">", previous );
       }
 
-      // Get the replace name. 
+      // Get the replace name.
       size_t replace = ancestor.find_first_of('/');
       if (replace == std::string::npos)
         die("igprof: --merge-ancestors / -ma) Check the argument form\n");

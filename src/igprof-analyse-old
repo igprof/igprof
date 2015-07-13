@@ -280,7 +280,7 @@ sub readAllDumps
     my $prof = { FILES => [], SYMS => {}, NODES => [],
 		 COUNTS => {}, FREQS => {}, LEAKS => {},
 		 SYMCACHE => {} };
-    
+
     $$prof{FILES}[0] = { NAME => "<unknown>" };
     $$prof{SYMS}{0} = { INDEX => 0, NAME => "<spontaneous>",
 			FILE => $$prof{FILES}[0], FILEOFF => 0 };
@@ -1204,14 +1204,14 @@ sub analyse
 	sub mhname { map { my $n = $_; $n =~ s/&/&amp;/g; $n =~ s/</&lt;/g; $n =~ s/>/&gt;/g; $n =~ s/ /&nbsp;/g; $n } @_ }
 	sub mhctr { my ($v0, $v1) = @_; return (&mrcell($v0), &mlcell($v1 ? ("/&nbsp;", $v1) : "&nbsp;")) }
 
-        # Create the output directory if it doesn't exist 
+        # Create the output directory if it doesn't exist
         if (!-e $outputdir) {
           mkdir($outputdir);
         } elsif (!-d $outputdir) {
           die "Cannot create directory $outputdir, already exists but it is not a directory\n";
         }
 
-        open(IGFLAT1, "> $outputdir/flat_profile_cumulative.html"); 
+        open(IGFLAT1, "> $outputdir/flat_profile_cumulative.html");
 	print IGFLAT1 "<h1>Flat profile, cumulative $key &gt;= 1%</h1>\n";
         print IGFLAT1 "<table width='100%' border='0'>\n";
 	print IGFLAT1 "  <tr>\n";
@@ -1240,7 +1240,7 @@ sub analyse
 	print IGFLAT1 "</table>\n";
         close IGFLAT1;
 
-        open(IGFLAT2, "> $outputdir/flat_profile_self.html"); 
+        open(IGFLAT2, "> $outputdir/flat_profile_self.html");
 	print IGFLAT2 "<h1>Flat profile, self $key &gt;= 0.01%</h1>\n";
         print IGFLAT2 "<table width='100%' border='0'>\n";
 	print IGFLAT2 "  <tr>\n";
@@ -1274,7 +1274,7 @@ sub analyse
 	{
 	    my ($rank, $name, $lib, $liboff, $pct,
 	        $cum, $self, $kids, $selfall, $cumall) = @{$$entry{SYM}};
-            open(IGCALL, "> $outputdir/call_$rank.html"); 
+            open(IGCALL, "> $outputdir/call_$rank.html");
        	    print IGCALL "<h1>Call tree profile, cumulative $key</h1>\n";
             print IGCALL "<table width='100%' border='0'>\n";
 	    my $spancol = (5 + ($showcalls ? 2 : 0) + ($showpaths ? 2 : 0));
@@ -1344,7 +1344,7 @@ sub analyse
 	    print "    $prefix<value type=\"$type\" counter=\"$key\" ",
 		  "value=\"$value\" count=\"$count\"/>\n";
 	}
-	    
+
 	sub xmlrow {
 	    my ($prefix, $rank, $name, $lib, $val) = @_;
 	    print "  $prefix<entry rank=\"$rank\" symbol=\"$name\" module=\"$lib\">\n";
@@ -1467,7 +1467,7 @@ while (scalar @ARGV)
     elsif ($ARGV[0] eq '--html' || $ARGV[0] eq '-h')
     { $output = "html"; shift (@ARGV); }
     elsif ($ARGV[0] eq '--multihtml' || $ARGV[0] eq '-m')
-    { 
+    {
         $output = "multihtml"; $outputdir = $ARGV[1]; # Error check??
         shift (@ARGV); shift (@ARGV);
     }

@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 #
 # This script generates an igprof compatible
-# output file which contains information 
+# output file which contains information
 # about symbols and their size.
 #
 # Symbols and their size are obtained using the usual
-# 
+#
 #     nm -t d -S <library-name>
-# 
-# The symbols are splitted separating the 
+#
+# The symbols are splitted separating the
 # various components (i.e. namespace, class, template arguments,
 # eventual arguments) and each component
 # is child on the component on the left.
-# 
+#
 # For example if you have
 #
 #
@@ -26,8 +26,8 @@
 #
 # Count will only be added to the leaf.
 # This way igprof-analyse will be able to
-# merge counts coming from the same namespace 
-# and / or class. 
+# merge counts coming from the same namespace
+# and / or class.
 import re
 import sys
 from glob import glob
@@ -55,8 +55,8 @@ def splitSymbols(name, cost):
       break
     p, s, rest = match.groups()
     size = int(s)
-    if p: 
-      current += p 
+    if p:
+      current += p
       if name:
         c = 0
       else:
@@ -72,7 +72,7 @@ def splitSymbols(name, cost):
         c = cost
       yield current, count, c #,olds, p
     count += 1
-    
+
 testSymbol = "_ZZN125_GLOBAL__N_tmp_slc4_ia32_gcc345_src_DataFormats_RecoCandidate_src_DataFormatsRecoCandidate_classes_rflx.cpp_DFF67DD7_B72D0B3014operator_34995EPvRKSt6vectorIS0_SaIS0_EES0_E3ret"
 #print testSymbol
 #for x in splitSymbols(testSymbol, 100):
@@ -105,7 +105,7 @@ if __name__ == "__main__":
   currentStack = []
 
   filenames = glob(join(path, "*.so"))
-  print "P=(ID=1 N=(%s) T=1)" % path 
+  print "P=(ID=1 N=(%s) T=1)" % path
   if len (filenames) > 2048:
     print "Too many files!!! Please select a directory with less than 2048."
     sys.exit(1)
@@ -113,8 +113,8 @@ if __name__ == "__main__":
     sys.stderr.write("Processing %s\n" % f)
     for address, size, type, name in symbols(f):
       componentsList = splitSymbols(name, size)
-      # Since once symbol correspond to a branch in the tree 
-      # we need to walk back in the node stack only for the 
+      # Since once symbol correspond to a branch in the tree
+      # we need to walk back in the node stack only for the
       # first symbol.
       previousStack = currentStack
       currentStack = []
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         else:
           ci = components[component]
           functionString = "N=(%s)" % (component)
-        
+
         # Do no repeat the beginning of the stacktrace
         # if its the same as the previous one.
         currentStack.append(ci)
@@ -143,7 +143,7 @@ if __name__ == "__main__":
           continue
 
         stackString = "C%s" % (int(index)+1)
-        
+
         if cost and firstTime:
           firstTime = False
           counterString = "V0=(MEM_TOTAL):(1,%s,0)" % int(cost)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
           counterString = "V0:(1,%s,0)" % int(cost)
         else:
           counterString = ""
-        
+
         nodeIndex = fi + ci*2048
         if not nodeIndex in nodes:
           nodes[nodeIndex] = nodesCount

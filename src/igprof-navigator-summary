@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 #
 # Helper scripts to create a summary database from all
-# the igprof database found in the passed path. 
-# 
+# the igprof database found in the passed path.
+#
 from optparse import OptionParser
 from commands import getstatusoutput
 from sys import exit
@@ -78,10 +78,10 @@ def createDatabase(output):
               );
            """
   doQuery(schema, output)
-  
+
 # Helper to get the high level summary information for the profile data.
 def getSummaryInfo(database):
-  summary_query="""SELECT counter, total_count, total_freq, tick_period 
+  summary_query="""SELECT counter, total_count, total_freq, tick_period
                    FROM summary;"""
   error, output = doQuery(summary_query, database)
   if error or not output or output.count("\n") > 1:
@@ -97,7 +97,7 @@ def getSummaryInfo(database):
 # We skip databases which don't have the summary table.
 def populateDatabase(path, output):
   globbed = glob.glob(join(path, "*/*/*.sql3"))
-  insertStatement = """INSERT INTO reports (filename, architecture, rel, candle, sequence, pileup, conditions, process, counterType, events, cumCounts, cumCalls) 
+  insertStatement = """INSERT INTO reports (filename, architecture, rel, candle, sequence, pileup, conditions, process, counterType, events, cumCounts, cumCalls)
                                     VALUES ("%s",     "%s",         "%s", "%s", "%s"    , "%s"  , "%s"      , "%s"   , "%s"       , "%s" , %s, %s);\n"""
   print output
   for f in globbed:
@@ -105,7 +105,7 @@ def populateDatabase(path, output):
     profileInfo = getSummaryInfo(f)
     if not profileInfo:
       continue
-    cumCounts, cumCalls = profileInfo 
+    cumCounts, cumCalls = profileInfo
     dump, architecture, release, rest = rsplit(f, "/", 3)
     candle, sequence, pileup, conditions, process, counterType, events = rest.split("___")
     events = events.replace(".sql3", "")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                     help="write output database to FILE", metavar="FILE")
 
   opts, args = parser.parse_args()
-  
+
   if not args:
     parser.error("You need to specify at least a db file.")
     exit(1)
@@ -135,8 +135,8 @@ if __name__ == "__main__":
     exit(1)
   print dirname(normpath(opts.output))
   if not isdir(dbPath):
-    parser.error("Cannot create %s in %s. Path not found." % (basename(opts.output), dbPath)) 
- 
-  createDatabase(opts.output) 
-  populateDatabase(path, opts.output)  
+    parser.error("Cannot create %s in %s. Path not found." % (basename(opts.output), dbPath))
+
+  createDatabase(opts.output)
+  populateDatabase(path, opts.output)
 
