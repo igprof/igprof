@@ -7,12 +7,12 @@
 # include <pthread.h>
 
 class IgProfTrace;
-#if __GNUC__
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wattributes"
 #endif
 typedef void IgProfAbortFunc (void) __attribute__((noreturn));
-#if __GNUC__
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
 # pragma GCC diagnostic pop
 #endif
 
