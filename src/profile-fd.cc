@@ -251,4 +251,4 @@ doaccept(IgHook::SafeData<igprof_doaccept_t> &hook,
 }
 
 // -------------------------------------------------------------------
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);

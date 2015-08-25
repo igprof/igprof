@@ -375,4 +375,4 @@ dodelsize(IgHook::SafeData<igprof_dodelsize_t> &hook, void *ptr, size_t n)
 }
 
 // -------------------------------------------------------------------
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);

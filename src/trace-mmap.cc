@@ -477,4 +477,4 @@ dommap64(IgHook::SafeData<igprof_dommap64_t> &hook,
 }
 
 //////////////////////////////////////////////////////////////////////
-static bool autoboot = initialize();
+static bool autoboot __attribute__((used)) = initialize();

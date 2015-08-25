@@ -344,4 +344,4 @@ dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
 }
 
 // -------------------------------------------------------------------
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);

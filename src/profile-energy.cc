@@ -593,4 +593,5 @@ dofclose(IgHook::SafeData<igprof_dofclose_t> &hook, FILE * stream)
 }
 #endif
 // -------------------------------------------------------------------
-static bool autoboot = (initialize(), true);
+
+static bool autoboot __attribute__((used)) = (initialize(), true) ;
