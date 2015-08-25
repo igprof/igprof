@@ -358,4 +358,4 @@ dodoublelib(void *a, void *b, void *c, void *d, void *e, void *f)
 }
 
 // -------------------------------------------------------------------
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);

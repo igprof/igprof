@@ -87,4 +87,4 @@ domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t size)
 }
 
 //////////////////////////////////////////////////////////////////////
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);

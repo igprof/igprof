@@ -120,4 +120,4 @@ do_exit ()
     }
 }
 
-static bool autoboot = (initialize(), true);
+static bool autoboot __attribute__((used)) = (initialize(), true);
