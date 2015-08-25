@@ -7,4 +7,4 @@ before_install:
   - sudo apt-get install -y libunwind8-dev
   
 install: cmake -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-g -O3 -U_FORTIFY_SOURCE" . && sudo make install
-script: igprof -o ls.gz -mp ls && igprof-analyse -r MEM_TOTAL ls.gz
+script: LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH igprof -o ls.gz -mp ls && igprof-analyse -r MEM_TOTAL ls.gz
