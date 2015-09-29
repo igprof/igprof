@@ -8,6 +8,19 @@ related:
  - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 
+# Installing IgProf via yum (experimental)
+
+For user of Centos7 / CERN Centos 7 we now provide an **experimental**
+yum repository, courtesy of <http://bintray.com>. To use it:
+
+    curl -o /etc/yum.repos.d/igprof.repo https://bintray.com/igprof/slc7_x86-64-test/rpm
+    yum update
+    yum install igprof
+
+if you have any problem with it, please open an issue.
+
+# Building IgProf from sources
+
 Building igprof requires recent [libatomic_ops][] and [libunwind][], plus recent
 [autotools][] and [cmake][] 2.8.x or later for the build itself, but not running.
 The recipe below includes a temporary build of cmake, but if your system
