@@ -8,16 +8,24 @@ related:
  - { name: Project, link: "https://github.com/igprof/igprof/" }
 ---
 
-# Installing IgProf via yum (experimental)
+# Installing IgProf via yum /apt (experimental)
 
-For user of Centos7 / CERN Centos 7 we now provide an **experimental**
-yum repository, courtesy of <http://bintray.com>. To use it:
+For user of Centos7 / CERN Centos 7 / Ubuntu 14.04 we now provide
+**experimental** binary repositories, courtesy of <http://bintray.com>.
+
+For YUM (e.g. Centos7) based systems you can use:
 
     curl -o /etc/yum.repos.d/igprof.repo https://bintray.com/igprof/slc7_x86-64-test/rpm
     yum update
     yum install igprof
 
-if you have any problem with it, please open an issue.
+For APT (e.g. Ubuntu) based systems you can use:
+
+    echo "deb https://dl.bintray.com/igprof/ubuntu1404_x86-64-test trusty main" | sudo tee -a /etc/apt/sources.list
+    apt-get update
+    apt-get install igprof
+
+If you have any problem, please open an [issue](https://github.com/igprof/igprof/issues).
 
 # Building IgProf from sources
 
