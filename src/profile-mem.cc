@@ -8,12 +8,22 @@
 #include <pthread.h>
 #include <malloc.h>
 #include <unistd.h>
+#include <new>
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
 LIBHOOK(1, void *, donew, _tc,
         (size_t n), (n),
         "tc_new", 0, 0)
+LIBHOOK(2, void *, donew_nothrow, _tc,
+        (size_t n, const std::nothrow_t &nothrow), (n, nothrow),
+        "tc_new_nothrow", 0, 0)
+LIBHOOK(1, void *, donew, _tc_newarray,
+        (size_t n), (n),
+        "tc_newarray", 0, 0)
+LIBHOOK(2, void *, donew_nothrow, _tc_newarray,
+        (size_t n, const std::nothrow_t &nothrow), (n, nothrow),
+        "tc_newarray_nothrow", 0, 0)
 LIBHOOK(1, void *, domalloc, _tc,
         (size_t n), (n),
         "tc_malloc", 0, 0)
@@ -39,6 +49,21 @@ LIBHOOK(1, void *, dovalloc, _tc,
 LIBHOOK(1, void, dofree, _tc,
         (void *ptr), (ptr),
         "tc_free", 0, 0)
+LIBHOOK(1, void, dofree, _tc_cfree,
+        (void *ptr), (ptr),
+        "tc_cfree", 0, 0)
+LIBHOOK(1, void, dofree, _tc_delete,
+        (void *ptr), (ptr),
+        "tc_delete", 0, 0)
+LIBHOOK(2, void, dofree_nothrow, _tc_delete,
+        (void *ptr, const std::nothrow_t &nothrow), (ptr, nothrow),
+        "tc_delete_nothrow", 0, 0)
+LIBHOOK(1, void, dofree, _tc_deletearray,
+        (void *ptr), (ptr),
+        "tc_deletearray", 0, 0)
+LIBHOOK(2, void, dofree_nothrow, _tc_deletearray,
+        (void *ptr, const std::nothrow_t &nothrow), (ptr, nothrow),
+        "tc_deletearray_nothrow", 0, 0)
 LIBHOOK(2, void, dodelsize, _tc,
         (void *ptr, size_t n), (ptr, n),
         "tc_delete_sized", 0, 0)
@@ -213,6 +238,9 @@ initialize(void)
   IgHook::hook(dofree_hook_main.raw);
 
   IgHook::hook(donew_hook_tc.raw);
+  IgHook::hook(donew_nothrow_hook_tc.raw);
+  IgHook::hook(donew_hook_tc_newarray.raw);
+  IgHook::hook(donew_nothrow_hook_tc_newarray.raw);
   IgHook::hook(domalloc_hook_tc.raw);
   IgHook::hook(docalloc_hook_tc.raw);
   IgHook::hook(dorealloc_hook_tc.raw);
@@ -221,6 +249,11 @@ initialize(void)
   IgHook::hook(dopvalloc_hook_tc.raw);
   IgHook::hook(dovalloc_hook_tc.raw);
   IgHook::hook(dofree_hook_tc.raw);
+  IgHook::hook(dofree_hook_tc_cfree.raw);
+  IgHook::hook(dofree_hook_tc_delete.raw);
+  IgHook::hook(dofree_nothrow_hook_tc_delete.raw);
+  IgHook::hook(dofree_hook_tc_deletearray.raw);
+  IgHook::hook(dofree_nothrow_hook_tc_deletearray.raw);
   IgHook::hook(dodelsize_hook_tc.raw);
 
 #if __linux
@@ -245,6 +278,20 @@ donew(IgHook::SafeData<igprof_donew_t> &hook, size_t n)
 {
   bool enabled = igprof_disable();
   void *result = (*hook.chain)(n);
+
+  if (LIKELY(enabled && result))
+    add(result, n);
+
+  igprof_enable();
+  return result;
+}
+
+static void *
+donew_nothrow(IgHook::SafeData<igprof_donew_nothrow_t> &hook, size_t n,
+              const std::nothrow_t &t)
+{
+  bool enabled = igprof_disable();
+  void *result = (*hook.chain)(n, t);
 
   if (LIKELY(enabled && result))
     add(result, n);
@@ -362,6 +409,16 @@ dofree(IgHook::SafeData<igprof_dofree_t> &hook, void *ptr)
   igprof_disable();
   remove(ptr);
   (*hook.chain)(ptr);
+  igprof_enable();
+}
+
+static void
+dofree_nothrow(IgHook::SafeData<igprof_dofree_nothrow_t> &hook, void *ptr,
+               const std::nothrow_t &nothrow)
+{
+  igprof_disable();
+  remove(ptr);
+  (*hook.chain)(ptr, nothrow);
   igprof_enable();
 }
 
