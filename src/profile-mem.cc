@@ -330,12 +330,28 @@ static void *
 dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 {
   bool enabled = igprof_disable();
+
+  // Remove the allocation in profile data before calling realloc() to
+  // avoid a race where another thread acquires the same memory address
+  // and we end up thinking the allocation leaked. See below why this is
+  // not entirely correct.
+  if (LIKELY(enabled && ptr))
+    remove(ptr);
+
   void *result = (*hook.chain)(ptr, n);
 
-  if (LIKELY(result))
+  if (LIKELY(enabled))
   {
-    if (LIKELY(ptr)) remove(ptr);
-    if (LIKELY(enabled && result)) add(result, n);
+    if (LIKELY(result))
+      add(result, n);
+    else if (LIKELY(ptr))
+    {
+      // This is incorrect; the original size of the allocation is lost.
+      // This avoids us having to get feedback data from profile buffers
+      // on remove() above, and realloc() should fail rarely. So use the
+      // new size and live with the reporting inconsistency.
+      add(ptr, n);
+    }
   }
 
   igprof_enable();
