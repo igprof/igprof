@@ -62,12 +62,11 @@ IgProfBuffer::allocateRaw(size_t size)
 		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (data != MAP_FAILED)
     return data;
-  else
-  {
-    igprof_debug("failed to allocate memory for profile buffer: %s (%d)\n",
-                 strerror(errno), errno);
-    igprof_abort();
-  }
+
+  igprof_debug("failed to allocate memory for profile buffer: %s (%d)\n",
+                strerror(errno), errno);
+  igprof_abort();
+  __builtin_unreachable();
 }
 
 void
