@@ -7,10 +7,15 @@
 #include <cstring>
 #include <signal.h>
 #include <sys/time.h>
+#include <link.h>
+#include <dlfcn.h>
+#include <pthread.h>
 
 #ifdef __APPLE__
 typedef sig_t sighandler_t;
 #endif
+
+typedef int(*dl_iterate_callback)(struct dl_phdr_info *, size_t , void *);
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
@@ -24,6 +29,7 @@ LIBHOOK(3, int, dosigaction, _main,
         (int signum, const struct sigaction *act, struct sigaction *oact),
         (signum, act, oact),
         "sigaction", 0, 0)
+
 //Looks like the dynamic loader invokes `close` on ARM, which leads to a
 //segfault in the doclose / dofclose hooks. For the moment I just exclude the
 //hook, however given it is actually used to protect an output corruption in
@@ -39,6 +45,7 @@ static bool                     s_initialized   = false;
 static bool                     s_keep          = false;
 static int                      s_signal        = SIGPROF;
 static int                      s_itimer        = ITIMER_PROF;
+HIDDEN pthread_key_t            dl_iterate_key;
 
 /** Convert timeval to seconds. */
 static inline double tv2sec(const timeval &tv)
@@ -123,6 +130,8 @@ initialize(void)
   const char    *options = igprof_options();
   bool          enable = false;
   bool          enable_on_init = true;
+
+  pthread_key_create(&dl_iterate_key, free);
 
   while (options && *options)
   {
@@ -393,6 +402,57 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   igprof_enable();
   return ret;
 }
+
+namespace {
+
+    // RAII for 'inUse'; used by dodl_iterate_phdr
+    struct inUseRaii {
+        inUseRaii(bool &inUse_) : inUse(inUse_) { inUse = true; }
+        ~inUseRaii() { inUse = false; }
+        bool & inUse;
+    };
+
+    // Holder for original dl_iterate_phdr function
+    typedef int(*dl_iterate_fn)(dl_iterate_callback, void *);
+
+// Disable pedantic to prevent
+//     error: ISO C++ forbids casting between pointer-to-function and pointer-to-object
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    dl_iterate_fn dl_iterate_phdr_orig() {
+        static dl_iterate_fn orig = reinterpret_cast<dl_iterate_fn>(dlsym(RTLD_NEXT, "dl_iterate_phdr"));
+        return orig;
+    }
+#pragma GCC diagnostic pop
+
+}
+
+// Monkey-patched dl_iterate_phdr
+//
+// dl_iterate_phdr may be used legitimately by the target program
+// (in particular, by libc during exception handling), in which
+// case it locks a mutex. If our sample fires when that mutex
+// is locked, our own call to dl_iterate_phdr will result in a
+// deadlock. We therefore allow only one dl_iterate_phdr in flight
+// at a time. This may result in some lost samples, but it allows
+// the profiled program to complete.
+extern "C"
+int dl_iterate_phdr(dl_iterate_callback callback, void *data)
+{
+    bool *inUse = reinterpret_cast<bool*>(pthread_getspecific(dl_iterate_key));
+    if (!inUse) {
+        inUse = reinterpret_cast<bool*>(malloc(sizeof(bool)));
+        pthread_setspecific(dl_iterate_key, inUse);
+        *inUse = false;
+    }
+    if (*inUse) {
+        igprof_debug("Prevented potential deadlock in dl_iterate_phdr\n");
+        return 0;
+    }
+    inUseRaii raii(*inUse);
+    return dl_iterate_phdr_orig()(callback, data);
+}
+
 
 #ifndef __arm__
 // If the profiled program closes stderr stream the igprof_debug got to be
