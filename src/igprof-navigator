@@ -184,7 +184,8 @@ def summary(database, out, cumulative):
   if "PATH_INFO" in os.environ and "SCRIPT_NAME" in os.environ:
     absPath = join(os.environ["SCRIPT_NAME"],
                    os.environ["PATH_INFO"].lstrip("/")).rstrip("/")
-    absPath = absPath.replace("/cumulative", "").replace("/self", "").replace("/1", "")
+    absPath = absPath.replace("/cumulative", "").replace("/self", "")
+    absPath = re.sub(r"/1$", "", absPath)
   else:
     absPath = "."
 
