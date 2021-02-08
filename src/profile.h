@@ -21,7 +21,7 @@ extern IgProfAtomic     s_igprof_enabled;
 extern pthread_key_t    s_igprof_bufkey;
 extern pthread_key_t    s_igprof_flagkey;
 extern int              s_igprof_stderrOpen;
-extern void             (*igprof_abort) (void) __attribute__((noreturn));
+extern void             (*igprof_abort) (void) throw ();
 extern char *           (*igprof_getenv) (const char *);
 extern int              (*igprof_unsetenv) (const char *);
 

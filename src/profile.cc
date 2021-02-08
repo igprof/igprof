@@ -29,7 +29,7 @@
 #endif
 
 // Global variables initialised once here.
-HIDDEN void             (*igprof_abort)(void) __attribute__((noreturn)) = &abort;
+HIDDEN void             (*igprof_abort)(void) throw () = &abort;
 HIDDEN char *           (*igprof_getenv)(const char *) = &getenv;
 HIDDEN int              (*igprof_unsetenv)(const char *) = &unsetenv;
 HIDDEN bool             s_igprof_activated = false;
