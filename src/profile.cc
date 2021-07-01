@@ -155,8 +155,8 @@ disposeTraceBuffer(IgProfTrace *buf)
     igprof_debug("merging profile buffer %p to master buffer %p\n",
                  (void *) buf, (void *) s_masterbuf);
     s_masterbuf->mergeFrom(*buf);
-    allTraceBuffers().erase(buf);
-    delete buf;
+//    allTraceBuffers().erase(buf);
+//    delete buf;
   }
 }
 
@@ -836,10 +836,10 @@ threadWrapper(void *arg)
 		   (unsigned long) pthread_self(),
 		   (void *) start_routine, start_arg);
 
-    itimerval stopped = { { 0, 0 }, { 0, 0 } };
-    setitimer(ITIMER_PROF, &stopped, 0);
-    setitimer(ITIMER_VIRTUAL, &stopped, 0);
-    setitimer(ITIMER_REAL, &stopped, 0);
+//    itimerval stopped = { { 0, 0 }, { 0, 0 } };
+//    setitimer(ITIMER_PROF, &stopped, 0);
+//    setitimer(ITIMER_VIRTUAL, &stopped, 0);
+//    setitimer(ITIMER_REAL, &stopped, 0);
   }
   return ret;
 }

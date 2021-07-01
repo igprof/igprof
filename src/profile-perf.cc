@@ -107,6 +107,9 @@ enableSignalHandler(void)
 static void
 threadInit(void)
 {
+  // check if someone else has installed a signal handler
+  struct sigaction sa;
+  if (!(sa.sa_handler == SIG_IGN || sa.sa_handler == SIG_DFL)) return;
   // Enable profiling in this thread.
   enableSignalHandler();
   enableTimer();
