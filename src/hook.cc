@@ -988,6 +988,9 @@ parse(const char *func, void *address, unsigned *patches)
 
     else if (insns[0] == 0xf3 && insns[1] == 0xc3)
       n +=5, insns += 5;
+    //ENDBR64
+    else if (insns[0] == 0xf3 && insns[1] == 0x0f && insns[2] == 0x1e && insns[3] == 0xfa )
+      n +=4, insns += 4;
 
     else
     {
