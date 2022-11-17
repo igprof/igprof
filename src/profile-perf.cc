@@ -98,7 +98,7 @@ enableSignalHandler(void)
 
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
-  sa.sa_handler = (sighandler_t) &profileSignalHandler;
+  sa.sa_sigaction = &profileSignalHandler;
   sa.sa_flags = SA_RESTART | SA_SIGINFO;
   sigaction(s_signal, &sa, 0);
 }
@@ -252,13 +252,13 @@ dosigaction(IgHook::SafeData<igprof_dosigaction_t> &hook,
   struct sigaction sa;
   if (signum == s_signal
       && act
-      && act->sa_handler != (sighandler_t) &profileSignalHandler)
+      && act->sa_sigaction != &profileSignalHandler)
   {
     igprof_debug("sigaction(): prevented profiling signal"
                  " %d from being overridden in thread 0x%lx\n",
                  s_signal, (unsigned long) pthread_self());
     sigemptyset(&sa.sa_mask);
-    sa.sa_handler = (sighandler_t) &profileSignalHandler;
+    sa.sa_sigaction = &profileSignalHandler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
     act = &sa;
   }
