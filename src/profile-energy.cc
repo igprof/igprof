@@ -268,7 +268,7 @@ enableSignalHandler(void)
 
   struct sigaction sa;
   sigemptyset(&sa.sa_mask);
-  sa.sa_handler = (sighandler_t) &profileSignalHandler;
+  sa.sa_sigaction = &profileSignalHandler;
   sa.sa_flags = SA_RESTART | SA_SIGINFO;
   sigaction(s_signal, &sa, 0);
 }
@@ -390,7 +390,7 @@ dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
       && (how == SIG_BLOCK || how == SIG_SETMASK)
       && sigismember(newmask, s_signal)
       && sigaction(s_signal, 0, &cursig) == 0
-      && cursig.sa_handler
+      && cursig.sa_sigaction
       && getitimer(s_itimer, &curtimer) == 0
       && (curtimer.it_interval.tv_sec || curtimer.it_interval.tv_usec))
   {
@@ -398,7 +398,7 @@ dopthread_sigmask(IgHook::SafeData<igprof_dopthread_sigmask_t> &hook,
                  " %d from being blocked in thread 0x%lx"
                  " [handler 0x%lx, interval %.0f us]\n",
                  s_signal, (unsigned long) pthread_self(),
-                 (unsigned long) cursig.sa_handler,
+                 (unsigned long) cursig.sa_sigaction,
                  1e6 * curtimer.it_interval.tv_sec
                  + curtimer.it_interval.tv_usec);
     sigdelset(newmask, s_signal);
@@ -415,13 +415,13 @@ dosigaction(IgHook::SafeData<igprof_dosigaction_t> &hook,
   struct sigaction sa;
   if (signum == s_signal
       && act
-      && act->sa_handler != (sighandler_t) &profileSignalHandler)
+      && act->sa_sigaction != &profileSignalHandler)
   {
     igprof_debug("sigaction(): prevented profiling signal"
                  " %d from being overridden in thread 0x%lx\n",
                  s_signal, (unsigned long) pthread_self());
     sigemptyset(&sa.sa_mask);
-    sa.sa_handler = (sighandler_t) &profileSignalHandler;
+    sa.sa_sigaction = &profileSignalHandler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
     act = &sa;
   }
