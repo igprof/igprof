@@ -991,7 +991,9 @@ parse(const char *func, void *address, unsigned *patches)
     //ENDBR64
     else if (insns[0] == 0xf3 && insns[1] == 0x0f && insns[2] == 0x1e && insns[3] == 0xfa )
       n +=4, insns += 4;
-
+    //MOVQ with XMM registers.
+    else if (insns[0] == 0x66 && insns[1] == 0x48 && insns[2] == 0xf)
+      n +=2, insns +=2;
     else
     {
       igprof_debug("%s (%p) + 0x%x: unrecognised prologue (found 0x%x 0x%x 0x%x 0x%x)\n",
