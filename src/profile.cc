@@ -577,7 +577,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   igprof_debug("profiler options: %s\n", options);
 
   // Report override function use.
-  if (igprof_abort != &abort)
+  if (static_cast<void(*)()>(igprof_abort) != static_cast<void(*)()>(&abort))
     igprof_debug("abort() from system %p, app had %p\n",
                  __extension__ (void *) igprof_abort,
 		 __extension__ (void *) &abort);
