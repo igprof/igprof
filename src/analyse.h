@@ -221,7 +221,7 @@ thousands(double value, int leftPadding, int decimalPositions)
   assert(decimalPositions < 63);
   char buffer[64];
   double decimal = fabs(value-int64_t(value));
-  sprintf(buffer+1, "%.2f", decimal);
+  snprintf(buffer+1, 63, "%.2f", decimal);
   buffer[decimalPositions+3] = 0;
   return result + &buffer[2];
 }
@@ -231,7 +231,7 @@ std::string
 toString(int64_t value)
 {
   char buffer[1024];
-  sprintf(buffer,"%" PRIi64, value);
+  snprintf(buffer, 1024, "%" PRIi64, value);
   return buffer;
 }
 
@@ -262,7 +262,7 @@ public:
     {
       printf("%*s", m_size, n.c_str());
       char denBuffer[256];
-      sprintf(denBuffer, " / %%-%ds", m_size);
+      snprintf(denBuffer, 256, " / %%-%ds", m_size);
       printf(denBuffer, d.c_str());
     }
 

@@ -103,7 +103,7 @@ dothrow(IgHook::SafeData<igprof_dothrow_t> &hook,
 	s_demanglehere = demangled;
     }
 
-    write(2, buf, sprintf(buf,
+    write(2, buf, snprintf(buf, 2048,
 			  "*** THROW by %.500s [thread %lu pid %ld]:\n"
 			  " Exception of type %.500s (address %p)\n",
 			  IgTrace::program(),
@@ -129,7 +129,7 @@ dothrow(IgHook::SafeData<igprof_dothrow_t> &hook,
       if (demangled && demangled != s_demanglehere)
 	s_demanglehere = demangled;
     }
-    write(2, buf, sprintf(buf, " Destructor %.500s (%p)\n Stack:\n",
+    write(2, buf, snprintf(buf, 2048, " Destructor %.500s (%p)\n Stack:\n",
 			  (sym ? sym : "unknown function"),
 			  __extension__ (void *) dest));
 
@@ -143,7 +143,7 @@ dothrow(IgHook::SafeData<igprof_dothrow_t> &hook,
       char hexsym[32];
       if (! sym || ! *sym)
       {
-	sprintf(hexsym, "@?%p", symaddr);
+	snprintf(hexsym, 32, "@?%p", symaddr);
 	sym = hexsym;
       }
       else if (s_demangle)
@@ -158,7 +158,7 @@ dothrow(IgHook::SafeData<igprof_dothrow_t> &hook,
       if (! lib)
 	lib = "<unknown library>";
 
-      write(2, buf, sprintf(buf,
+      write(2, buf, snprintf(buf, 2048,
 			    "  %3d: %-10p %.500s %s %ld [%.500s %s %ld]\n",
 			    i-1, stack[i], sym, (symoff < 0 ? "-" : "+"),
 			    labs(symoff), lib, (liboff < 0 ? "-" : "+"),
