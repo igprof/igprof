@@ -80,8 +80,8 @@ LIBHOOK(2, int, doclock_getres, _main,
         "clock_getres", 0, "libc.so.6")
 
 LIBHOOK(1, int, dosigreturn, _main,
-        (unsigned long __unused),
-        (__unused),
+        (unsigned long __dummy),
+        (__dummy),
         "sigreturn", 0, "libc.so.6")
 #endif /* defined(__aarch64__) */
 
@@ -689,10 +689,10 @@ doclock_getres(IgHook::SafeData<igprof_doclock_getres_t> &hook,
 
 static int
 dosigreturn(IgHook::SafeData<igprof_dosigreturn_t> &hook,
-               unsigned long __unused)
+               unsigned long __dummy)
 {
   igprof_disable();
-  int ret = hook.chain(__unused);
+  int ret = hook.chain(__dummy);
   igprof_enable();
 
   return ret;
