@@ -6,7 +6,11 @@
 #include <cstring>
 #include <cstdio>
 #include <pthread.h>
+#if __APPLE__
+#include <malloc/malloc.h>
+#else
 #include <malloc.h>
+#endif
 #include <unistd.h>
 #include <new>
 
@@ -124,7 +128,13 @@ add(void *ptr, size_t size)
 
   if (UNLIKELY(s_overhead != OVERHEAD_NONE))
   {
+#ifdef __linux__
     size_t actual = malloc_usable_size(ptr);
+#elif defined(__APPLE__)
+    size_t actual = malloc_size(ptr);
+#else
+    size_t actual = size;
+#endif
     if (s_overhead == OVERHEAD_DELTA)
     {
       if ((size = actual - size) == 0)
