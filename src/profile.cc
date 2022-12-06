@@ -199,7 +199,7 @@ dumpOneProfile(IgProfDumpInfo &info, IgProfTrace::Stack *frame)
 
       if (UNLIKELY(! symname || ! *symname))
       {
-        symlen = sprintf(symgen, "@?%p", sym->address);
+        symlen = snprintf(symgen, 32, "@?%p", sym->address);
         symname = symgen;
 	ASSERT(symlen <= sizeof(symgen));
       }
@@ -328,7 +328,7 @@ dumpAllProfiles(void *arg)
 
     timeval tv;
     gettimeofday(&tv, 0);
-    sprintf(outname, "|gzip -c>igprof.%.100s.%ld.%f.gz",
+    snprintf(outname, MAX_FNAME, "|gzip -c>igprof.%.100s.%ld.%f.gz",
             progname, (long) getpid(), tv.tv_sec + 1e-6*tv.tv_usec);
     tofile = outname;
   }
@@ -343,7 +343,7 @@ dumpAllProfiles(void *arg)
   else
   {
     char clockres[32];
-    size_t clockreslen = sprintf(clockres, "%f", s_clockres);
+    size_t clockreslen = snprintf(clockres, 32, "%f", s_clockres);
     size_t prognamelen = strlen(program_invocation_name);
     info->io.attach(fileno(info->output));
     info->io.put("P=(HEX ID=").put(getpid())

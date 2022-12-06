@@ -342,7 +342,7 @@ munmapreport(void *addr, size_t len)
       char hexsym[32];
       if (! sym || ! *sym)
       {
-        sprintf(hexsym, "@?%p", symaddr);
+        snprintf(hexsym, 32, "@?%p", symaddr);
         sym = hexsym;
       }
       else if (s_demangle && sym[0] == '_' && sym[1] == 'Z')
@@ -402,7 +402,7 @@ mmapreport(const char *sz, void *addr, size_t len, int prot, int flags, int fd, 
       char hexsym[32];
       if (! sym || ! *sym)
       {
-        sprintf(hexsym, "@?%p", symaddr);
+        snprintf(hexsym, 32, "@?%p", symaddr);
         sym = hexsym;
       }
       else if (s_demangle && sym[0] == '_' && sym[1] == 'Z')

@@ -1209,12 +1209,12 @@ symlookup(FileInfo *file, int fileoff, std::string& symname, bool useGdb)
     char buffer[1024];
     if (file->NAME == "<dynamically generated>")
     {
-      sprintf(buffer, "@?0x%x{<dynamically-generated>}", fileoff);
+      snprintf(buffer, 1024, "@?0x%x{<dynamically-generated>}", fileoff);
       result = buffer;
     }
     else
     {
-      sprintf(buffer, "+%d}",fileoff);
+      snprintf(buffer, 1024, "+%d}",fileoff);
       // Finds the filename by looking up for the last / in the path
       // and picking up only the remaining.
       // Notice that this works also in the case / is not found
@@ -4072,7 +4072,7 @@ IgProfAnalyzerApplication::generateFlatReport(ProfileInfo & /* prof */,
       }
 
       char rankBuffer[256];
-      sprintf(rankBuffer, "[%d]", mainRow.rank());
+      snprintf(rankBuffer, 256, "[%d]", mainRow.rank());
       printf("%-8s", rankBuffer);
 
       if (m_showLocalityMetrics || m_showPageRanges)

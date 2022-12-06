@@ -75,7 +75,7 @@ domalloc(IgHook::SafeData<igprof_domalloc_t> &hook, size_t size)
     if (IgTrace::filter(0, stack, depth))
     {
       char buf[1024];
-      write(2, buf, sprintf(buf,
+      write(2, buf, snprintf(buf, 1024,
 			    "*** MALLOC %ld bytes => %p, by %.500s [thread %lu pid %ld]\n",
 			    (unsigned long) size, result, IgTrace::program(),
 			    (unsigned long) pthread_self(), (long) getpid()));
