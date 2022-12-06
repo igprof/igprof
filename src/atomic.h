@@ -46,9 +46,9 @@ IgProfAtomicInc (volatile IgProfAtomic *val)
   return result;
 # elif __aarch64__
   IgProfAtomic result, modified = 0;
-  __asm__ __volatile__ ("1: ldaxr %0,[%1]     \n"
-                        "   add   %0,%0,#1    \n"
-                        "   stlxr %w2,%0,[%1] \n"
+  __asm__ __volatile__ ("1: ldaxr %w0,[%1]     \n"
+                        "   add   %w0,%w0,#1  \n"
+                        "   stlxr %w2,%w0,[%1] \n"
                         "   cbnz  %w2,1b      \n"
                       : "=&r" (result)
                       : "r" (val), "r" (modified)
@@ -95,9 +95,9 @@ IgProfAtomicDec (volatile IgProfAtomic *val)
   return result;
 # elif __aarch64__
   IgProfAtomic result, modified = 0;
-  __asm__ __volatile__ ("1: ldaxr %0,[%1]     \n"
-                        "   add   %0,%0,#-1   \n"
-                        "   stlxr %w2,%0,[%1] \n"
+  __asm__ __volatile__ ("1: ldaxr %w0,[%1]     \n"
+                        "   add   %w0,%w0,#-1   \n"
+                        "   stlxr %w2,%w0,[%1] \n"
                         "   cbnz  %w2,1b      \n"
                       : "=&r" (result)
                       : "r" (val), "r" (modified)
