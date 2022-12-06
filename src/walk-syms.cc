@@ -171,7 +171,7 @@ IgHookTrace::stacktrace(void **addresses, int nmax)
   }
 
   return depth;
-#elif __linux && __x86_64__ || __arm__ || __aarch64__
+#elif __linux && (__x86_64__ || __arm__ || __aarch64__)
   return unw_backtrace(addresses, nmax);
 #if 0 // Debug code for tracking unwind failures.
   if (addresses[depth-1] != (void *) 0x40cce9)
