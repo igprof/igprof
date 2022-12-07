@@ -6,6 +6,7 @@
 #  error Sorry this platform is not supported.
 # endif
 
+  
 typedef int IgProfAtomic; // correct for all supported platforms for now
 
 HIDDEN
