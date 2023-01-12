@@ -80,7 +80,7 @@ ENDIF()
 SET(CMAKE_C_FLAGS "${CMAKE_ANSI_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_REQUIRED_FLAGS ${CMAKE_ANSI_FLAGS})
 IF(CMAKE_COMPILER_IS_GNUCC)
-  ADD_DEFINITIONS(-ansi -pedantic -W -Wall -Wno-long-long -Werror -Wno-unused-result)
+  ADD_DEFINITIONS(-ansi -W -Wall -Wno-long-long -Werror -Wno-unused-result)
 ENDIF()
 
 IF(UNIX)
