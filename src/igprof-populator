@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python3
 # Aggregates multiple igprof-anaylise sqlite dumps into one single
 # key value storage. The advantage of this approach is that it enables the
 # client GUI to quickly do correlations between different dumps and it stores
