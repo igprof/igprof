@@ -659,7 +659,7 @@ def printGlobbedListing(path):
 
     managedFiles.append(fileInfo)
 
-  managedFiles.sort(tableSorter)
+  managedFiles.sort(key=tableSorter)
   if not managedFiles:
     print("<h1>Unable to find any acceptable sqlite files</h1>")
     print("File names are expected to be of the form <em>%s.sql3</em>" % \
