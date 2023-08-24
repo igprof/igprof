@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Web GUI for igprof-analyse sqlite databases.
 #
@@ -33,10 +33,10 @@
 # Will be made available by the GUI.
 #
 from optparse import OptionParser
-from commands import getstatusoutput
+from subprocess import getstatusoutput
 from sys import exit
 import sys
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import re
 import locale
 from locale import format
@@ -44,8 +44,8 @@ import os
 import cgi
 import socket
 import shutil
-import thread
-from urlparse import urlparse
+import _thread
+from urllib.parse import urlparse
 from os.path import join, normpath, exists, basename, isdir, dirname, getsize
 import traceback
 debug=True
@@ -56,9 +56,9 @@ if debug:
 import glob
 
 def die(output):
-  print "Internal Error!"
+  print("Internal Error!")
   if debug:
-    print output
+    print(output)
   exit(1)
 
 # Emulate rsplit in python 2.3
@@ -515,7 +515,7 @@ class SimpleServerHandler(BaseHTTPRequestHandler):
       if error:
         self.send_error(*error)
         return
-    except Exception, e:
+    except Exception as e:
       if debug:
         self.wfile.write("<pre>")
         self.wfile.write(traceback.format_exc())
@@ -541,8 +541,8 @@ class TimeOutHTTPServer(HTTPServer):
       sock.settimeout(None)
       return (sock, addr)
     except socket.timeout:
-      print "Inactive for too long. Quitting..."
-      thread.interrupt_main()
+      print("Inactive for too long. Quitting...")
+      _thread.interrupt_main()
 
 # Runs the server in standalone mode, printing out information of where to
 # find it and exiting successfully on "<ctrl-c>", which can either be raised
@@ -554,11 +554,11 @@ def runServer(database, opts):
                                SimpleServerHandler,
                                opts.timeout)
     from socket import gethostname
-    print 'igprof-navigator standalone HTTP server started on port %s\n' % opts.port
-    print 'Point your browser to: http://%s:%s' % (gethostname(), opts.port)
+    print('igprof-navigator standalone HTTP server started on port %s\n' % opts.port)
+    print('Point your browser to: http://%s:%s' % (gethostname(), opts.port))
     server.serve_forever()
   except KeyboardInterrupt:
-    print '^C received, shutting down server'
+    print('^C received, shutting down server')
     server.socket.close()
   exit(0)
 
@@ -632,7 +632,7 @@ def printGlobbedListing(path):
       else:
         fileInfo["release"] = release; fileInfo["date"] = "0000-Misc"
       dataset, step, pileup, gtag, t, counter, events = DB.split("___")
-      if not counter in counterId.iterkeys():
+      if not counter in iter(counterId.keys()):
         continue
       fileInfo["dataset"] = dataset
       fileInfo["step"] = step
@@ -641,8 +641,8 @@ def printGlobbedListing(path):
       fileInfo["type"] = t
       fileInfo["counter"] = counter
       fileInfo["events"] = events
-    except ValueError, e:
-      print "Warning: Failed to split DB name \"%s\"<p>" % (DB)
+    except ValueError as e:
+      print("Warning: Failed to split DB name \"%s\"<p>" % (DB))
       continue
 
     if "_merged" in fileInfo["events"]:
@@ -659,25 +659,25 @@ def printGlobbedListing(path):
 
     managedFiles.append(fileInfo)
 
-  managedFiles.sort(tableSorter)
+  managedFiles.sort(key=tableSorter)
   if not managedFiles:
-    print "<h1>Unable to find any acceptable sqlite files</h1>"
-    print "File names are expected to be of the form <em>%s.sql3</em>" % \
+    print("<h1>Unable to find any acceptable sqlite files</h1>")
+    print("File names are expected to be of the form <em>%s.sql3</em>" % \
         ("___".join(["dataset", "step", "pileup", "gtag", "t",
-                     ("(%s)" % "|".join(list(sorted(counterId.keys())))), "events"]))
+                     ("(%s)" % "|".join(list(sorted(counterId.keys())))), "events"])))
     exit(1)
 
   c = managedFiles[0]
 
   def dateHeader(d):
-    print """<h2>%s</h2>""" % d
+    print("""<h2>%s</h2>""" % d)
 
   def tableHeader(*titles):
     title = " ".join(titles)
     display = ""
     if titles[0] == "Unknown":
       display="style='display: none;'"
-    print """<table cellspacing="0px" %s>
+    print("""<table cellspacing="0px" %s>
              <tr>
              <th colspan="5">%s</th>
              </tr>
@@ -688,13 +688,13 @@ def printGlobbedListing(path):
              <th>MEM_TOTAL</th>
              <th>PERF_TICKS</th>
              </tr>
-          """ % (display, title)
+          """ % (display, title))
 
   def stepHeader(s, pileup, gtag):
     string = "%s<br/>(%s, %s)" % (s.replace(",", ", "), pileup, gtag)
-    print "<tr><td style='border:0px;white-space:nowrap;'>%s</td><td>" % string
+    print("<tr><td style='border:0px;white-space:nowrap;'>%s</td><td>" % string)
 
-  print """<html>
+  print("""<html>
   <meta name="keywords" content="CMS, CMSSW, profiling, igprof, software performance, high energy physics" />
   <style>
 body {
@@ -728,7 +728,7 @@ border-style: dashed;
   <body>
   <h1>CMSSW Integration Build - IgProf results</h1>
   <a href="http://igprof.org">More information about igprof.</a>
-  """
+  """)
   dateHeader(c["date"])
   tableHeader(c["release"], c["arch"], c["dataset"])
   stepHeader(c["step"],c["pileup"], c["gtag"])
@@ -736,10 +736,10 @@ border-style: dashed;
   for i in managedFiles:
     if c["step"] != i["step"]:
       previousCounter = 0
-      print """</td></tr>"""
+      print("""</td></tr>""")
 
     if c["release"] != i["release"] or c["arch"] != i["arch"] or c["dataset"] != i["dataset"] or c["date"] != i["date"]:
-      print """</table>"""
+      print("""</table>""")
     if c["date"] != i["date"]:
       dateHeader(i["date"])
     if c["release"] != i["release"] or c["arch"] != i["arch"] or c["dataset"] != i["dataset"] or c["date"] != i["date"]:
@@ -749,14 +749,14 @@ border-style: dashed;
     counterDiff = counterId[i["counter"]] - previousCounter
     previousCounter = counterId[i["counter"]]
 
-    for x in xrange(0, counterDiff):
-      print "</td><td>"
-    print """<a href="%(href)s/">%(events)s %(reportType)s</a><br/>""" % i
+    for x in range(0, counterDiff):
+      print("</td><td>")
+    print("""<a href="%(href)s/">%(events)s %(reportType)s</a><br/>""" % i)
     c = i
 
-  print """</tr></table>
+  print("""</tr></table>
            For more information about this pages, please ask Giulio Eulisse or Lassi Tuura (both at CERN).
-           </body><html>"""
+           </body><html>""")
 
 # Produces a list of possible database paths.
 # The only two possibilities for a url are "<script>/<database-path>"
@@ -772,8 +772,8 @@ def possibleDBAndRanks(p):
 # database, we build the page as requested, if not we simply print out a list
 # of the available databases.
 def cgiReply():
-  print "Content-Type: text/html"
-  print
+  print("Content-Type: text/html")
+  print()
   dataPath = join(os.getcwd(), "data")
   if not "PATH_INFO" in os.environ or not "SCRIPT_FILENAME" in os.environ:
     printGlobbedListing(dataPath)
@@ -791,7 +791,7 @@ def cgiReply():
       try:
         shutil.copyfileobj(open(indexFile), sys.stdout)
         exit(0)
-      except IOError, e:
+      except IOError as e:
         pass
 
   if not path.startswith(dataPath):
@@ -835,15 +835,15 @@ if __name__ == "__main__":
 
 
   if opts.timeout > 60*60:
-    print "Maximum timeout period is 1h."
+    print("Maximum timeout period is 1h.")
     exit(1)
 
   if opts.timeout < 60:
-    print "Minimum timeout period is 1m."
+    print("Minimum timeout period is 1m.")
     exit(1)
 
   if opts.port < 1024 or opts.port > 65535:
-    print "Please specify a valid user port (1024-65535)."
+    print("Please specify a valid user port (1024-65535).")
     exit(1)
 
   if len(args) > 2:

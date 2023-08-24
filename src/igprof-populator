@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python3
 # Aggregates multiple igprof-anaylise sqlite dumps into one single
 # key value storage. The advantage of this approach is that it enables the
 # client GUI to quickly do correlations between different dumps and it stores
@@ -19,7 +19,7 @@ from os.path import splitext, exists, basename, abspath, getsize
 from os.path import getctime, dirname, isdir
 import sys
 from hashlib import sha1
-from commands import getstatusoutput
+from subprocess import getstatusoutput
 import string
 from time import clock, ctime
 import sqlite3
@@ -29,7 +29,7 @@ from time import gmtime, strftime, strptime
 from datetime import datetime, timedelta
 
 def doPrint(s, *x):
-  print x and s % x or s
+  print(x and s % x or s)
 
 def noPrint(*x):
   pass
@@ -88,7 +88,7 @@ def doQuery(query, connection):
 # Returns the index of the first character that differs between two strings.
 def mcs(a, b):
   minLen = min(len(a), len(b))
-  for i in xrange(0, minLen):
+  for i in range(0, minLen):
     if a[i] != b[i]:
       return i
   return minLen
@@ -171,7 +171,7 @@ class TreeEncoder(object):
         pass
       debug("%s (%s) (%s) was already found to be %s", key, s, sparseCacheRef, cacheRef)
       return cacheRef
-    for l in xrange(len(self.__prefix) + 1, len(s)):
+    for l in range(len(self.__prefix) + 1, len(s)):
       debug("Attempt %s for key %s", s[0:l], key)
       if skip:
         skip -= 1
@@ -477,7 +477,7 @@ def extractDumpInfo(dump, uniqueHash, old=None):
       connection.text_factory = str
       dumpSummaryKeys = ["counter", "total_count", "total_freq", "tick_period"]
       dumpSummaryQuery = """select %s from summary;""" % ",".join(dumpSummaryKeys)
-      dumpInfo.update(dict(zip(dumpSummaryKeys, [x for x in doQuery(dumpSummaryQuery, connection)][0])))
+      dumpInfo.update(dict(list(zip(dumpSummaryKeys, [x for x in doQuery(dumpSummaryQuery, connection)][0]))))
   except sqlite3.DatabaseError:
     error("Error while querying file: %s", dump)
   except IndexError:
@@ -600,7 +600,7 @@ class Populator(object):
     payload = lambda x : None;
     payloads = doQuery("SELECT %s FROM mainrows;" % ",".join(columns), connection)
     for p in payloads:
-      payload.__dict__ = dict(zip(columns, p))
+      payload.__dict__ = dict(list(zip(columns, p)))
       payloadUniqueId = "p" + dumpUniqueId[1:] + "-" + self.NODES_INDEX[payload.symbol_id][1:]
       db[payloadUniqueId] = [int(payload.self_count),
                              int(payload.cumulative_count),
@@ -619,7 +619,7 @@ class Populator(object):
                        INNER JOIN mainrows pr ON c.parent_id = pr.id
                        INNER JOIN mainrows sr ON c.self_id = sr.id;
     """
-    edges = [obj(dict(zip(columns, c))) for c in doQuery(childrenQuery, connection)]
+    edges = [obj(dict(list(zip(columns, c)))) for c in doQuery(childrenQuery, connection)]
     edgesCache = {}
 
     for payload in edges:
@@ -639,7 +639,7 @@ class Populator(object):
       edgesCache[calleeId][1].append((payloadId, calleeIndexInParent))
 
     try:
-      for k,v in edgesCache.iteritems():
+      for k,v in edgesCache.items():
         db[k] = json.dumps(v)
     except:
       error("Error while setting %s to %s...", k, v[0:10])

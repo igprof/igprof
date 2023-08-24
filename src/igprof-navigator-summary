@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Helper scripts to create a summary database from all
 # the igprof database found in the passed path.
 #
 from optparse import OptionParser
-from commands import getstatusoutput
+from subprocess import getstatusoutput
 from sys import exit
 import sys
 import locale
@@ -14,8 +14,8 @@ from os.path import join, normpath, exists, basename, isdir, dirname, getsize, a
 import glob
 
 def die(output):
-  print "Internal Error!"
-  print output
+  print("Internal Error!")
+  print(output)
   exit(1)
 
 # Emulate rsplit in python 2.3
@@ -99,9 +99,9 @@ def populateDatabase(path, output):
   globbed = glob.glob(join(path, "*/*/*.sql3"))
   insertStatement = """INSERT INTO reports (filename, architecture, rel, candle, sequence, pileup, conditions, process, counterType, events, cumCounts, cumCalls)
                                     VALUES ("%s",     "%s",         "%s", "%s", "%s"    , "%s"  , "%s"      , "%s"   , "%s"       , "%s" , %s, %s);\n"""
-  print output
+  print(output)
   for f in globbed:
-    print f
+    print(f)
     profileInfo = getSummaryInfo(f)
     if not profileInfo:
       continue
@@ -133,7 +133,7 @@ if __name__ == "__main__":
   if not exists(path):
     parser.error("%s does not exists" % path)
     exit(1)
-  print dirname(normpath(opts.output))
+  print(dirname(normpath(opts.output)))
   if not isdir(dbPath):
     parser.error("Cannot create %s in %s. Path not found." % (basename(opts.output), dbPath))
 

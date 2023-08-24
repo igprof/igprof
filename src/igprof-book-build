@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # A script which merges all the relevant resources of a igprof-book into one
 # single file.
@@ -22,10 +22,10 @@ if __name__ == "__main__":
   if opts.driver:
     try:
       d = open(opts.driver)
-    except Exception, e:
-      print e
+    except Exception as e:
+      print(e)
       parser.error("Python driver not found.")
-    out.write("#!/usr/bin/env python2.6\n__DATA__ = \"\"\"\n")
+    out.write("#!/usr/bin/env python3\n__DATA__ = \"\"\"\n")
   for l in f.readlines():
     m = re.search("""<script[^>]*src=["']([^"']+)["'][^>]*></script>""", l)
     if not m:
