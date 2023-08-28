@@ -26,6 +26,9 @@ DUAL_HOOK(3, int, dopmemalign, _main, _libc,
 DUAL_HOOK(2, void *, domemalign, _main, _libc,
           (size_t alignment, size_t size), (alignment, size),
           "memalign", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
+DUAL_HOOK(2, void *, doaligned_alloc, _main, _libc,
+          (size_t alignment, size_t size), (alignment, size),
+          "aligned_alloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
 DUAL_HOOK(1, void *, dovalloc, _main, _libc,
           (size_t size), (size),
           "valloc", 0, igprof_getenv("IGPROF_MALLOC_LIB"))
@@ -159,6 +162,7 @@ initialize(void)
     IgHook::hook(dorealloc_hook_main.raw);
     IgHook::hook(dopmemalign_hook_main.raw);
     IgHook::hook(domemalign_hook_main.raw);
+    IgHook::hook(doaligned_alloc_hook_main.raw);
     IgHook::hook(dovalloc_hook_main.raw);
   }
   else if (trace_other)
@@ -172,6 +176,7 @@ initialize(void)
     if (domalloc_hook_main.raw.chain)    IgHook::hook(domalloc_hook_libc.raw);
     if (docalloc_hook_main.raw.chain)    IgHook::hook(docalloc_hook_libc.raw);
     if (domemalign_hook_main.raw.chain)  IgHook::hook(domemalign_hook_libc.raw);
+    if (doaligned_alloc_hook_main.raw.chain)  IgHook::hook(doaligned_alloc_hook_libc.raw);
     if (dovalloc_hook_main.raw.chain)    IgHook::hook(dovalloc_hook_libc.raw);
   }
   else if (trace_other)
@@ -240,6 +245,23 @@ dorealloc(IgHook::SafeData<igprof_dorealloc_t> &hook, void *ptr, size_t n)
 
 static void *
 domemalign(IgHook::SafeData<igprof_domemalign_t> &hook, size_t alignment, size_t size)
+{
+  bool enabled = igprof_disable();
+  uint64_t tstart, tend;
+
+  RDTSC(tstart);
+  void *result = (*hook.chain)(alignment, size);
+  RDTSC(tend);
+
+  if (LIKELY(enabled))
+    add(tend-tstart);
+
+  igprof_enable();
+  return result;
+}
+
+static void *
+doaligned_alloc(IgHook::SafeData<igprof_doaligned_alloc_t> &hook, size_t alignment, size_t size)
 {
   bool enabled = igprof_disable();
   uint64_t tstart, tend;
