@@ -1020,7 +1020,7 @@ public:
   MallocFilter(bool isMax)
   :m_isMax(isMax)
   {
-    m_filter = "malloc", "calloc", "realloc", "memalign", "posix_memalign",
+    m_filter = "malloc", "calloc", "realloc", "memalign", "posix_memalign", "aligned_alloc",
                "valloc", "zmalloc", "zcalloc", "zrealloc", "_Znwj", "_Znwm",
                "_Znaj", "_Znam";
   }
