@@ -217,7 +217,7 @@ static inline double tv2sec(const timeval &tv)
     the correct thread.  Skip ticks when this profiler is not
     enabled.  */
 static void
-profileSignalHandler(int /* nsig */)
+profileSignalHandler(int, siginfo_t*, void*)
 {
   void *addresses[IgProfTrace::MAX_DEPTH];
   if (LIKELY(igprof_disable()))
