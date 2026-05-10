@@ -501,7 +501,7 @@ igprof_init(const char *id, void (*threadinit)(void), bool perthread, double clo
   if (void *libc = dlopen("libc.so.6", RTLD_LAZY | RTLD_GLOBAL))
   {
     if (void *sym = dlsym(libc, "abort"))
-      igprof_abort = __extension__ (IgProfAbortFunc *) sym;
+      igprof_abort = __extension__ (void (*)(void) throw()) sym;
 
     if (void *sym = dlsym(libc, "getenv"))
       igprof_getenv = __extension__ (char *(*)(const char *)) sym;
