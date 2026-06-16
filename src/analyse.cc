@@ -556,7 +556,7 @@ public:
     assert(node);
     Nodes::iterator new_end = std::remove_if(CHILDREN.begin(),
                                              CHILDREN.end(),
-                                             std::bind2nd(std::equal_to<NodeInfo *>(), node));
+                                             [node](NodeInfo *child) { return child == node; });
     if (new_end != CHILDREN.end())
       CHILDREN.erase(new_end, CHILDREN.end());
   }
@@ -963,7 +963,7 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
 
     NodeInfo::Nodes::iterator new_end = std::remove_if(parent->CHILDREN.begin(),
                                                        parent->CHILDREN.end(),
-                                                       std::bind2nd(std::equal_to<NodeInfo *>(), node));
+                                                       [node](NodeInfo *child) { return child == node; });
     if (new_end != parent->CHILDREN.end())
       parent->CHILDREN.erase(new_end, parent->CHILDREN.end());
   }

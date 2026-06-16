@@ -1,5 +1,14 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.12)
 PROJECT(IGPROF C CXX)
+
+# Build all C++ targets against C++20 and all C targets against C17 (the C
+# revision contemporaneous with C++20). STANDARD_REQUIRED makes each a hard
+# requirement (configure fails rather than silently falling back to an older
+# standard), while leaving compiler extensions enabled so GNU-isms keep working.
+SET(CMAKE_CXX_STANDARD 20)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_C_STANDARD 17)
+SET(CMAKE_C_STANDARD_REQUIRED ON)
 
 # IGPROF_VIEWER_ONLY: build just the standalone dump viewer `igprof-fast`.
 # It is dependency-free (reads IgProf dumps + pre-demangled side-cars; no
@@ -12,7 +21,7 @@ PROJECT(IGPROF C CXX)
 OPTION(IGPROF_VIEWER_ONLY "Build only the standalone dump viewer (igprof-fast)." OFF)
 IF(IGPROF_VIEWER_ONLY)
   ADD_EXECUTABLE(igprof-fast src/igprof-fast.c)
-  SET_TARGET_PROPERTIES(igprof-fast PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+  SET_TARGET_PROPERTIES(igprof-fast PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
   INSTALL(TARGETS igprof-fast RUNTIME DESTINATION bin)
   RETURN()
 ENDIF()
@@ -93,11 +102,12 @@ IF(${CMAKE_SYSTEM_NAME} MATCHES Linux)
       CACHE STRING "Flags used by the linker during the creation of dll's.")
 ENDIF()
 
-# Use ANSI mode for C and stricter compile options with GCC.
+# Stricter compile options with GCC. The old -ansi flag (ISO C89) was dropped:
+# the C standard is now C17, selected via CMAKE_C_STANDARD above.
 SET(CMAKE_C_FLAGS "${CMAKE_ANSI_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_REQUIRED_FLAGS ${CMAKE_ANSI_FLAGS})
 IF(CMAKE_COMPILER_IS_GNUCC)
-  ADD_DEFINITIONS(-ansi -W -Wall -Wno-long-long -Werror -Wno-unused-result)
+  ADD_COMPILE_OPTIONS(-W -Wall -Wno-long-long -Werror -Wno-unused-result)
 ENDIF()
 
 IF(UNIX)
