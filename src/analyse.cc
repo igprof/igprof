@@ -3239,7 +3239,7 @@ std::ostream & operator<<(std::ostream &stream, OtherGProfRow& row)
 template <int ORDER>
 struct CompareCallersRow
 {
-  bool operator()(OtherGProfRow *a, OtherGProfRow *b)
+  bool operator()(OtherGProfRow *a, OtherGProfRow *b) const
     {
       int64_t callsDiff = ORDER * (a->SELF_COUNTS - b->SELF_COUNTS);
       int64_t cumDiff = ORDER * (a->CHILDREN_COUNTS - b->CHILDREN_COUNTS);
