@@ -28,7 +28,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Install test dependencies
         run: |
