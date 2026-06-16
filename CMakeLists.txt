@@ -1,5 +1,22 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 PROJECT(IGPROF C CXX)
+
+# IGPROF_VIEWER_ONLY: build just the standalone dump viewer `igprof-fast`.
+# It is dependency-free (reads IgProf dumps + pre-demangled side-cars; no
+# profiler runtime, no PCRE, no libunwind, no demangling), so the viewer can be
+# built and used where the full IgProf does not port (e.g. macOS) — mirroring how
+# perf profiles plus their resolved symbols are analysed off the profiling host.
+# Symbol resolution/demangling is done on the profiling host by
+# igprof-demangle-symbols (Linux: nm/objdump), which ships a side-car alongside
+# the dump. Returns early, before the rest of the project is even configured.
+OPTION(IGPROF_VIEWER_ONLY "Build only the standalone dump viewer (igprof-fast)." OFF)
+IF(IGPROF_VIEWER_ONLY)
+  ADD_EXECUTABLE(igprof-fast src/igprof-fast.c)
+  SET_TARGET_PROPERTIES(igprof-fast PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+  INSTALL(TARGETS igprof-fast RUNTIME DESTINATION bin)
+  RETURN()
+ENDIF()
+
 FIND_PACKAGE(Threads)
 
 #Find PCRE library
