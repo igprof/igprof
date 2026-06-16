@@ -2065,13 +2065,11 @@ public:
     // FIXME: Add a new node called "others" to the list
     //        with the aggregated sum.
     int lastPrinted = -1;
-    // float others = 0.;
     for (size_t i = 0, e = node->CHILDREN.size(); i != e; i++)
     {
       Counter &childCounter = node->CHILDREN[i]->COUNTER;
       float childPct = percent(childCounter.ccnt, m_totals);
       if ((childPct < 1. && pct < 1.) || childPct < 0.1) {}
-        // others += childPct;
       else
         lastPrinted++;
     }
