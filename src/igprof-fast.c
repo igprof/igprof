@@ -51,7 +51,7 @@ static Str  *ctrs;  static size_t nctrs,  capctrs;
  * resolves to the same name — merge automatically, recursion dedup included,
  * with no error-prone post-pass. `match` (set at definition) marks groups
  * selected by `show`. */
-typedef struct { const char *name; uint32_t namelen, hash; uint8_t resolved, match; } Group;
+typedef struct { const char *name; uint32_t namelen, hash; uint8_t resolved, match, mallocish, igprofish; } Group;
 static Group *groups; static size_t ngroups, capgroups;
 static int32_t *ghash; static size_t ghcap;   /* open-addressed name->gid; -1 = empty */
 
@@ -59,6 +59,50 @@ static int   key_ctr = -1;
 static const char *key_name = NULL;
 static int   key_is_max = 0;     /* selected counter is a peak/MAX: aggregate by max, not sum */
 static int   g_base = 10;
+
+/* Frame collapsing, matching igprof-analyse's post filters so self/cumulative
+ * splits agree (cumulative totals already agree without it).
+ *
+ *  - MallocFilter: for any MEM_* counter, an allocator frame's bytes belong to
+ *    its caller's *self*, not to a separate "operator new"/"malloc" callee. The
+ *    frame is removed and its counter added to the parent (igprof-analyse
+ *    src/analyse.cc MallocFilter). Gated on g_collapse_malloc (set when the key
+ *    counter is recognised as MEM_*).
+ *  - RemoveIgProfFilter: the injected profiler's own frames (symbols whose file
+ *    is libigprof/IgProf/IgHook) are likewise merged into the caller; always on.
+ *
+ * Both are "remove node, reparent its children to the parent, add its own
+ * counter to the parent" — modelled below by retargeting the node's self to the
+ * caller group and reparenting the stack slot so any children attribute to the
+ * caller too. */
+static int   g_collapse_malloc = 0;
+
+/* Exact raw-name match against igprof-analyse's MallocFilter set. */
+static int is_malloc_name(const char *s, uint32_t n)
+{
+  static const char *const A[] = {
+    "malloc", "calloc", "realloc", "memalign", "posix_memalign", "aligned_alloc",
+    "valloc", "zmalloc", "zcalloc", "zrealloc", "_Znwj", "_Znwm", "_Znaj", "_Znam"
+  };
+  for (size_t i = 0; i < sizeof A / sizeof *A; i++)
+    if (strlen(A[i]) == n && !memcmp(A[i], s, n)) return 1;
+  return 0;
+}
+
+/* RemoveIgProfFilter: a frame belonging to the injected profiler library. */
+static int is_igprof_file(const char *s, uint32_t n)
+{
+  /* substring search over the (short) file name, like igprof-analyse */
+  static const char *const L[] = { "libigprof.", "IgProf.", "IgHook." };
+  for (size_t i = 0; i < sizeof L / sizeof *L; i++)
+  {
+    size_t ln = strlen(L[i]);
+    if (n < ln) continue;
+    for (uint32_t j = 0; j + ln <= n; j++)
+      if (!memcmp(s + j, L[i], ln)) return 1;
+  }
+  return 0;
+}
 
 static void die(const char *m) { fprintf(stderr, "igprof-fast: %s\n", m); exit(1); }
 
@@ -136,7 +180,7 @@ static int32_t intern(const char *s, uint32_t n, uint8_t resolved) {
     i = (i + 1) & mask;
   }
   groups = xgrow(groups, &capgroups, ngroups + 1, sizeof *groups);
-  groups[ngroups] = (Group){ s, n, h, resolved, 0 };
+  groups[ngroups] = (Group){ s, n, h, resolved, 0, 0, 0 };
   ghash[i] = (int32_t)ngroups;
   return (int32_t)ngroups++;
 }
@@ -221,6 +265,11 @@ static int next_node(const char **pp, Node *out) {
     else { kn = nm; kl = nl; res = 0; }
     int32_t gid = intern(kn, kl, res);
     syms[symid].gid = gid;
+    /* Classify for frame collapsing on the *raw* dump name/file, exactly the
+       fields igprof-analyse matches (node->symbol()->NAME and ->FILE->NAME). */
+    if (is_malloc_name(nm, nl)) groups[gid].mallocish = 1;
+    if ((size_t)fid < nfiles && files[fid].name
+        && is_igprof_file(files[fid].name, files[fid].namelen)) groups[gid].igprofish = 1;
     if (g_pick_gid >= 0) { if (gid == g_pick_gid) groups[gid].match = 1; }
     else if (g_re_on && !groups[gid].match) {
       char tmp[8192]; const char *mn = NULL;
@@ -251,6 +300,8 @@ static int next_node(const char **pp, Node *out) {
          * peak counter (MEM_MAX) by name: it must be reduced by max, not sum. */
         key_is_max = (ctrs[cid].namelen >= 3 &&
                       !memcmp(cn + ctrs[cid].namelen - 3, "MAX", 3));
+        /* igprof-analyse adds the MallocFilter only for MEM_* counters. */
+        g_collapse_malloc = (ctrs[cid].namelen >= 4 && !memcmp(cn, "MEM_", 4));
       }
     }
     if (p[0] != ':' || p[1] != '(') break; /* truncated/interleaved record: resync */
@@ -312,22 +363,30 @@ static int32_t *aggregate_top(const char *p, size_t *nout) {
       for (size_t i = acap; i < ngroups; i++) { t_self[i]=t_cnt[i]=t_cumul[i]=0; t_seen[i]=0; }
       acap = ngroups;
     }
-    t_stack[lvl] = g;
+    /* Collapse allocator / profiler frames into the caller: attribute this
+       node's self to the parent group (tg) and reparent its stack slot so any
+       children attribute to the parent too; the node's own cumulative stops at
+       the parent (top). With no parent (lvl 0) the frame stays as-is, like
+       igprof-analyse's `if (!parent) return`. */
+    int collapse = groups[g].igprofish || (groups[g].mallocish && g_collapse_malloc);
+    int32_t tg = g; int64_t top = lvl;
+    if (collapse && lvl > 0) { tg = t_stack[lvl - 1]; top = lvl - 1; }
+    t_stack[lvl] = tg;
     if (nd.has_key) {
-      t_cnt[g] += nd.key_cnt;
+      t_cnt[tg] += nd.key_cnt;
       if (key_is_max) {                       /* peak counter: reduce by max */
-        if (nd.key_bytes > t_self[g]) t_self[g] = nd.key_bytes;
-        for (int64_t l = 0; l <= lvl; l++) {  /* max is idempotent: no dedup needed */
+        if (nd.key_bytes > t_self[tg]) t_self[tg] = nd.key_bytes;
+        for (int64_t l = 0; l <= top; l++) {  /* max is idempotent: no dedup needed */
           int32_t s = t_stack[l];
           if (nd.key_bytes > t_cumul[s]) t_cumul[s] = nd.key_bytes;
         }
         continue;
       }
-      t_self[g] += nd.key_bytes;
+      t_self[tg] += nd.key_bytes;
       serial++;
       /* dedup per group: a stack with the same name twice (recursion, or two FN
        * ids that share a name) still counts its cumulative once. */
-      for (int64_t l = 0; l <= lvl; l++) {
+      for (int64_t l = 0; l <= top; l++) {
         int32_t s = t_stack[l];
         if (t_seen[s] != serial) { t_seen[s] = serial; t_cumul[s] += nd.key_bytes; }
       }
@@ -350,7 +409,8 @@ static int32_t *aggregate_top(const char *p, size_t *nout) {
 static int64_t s_self = 0, s_cumul = 0, s_cnt = 0;
 static int64_t *caller, *callee;            /* indexed by group id */
 static int32_t *touch; static size_t ntouch;
-static int64_t *nc, *nf; static int32_t *sstk; static int32_t *nmatch; static size_t s_scap;
+static int64_t *nc, *nf, *nfc; static int32_t *sstk; static int32_t *nmatch;
+static uint8_t *scol; static size_t s_scap;
 
 static void touch_mark(int32_t g) { if (caller[g] == 0 && callee[g] == 0) touch[ntouch++] = g; }
 
@@ -363,6 +423,15 @@ static void close_level(int64_t L) {
   if (L < 0) return;
   int32_t sym = sstk[L];                     /* group id of the node closing */
   int32_t par = L > 0 ? sstk[L - 1] : -1;    /* group id of its caller */
+  if (scol[L]) {                             /* collapsed allocator/profiler frame */
+    /* Its slot was reparented to the caller (sym == par): fold this frame's own
+       self and self-count into the caller, propagate its subtree, no edge. */
+    if (L > 0) { accum(&nf[L - 1], nf[L]);
+                 if (groups[par].match) s_cnt += nfc[L];
+                 accum(&nc[L - 1], nc[L]); }
+    nc[L] = nf[L] = nfc[L] = 0;
+    return;
+  }
   if (groups[sym].match) {                   /* selected node closing */
     accum(&s_self, nf[L]);
     /* headline cumulative counts each stack once: only the outermost selected
@@ -381,7 +450,7 @@ static void close_level(int64_t L) {
     touch_mark(sym); accum(&callee[sym], nc[L]);
   }
   if (L > 0) accum(&nc[L - 1], nc[L]);
-  nc[L] = nf[L] = 0;
+  nc[L] = nf[L] = nfc[L] = 0;
 }
 
 static void aggregate_show(const char *p) {
@@ -402,13 +471,21 @@ static void aggregate_show(const char *p) {
       sstk = xgrow(sstk, &s_scap, lvl + 1, sizeof *sstk);
       nc = realloc(nc, s_scap * sizeof *nc);
       nf = realloc(nf, s_scap * sizeof *nf);
+      nfc = realloc(nfc, s_scap * sizeof *nfc);
       nmatch = realloc(nmatch, s_scap * sizeof *nmatch);
+      scol = realloc(scol, s_scap * sizeof *scol);
     }
     for (int64_t L = cur; L >= lvl; L--) close_level(L);   /* close siblings/ancestors */
-    sstk[lvl] = g; nc[lvl] = nf[lvl] = 0; cur = lvl;
-    nmatch[lvl] = (lvl ? nmatch[lvl - 1] : 0) + (groups[g].match ? 1 : 0);
+    /* Collapse allocator/profiler frames: reparent the stack slot to the caller
+       so the frame's self folds into the caller and its children attribute to
+       the caller too (see aggregate_top for the same model). */
+    int collapse = lvl > 0 && (groups[g].igprofish || (groups[g].mallocish && g_collapse_malloc));
+    int32_t sg = collapse ? sstk[lvl - 1] : g;
+    sstk[lvl] = sg; scol[lvl] = collapse; cur = lvl;
+    nc[lvl] = nf[lvl] = 0; nfc[lvl] = nd.has_key ? nd.key_cnt : 0;
+    nmatch[lvl] = (lvl ? nmatch[lvl - 1] : 0) + (!collapse && groups[sg].match ? 1 : 0);
     if (nd.has_key) { accum(&nc[lvl], nd.key_bytes); accum(&nf[lvl], nd.key_bytes);
-                      if (groups[g].match) s_cnt += nd.key_cnt; }
+                      if (!collapse && groups[sg].match) s_cnt += nd.key_cnt; }
   }
   for (int64_t L = cur; L >= 0; L--) close_level(L);       /* flush at EOF */
 }
@@ -463,7 +540,7 @@ int main(int argc, char **argv) {
     g_pick_gid = o[rank - 1];
     /* reset for the show re-read; keep the interned groups (re-parsing yields
      * the same ids) but clear the per-pass match flags and counter selection. */
-    nsyms = nfiles = nctrs = 0; key_ctr = -1; key_is_max = 0;
+    nsyms = nfiles = nctrs = 0; key_ctr = -1; key_is_max = 0; g_collapse_malloc = 0;
     memset(syms, 0, capsyms * sizeof *syms);
     for (size_t g = 0; g < ngroups; g++) groups[g].match = 0;
   } else if (mode[1] == 'h') {
