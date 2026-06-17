@@ -245,7 +245,10 @@ static int next_node(const char **pp, Node *out) {
     if (*p == '=') {
       p += 2;                              /* "=(" */
       const char *fn = p; while (*p && *p != ')' && *p != '\n') p++;
+      size_t oldcap_f = capfiles;
       files = xgrow(files, &capfiles, fid + 1, sizeof *files);
+      if (capfiles != oldcap_f)               /* zero new slots: undefined file ids must read name==NULL */
+        memset(files + oldcap_f, 0, (capfiles - oldcap_f) * sizeof *files);
       files[fid].name = fn; files[fid].namelen = (uint32_t)(p - fn);
       if ((size_t)fid + 1 > nfiles) nfiles = fid + 1;
       if (*p == ')') p++;
