@@ -18,9 +18,9 @@
  * Build (Linux, on the profiling host):
  *     cc -O2 -pthread -o igprof-demangle-symbols igprof-demangle-symbols.c -lstdc++
  * Use:
- *     igprof-demangle-symbols -j 8 igprof.host.*.gz.dump ...   # writes <dump>.syms each
- *     gzip -dc igprof.*.gz | igprof-demangle-symbols -          # one dump -> stdout
- * (Pass already-decompressed dumps, or a path; gz must be expanded by the caller.)
+ *     igprof-demangle-symbols -j 8 igprof.*.gz ...   # writes <dump>.syms.gz each
+ *     gzip -dc igprof.*.gz | igprof-demangle-symbols -   # one dump -> stdout
+ * (.gz dump paths are decompressed automatically; for stdin pipe the data in.)
  *
  * NB: like igprof, offset resolution is GNU binutils / Linux only.
  */
@@ -205,12 +205,18 @@ static void *worker(void *a) { (void)a;
 /* ------------------------------------------------------------------- main */
 
 static char *slurp(const char *path, size_t *outlen) {
-  int fd = 0;
-  if (path && strcmp(path, "-")) { fd = open(path, O_RDONLY); if (fd < 0) die("cannot open dump"); }
+  int fd = 0; FILE *gzp = NULL;     /* gzp set => reading the |gzip -dc pipe */
+  if (path && strcmp(path, "-")) {
+    size_t pl = strlen(path);
+    if (pl > 3 && !strcmp(path + pl - 3, ".gz")) {   /* IgProf dumps ship gzipped */
+      char cmd[8192]; snprintf(cmd, sizeof cmd, "gzip -dc '%s'", path);
+      gzp = popen(cmd, "r"); if (!gzp) die("cannot open dump"); fd = fileno(gzp);
+    } else { fd = open(path, O_RDONLY); if (fd < 0) die("cannot open dump"); }
+  }
   size_t cap = 1 << 20, len = 0; char *buf = xmalloc(cap);
   for (;;) { if (len + (1<<20) + 1 > cap) buf = xrealloc(buf, cap *= 2);
     ssize_t n = read(fd, buf + len, 1<<20); if (n < 0) die("read"); if (!n) break; len += n; }
-  if (fd) close(fd);
+  if (gzp) pclose(gzp); else if (fd) close(fd);
   buf[len] = 0; if (outlen) *outlen = len; return buf;
 }
 
@@ -253,7 +259,11 @@ int main(int argc, char **argv) {
   fprintf(stderr, "igprof-demangle-symbols: %zu dumps, %zu binaries, -j%d\n", ndumps, nbins, jobs);
   for (int d = 0; d < nin; d++) {
     if (!dumps[d].path) { emit(d, stdout); continue; }   /* stdin -> stdout (caller may gzip) */
-    char cmd[8192]; snprintf(cmd, sizeof cmd, "gzip -c > '%s.syms.gz'", dumps[d].path);
+    /* Side-car name <dump>.syms.gz, dropping the dump's own .gz so a gzipped
+       dump yields foo.syms.gz rather than foo.gz.syms.gz. */
+    const char *dp = dumps[d].path; size_t dl = strlen(dp);
+    if (dl > 3 && !strcmp(dp + dl - 3, ".gz")) dl -= 3;
+    char cmd[8192]; snprintf(cmd, sizeof cmd, "gzip -c > '%.*s.syms.gz'", (int)dl, dp);
     FILE *f = popen(cmd, "w"); if (!f) die("cannot write side-car");
     emit(d, f); pclose(f);
   }
