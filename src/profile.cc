@@ -29,7 +29,11 @@
 #endif
 
 // Global variables initialised once here.
-HIDDEN void             (*igprof_abort)(void) throw () = &abort;
+// Cast through IgProfAbortFunc* so the initializer also compiles where the
+// platform's <cstdlib> does not declare abort() noexcept (e.g. macOS): an
+// implicit conversion cannot add noexcept, but an explicit cast can, and abort
+// upholds it (it never returns, let alone throws).
+HIDDEN void             (*igprof_abort)(void) noexcept = (IgProfAbortFunc *) &abort;
 HIDDEN char *           (*igprof_getenv)(const char *) = &getenv;
 HIDDEN int              (*igprof_unsetenv)(const char *) = &unsetenv;
 HIDDEN bool             s_igprof_activated = false;
@@ -417,7 +421,7 @@ asyncDumpThread(void *)
   while (true)
   {
     // If we are done processing, quit.  Give threads max ~1s to quit.
-    if (s_quitting && ++s_quitting > 100)
+    if (s_quitting && IgProfAtomicInc(&s_quitting) > 100)
       break;
 
     // Check every once in a while if a dump has been requested.

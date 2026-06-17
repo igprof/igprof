@@ -21,14 +21,13 @@ jobs:
         os:
           - 'ubuntu-latest'
         container:
-          - 'ubuntu:18.04'
-          - 'ubuntu:22.04'
-          - 'fedora:37'
-          - 'fedora:38'
+          - 'ubuntu:24.04'
+          - 'ubuntu:26.04'
+          - 'fedora:44'
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Install test dependencies
         run: |
@@ -36,12 +35,11 @@ jobs:
             ubuntu:*)
               export DEBIAN_FRONTEND=noninteractive
               apt update -y
-              apt install -y cmake libunwind-dev libpcre3-dev make build-essential
+              apt install -y cmake libunwind-dev libpcre2-dev make build-essential
             ;;
             centos:*|fedora:*)
               yum update -y
-              dnf group install -y "C Development Tools and Libraries" "Development Tools"
-              yum install -y cmake libunwind-devel pcre-devel make
+              dnf install -y gcc gcc-c++ make cmake autoconf automake libtool pkgconf-pkg-config git libunwind-devel pcre-devel
             ;;
             macos:*)
               brew install cmake

@@ -556,7 +556,7 @@ public:
     assert(node);
     Nodes::iterator new_end = std::remove_if(CHILDREN.begin(),
                                              CHILDREN.end(),
-                                             std::bind2nd(std::equal_to<NodeInfo *>(), node));
+                                             [node](NodeInfo *child) { return child == node; });
     if (new_end != CHILDREN.end())
       CHILDREN.erase(new_end, CHILDREN.end());
   }
@@ -963,7 +963,7 @@ void mergeToNode(NodeInfo *parent, NodeInfo *node, bool isMax)
 
     NodeInfo::Nodes::iterator new_end = std::remove_if(parent->CHILDREN.begin(),
                                                        parent->CHILDREN.end(),
-                                                       std::bind2nd(std::equal_to<NodeInfo *>(), node));
+                                                       [node](NodeInfo *child) { return child == node; });
     if (new_end != parent->CHILDREN.end())
       parent->CHILDREN.erase(new_end, parent->CHILDREN.end());
   }
@@ -2065,7 +2065,7 @@ public:
     // FIXME: Add a new node called "others" to the list
     //        with the aggregated sum.
     int lastPrinted = -1;
-    float others = 0.;
+    [[maybe_unused]] float others = 0.;
     for (size_t i = 0, e = node->CHILDREN.size(); i != e; i++)
     {
       Counter &childCounter = node->CHILDREN[i]->COUNTER;
@@ -3239,7 +3239,7 @@ std::ostream & operator<<(std::ostream &stream, OtherGProfRow& row)
 template <int ORDER>
 struct CompareCallersRow
 {
-  bool operator()(OtherGProfRow *a, OtherGProfRow *b)
+  bool operator()(OtherGProfRow *a, OtherGProfRow *b) const
     {
       int64_t callsDiff = ORDER * (a->SELF_COUNTS - b->SELF_COUNTS);
       int64_t cumDiff = ORDER * (a->CHILDREN_COUNTS - b->CHILDREN_COUNTS);

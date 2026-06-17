@@ -1,6 +1,29 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 3.12)
 PROJECT(IGPROF C CXX)
-CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
-FIND_PACKAGE(Threads)
+# Build all C++ targets against C++20 and all C targets against C17 (the C
+# revision contemporaneous with C++20). STANDARD_REQUIRED makes each a hard
+# requirement (configure fails rather than silently falling back to an older
+# standard), while leaving compiler extensions enabled so GNU-isms keep working.
+SET(CMAKE_CXX_STANDARD 20)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(CMAKE_C_STANDARD 17)
+SET(CMAKE_C_STANDARD_REQUIRED ON)
+
+# IGPROF_VIEWER_ONLY: build just the standalone dump viewer `igprof-query`.
+# It is dependency-free (reads IgProf dumps + pre-demangled side-cars; no
+# profiler runtime, no PCRE, no libunwind, no demangling), so the viewer can be
+# built and used where the full IgProf does not port (e.g. macOS) — mirroring how
+# perf profiles plus their resolved symbols are analysed off the profiling host.
+# Symbol resolution/demangling is done on the profiling host by
+# igprof-demangle-symbols (Linux: nm/objdump), which ships a side-car alongside
+# the dump. Returns early, before the rest of the project is even configured.
+OPTION(IGPROF_VIEWER_ONLY "Build only the standalone dump viewer (igprof-query)." OFF)
+IF(IGPROF_VIEWER_ONLY)
+  ADD_EXECUTABLE(igprof-query src/igprof-query.c)
+  SET_TARGET_PROPERTIES(igprof-query PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
+  INSTALL(TARGETS igprof-query RUNTIME DESTINATION bin)
+  RETURN()
+ENDIF()
 
 #Find PCRE library
 IF(PCRE_INCLUDE_DIR AND PCRE_LIBRARIES)
@@ -76,11 +99,12 @@ IF(${CMAKE_SYSTEM_NAME} MATCHES Linux)
       CACHE STRING "Flags used by the linker during the creation of dll's.")
 ENDIF()
 
-# Use ANSI mode for C and stricter compile options with GCC.
+# Stricter compile options with GCC. The old -ansi flag (ISO C89) was dropped:
+# the C standard is now C17, selected via CMAKE_C_STANDARD above.
 SET(CMAKE_C_FLAGS "${CMAKE_ANSI_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_REQUIRED_FLAGS ${CMAKE_ANSI_FLAGS})
 IF(CMAKE_COMPILER_IS_GNUCC)
-  ADD_DEFINITIONS(-ansi -W -Wall -Wno-long-long -Werror -Wno-unused-result)
+  ADD_COMPILE_OPTIONS(-W -Wall -Wno-long-long -Werror -Wno-unused-result)
 ENDIF()
 
 IF(UNIX)
@@ -148,7 +172,24 @@ IF(PCRE_FOUND)
 ELSE()
   TARGET_LINK_LIBRARIES(igprof-analyse ${CMAKE_DL_LIBS})
 ENDIF()
-INSTALL(TARGETS igprof igprof-analyse
+# Standalone dump tools. Both are C sources that need the C++ runtime for
+# __cxa_demangle, so link as CXX (also avoids hard-coding -lstdc++).
+#   igprof-query: fast streaming reader / interactive drill-down over dumps. Also
+#     buildable on its own via IGPROF_VIEWER_ONLY for off-host analysis; here we
+#     enable IGPROF_DEMANGLE since libstdc++ is available on the profiling host.
+#   igprof-demangle-symbols: resolves + demangles a dump's symbols on the host
+#     (nm/objdump) into a portable side-car igprof-query consumes without binaries.
+ADD_EXECUTABLE(igprof-query src/igprof-query.c)
+SET_TARGET_PROPERTIES(igprof-query PROPERTIES
+  C_STANDARD 17 C_STANDARD_REQUIRED ON LINKER_LANGUAGE CXX)
+TARGET_COMPILE_DEFINITIONS(igprof-query PRIVATE IGPROF_DEMANGLE)
+
+ADD_EXECUTABLE(igprof-demangle-symbols src/igprof-demangle-symbols.c)
+SET_TARGET_PROPERTIES(igprof-demangle-symbols PROPERTIES
+  C_STANDARD 17 C_STANDARD_REQUIRED ON LINKER_LANGUAGE CXX)
+TARGET_LINK_LIBRARIES(igprof-demangle-symbols ${CMAKE_THREAD_LIBS_INIT})
+
+INSTALL(TARGETS igprof igprof-analyse igprof-query igprof-demangle-symbols
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION lib
 	ARCHIVE DESTINATION lib)
