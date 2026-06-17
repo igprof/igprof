@@ -19,6 +19,7 @@
  *     cc -O2 -pthread -o igprof-demangle-symbols igprof-demangle-symbols.c -lstdc++
  * Use:
  *     igprof-demangle-symbols -j 8 igprof.*.gz ...   # writes <dump>.syms.gz each
+ *     igprof-demangle-symbols -o DIR igprof.*.gz     # side-cars under DIR/
  *     gzip -dc igprof.*.gz | igprof-demangle-symbols -   # one dump -> stdout
  * (.gz dump paths are decompressed automatically; for stdin pipe the data in.)
  *
@@ -237,9 +238,11 @@ static void emit(int d, FILE *out) {
 }
 
 int main(int argc, char **argv) {
-  int jobs = 4; const char **inputs = xmalloc(argc * sizeof *inputs); int nin = 0;
+  int jobs = 4; const char *outdir = NULL;
+  const char **inputs = xmalloc(argc * sizeof *inputs); int nin = 0;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "-j") && i + 1 < argc) jobs = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "-o") && i + 1 < argc) outdir = argv[++i];
     else inputs[nin++] = argv[i];
   }
   if (!nin) inputs[nin++] = "-";
@@ -260,10 +263,15 @@ int main(int argc, char **argv) {
   for (int d = 0; d < nin; d++) {
     if (!dumps[d].path) { emit(d, stdout); continue; }   /* stdin -> stdout (caller may gzip) */
     /* Side-car name <dump>.syms.gz, dropping the dump's own .gz so a gzipped
-       dump yields foo.syms.gz rather than foo.gz.syms.gz. */
-    const char *dp = dumps[d].path; size_t dl = strlen(dp);
-    if (dl > 3 && !strcmp(dp + dl - 3, ".gz")) dl -= 3;
-    char cmd[8192]; snprintf(cmd, sizeof cmd, "gzip -c > '%.*s.syms.gz'", (int)dl, dp);
+       dump yields foo.syms.gz rather than foo.gz.syms.gz. With -o DIR the
+       side-car goes there under the dump's basename; otherwise next to it. */
+    const char *dp = dumps[d].path;
+    const char *base = outdir ? (strrchr(dp, '/') ? strrchr(dp, '/') + 1 : dp) : dp;
+    size_t bl = strlen(base);
+    if (bl > 3 && !strcmp(base + bl - 3, ".gz")) bl -= 3;
+    char cmd[8192];
+    if (outdir) snprintf(cmd, sizeof cmd, "gzip -c > '%s/%.*s.syms.gz'", outdir, (int)bl, base);
+    else        snprintf(cmd, sizeof cmd, "gzip -c > '%.*s.syms.gz'", (int)bl, base);
     FILE *f = popen(cmd, "w"); if (!f) die("cannot write side-car");
     emit(d, f); pclose(f);
   }
