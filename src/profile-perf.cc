@@ -7,10 +7,78 @@
 #include <cstring>
 #include <signal.h>
 #include <sys/time.h>
+#ifndef __APPLE__
+# include <link.h>
+# include <dlfcn.h>
+#endif
 
 #ifdef __APPLE__
 typedef sig_t sighandler_t;
 #endif
+
+#ifndef __APPLE__
+// -------------------------------------------------------------------
+// Interpose dl_iterate_phdr to avoid a self-deadlock.
+//
+// The profiled program (notably libc during C++ exception unwinding) may call
+// dl_iterate_phdr while holding glibc's non-recursive loader lock. If the
+// profiling signal fires there and our stack walk re-enters dl_iterate_phdr on
+// the same thread, it would block on that lock forever. We therefore allow only
+// one dl_iterate_phdr per thread at a time: the re-entrant (signal-handler) call
+// returns 0 -- dropping that one sample -- while the program's own outer call
+// still runs to completion and returns the real result.
+//
+// Everything on the signal-handler path is async-signal-safe by construction:
+//   * the "in use" flag is a __thread int in the initial-exec model, i.e. a
+//     direct TP-relative load/store -- no __tls_get_addr, no lazy allocation and
+//     no lock (libigprof is LD_PRELOADed, so initial-exec TLS is available);
+//   * the original function pointer is resolved once at load (see initialize()),
+//     so the wrapper never calls dlsym from a signal handler.
+typedef int (*dl_iterate_callback)(struct dl_phdr_info *, size_t, void *);
+typedef int (*dl_iterate_fn)(dl_iterate_callback, void *);
+
+static dl_iterate_fn s_dl_iterate_phdr_orig = 0;
+static __thread int  s_dl_iterate_in_use
+  __attribute__((tls_model("initial-exec"))) = 0;
+
+// dlsym() returns void*; casting it to a function pointer is well-defined on
+// POSIX but pedantic ISO C++ objects, so silence just that warning.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+static dl_iterate_fn
+resolve_dl_iterate_phdr(void)
+{ return reinterpret_cast<dl_iterate_fn>(dlsym(RTLD_NEXT, "dl_iterate_phdr")); }
+#pragma GCC diagnostic pop
+
+namespace {
+// Clear the per-thread flag even if the iteration unwinds through us (the
+// callback may run C++ exception machinery, which itself uses dl_iterate_phdr).
+struct DlIterateGuard
+{
+  DlIterateGuard(void)  { s_dl_iterate_in_use = 1; }
+  ~DlIterateGuard(void) { s_dl_iterate_in_use = 0; }
+};
+}
+
+extern "C" int
+dl_iterate_phdr(dl_iterate_callback callback, void *data)
+{
+  dl_iterate_fn orig = s_dl_iterate_phdr_orig;
+  if (UNLIKELY(! orig))
+    // Reached before initialize() ran (e.g. the loader itself calls this during
+    // libigprof's own load); resolve on the spot, still in normal context.
+    orig = s_dl_iterate_phdr_orig = resolve_dl_iterate_phdr();
+
+  if (s_dl_iterate_in_use)
+  {
+    igprof_debug("prevented potential deadlock in dl_iterate_phdr\n");
+    return 0;
+  }
+
+  DlIterateGuard guard;
+  return orig ? orig(callback, data) : 0;
+}
+#endif // ! __APPLE__
 
 // -------------------------------------------------------------------
 // Traps for this profiler module
@@ -119,6 +187,15 @@ initialize(void)
 {
   if (s_initialized) return;
   s_initialized = true;
+
+#ifndef __APPLE__
+  // Resolve the real dl_iterate_phdr once, in normal context, so the interposing
+  // wrapper above never needs dlsym from a signal handler. Done before the option
+  // parsing below so it happens even when perf is not the selected profiler --
+  // the wrapper is interposed process-wide regardless.
+  if (! s_dl_iterate_phdr_orig)
+    s_dl_iterate_phdr_orig = resolve_dl_iterate_phdr();
+#endif
 
   const char    *options = igprof_options();
   bool          enable = false;
