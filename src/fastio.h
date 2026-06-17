@@ -4,6 +4,7 @@
 # include "macros.h"
 # include <unistd.h>
 # include <string.h>
+# include <errno.h>
 
 /** Wrapper for elementary but very fast formatted I/O. */
 class HIDDEN FastIO
@@ -28,10 +29,29 @@ public:
     fd_ = fd;
   }
 
-  /** Flush out all remaining output. */
+  /** Flush out all remaining output.
+
+      write(2) may transfer fewer bytes than requested (a short write,
+      e.g. when the destination is a pipe that fills up) or be interrupted
+      by a signal before transferring anything (EINTR) -- and IgProf dumps
+      go down a |gzip pipe while the profiling timer keeps firing, so both
+      happen in practice. Loop until the whole buffer is written, retrying
+      on EINTR, otherwise the unwritten tail is silently dropped and the
+      dump is corrupted. */
   void flush(void)
   {
-    write(fd_, buf_, pos_);
+    size_t off = 0;
+    while (off < pos_)
+    {
+      ssize_t n = write(fd_, buf_ + off, pos_ - off);
+      if (n < 0)
+      {
+        if (errno == EINTR)
+          continue;
+        break; // unrecoverable error; nothing more we can do here
+      }
+      off += n;
+    }
     pos_ = 0;
   }
 
