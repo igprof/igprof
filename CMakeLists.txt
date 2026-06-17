@@ -10,7 +10,7 @@ SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_C_STANDARD 17)
 SET(CMAKE_C_STANDARD_REQUIRED ON)
 
-# IGPROF_VIEWER_ONLY: build just the standalone dump viewer `igprof-fast`.
+# IGPROF_VIEWER_ONLY: build just the standalone dump viewer `igprof-query`.
 # It is dependency-free (reads IgProf dumps + pre-demangled side-cars; no
 # profiler runtime, no PCRE, no libunwind, no demangling), so the viewer can be
 # built and used where the full IgProf does not port (e.g. macOS) — mirroring how
@@ -18,11 +18,11 @@ SET(CMAKE_C_STANDARD_REQUIRED ON)
 # Symbol resolution/demangling is done on the profiling host by
 # igprof-demangle-symbols (Linux: nm/objdump), which ships a side-car alongside
 # the dump. Returns early, before the rest of the project is even configured.
-OPTION(IGPROF_VIEWER_ONLY "Build only the standalone dump viewer (igprof-fast)." OFF)
+OPTION(IGPROF_VIEWER_ONLY "Build only the standalone dump viewer (igprof-query)." OFF)
 IF(IGPROF_VIEWER_ONLY)
-  ADD_EXECUTABLE(igprof-fast src/igprof-fast.c)
-  SET_TARGET_PROPERTIES(igprof-fast PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
-  INSTALL(TARGETS igprof-fast RUNTIME DESTINATION bin)
+  ADD_EXECUTABLE(igprof-query src/igprof-query.c)
+  SET_TARGET_PROPERTIES(igprof-query PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON)
+  INSTALL(TARGETS igprof-query RUNTIME DESTINATION bin)
   RETURN()
 ENDIF()
 
@@ -175,7 +175,24 @@ IF(PCRE_FOUND)
 ELSE()
   TARGET_LINK_LIBRARIES(igprof-analyse ${CMAKE_DL_LIBS})
 ENDIF()
-INSTALL(TARGETS igprof igprof-analyse
+# Standalone dump tools. Both are C sources that need the C++ runtime for
+# __cxa_demangle, so link as CXX (also avoids hard-coding -lstdc++).
+#   igprof-query: fast streaming reader / interactive drill-down over dumps. Also
+#     buildable on its own via IGPROF_VIEWER_ONLY for off-host analysis; here we
+#     enable IGPROF_DEMANGLE since libstdc++ is available on the profiling host.
+#   igprof-demangle-symbols: resolves + demangles a dump's symbols on the host
+#     (nm/objdump) into a portable side-car igprof-query consumes without binaries.
+ADD_EXECUTABLE(igprof-query src/igprof-query.c)
+SET_TARGET_PROPERTIES(igprof-query PROPERTIES
+  C_STANDARD 17 C_STANDARD_REQUIRED ON LINKER_LANGUAGE CXX)
+TARGET_COMPILE_DEFINITIONS(igprof-query PRIVATE IGPROF_DEMANGLE)
+
+ADD_EXECUTABLE(igprof-demangle-symbols src/igprof-demangle-symbols.c)
+SET_TARGET_PROPERTIES(igprof-demangle-symbols PROPERTIES
+  C_STANDARD 17 C_STANDARD_REQUIRED ON LINKER_LANGUAGE CXX)
+TARGET_LINK_LIBRARIES(igprof-demangle-symbols ${CMAKE_THREAD_LIBS_INIT})
+
+INSTALL(TARGETS igprof igprof-analyse igprof-query igprof-demangle-symbols
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION lib
 	ARCHIVE DESTINATION lib)

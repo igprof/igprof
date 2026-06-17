@@ -1,6 +1,6 @@
 /* igprof-demangle-symbols — resolve + demangle the symbols of one or more
  * IgProf dumps, ON the profiling host (where the binaries live), and emit a
- * portable per-dump side-car so the analysis (igprof-fast) can run elsewhere
+ * portable per-dump side-car so the analysis (igprof-query) can run elsewhere
  * WITHOUT the binaries — like shipping perf's resolved symbols.
  *
  * IgProf follows forks, so a run yields many dumps (one per process). Each dump
@@ -90,7 +90,8 @@ static void parse_dump(int d, const char *p) {
   Dump *D = &dumps[d];
   if (strncmp(p, "P=(", 3)) die("not an igprof dump");
   p += 3; g_base = (*p == 'H') ? 16 : 10; if (g_base == 16) p += 4;
-  while (*p && *p != '\n') p++; if (*p) p++;
+  while (*p && *p != '\n') p++;
+  if (*p) p++;
 
   int32_t *localbin = NULL; size_t lbcap = 0;       /* dump-local file id -> global bin */
   Sym *syms = NULL; size_t nsyms = 0, cap = 0;
@@ -123,7 +124,8 @@ static void parse_dump(int d, const char *p) {
         bin_add_req(b, (uint64_t)binoff, d, (int)symid);
       p++;                                            /* ')' of FN=( */
     }
-    while (*p && *p != '\n') p++; if (*p) p++;        /* skip counters/rest */
+    while (*p && *p != '\n') p++;                     /* skip counters/rest */
+    if (*p) p++;
   }
   free(localbin);
   D->syms = syms; D->nsyms = nsyms;
@@ -195,7 +197,8 @@ static void resolve_bin(Bin *B) {
 static size_t g_next; static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static void *worker(void *a) { (void)a;
   for (;;) { pthread_mutex_lock(&g_lock); size_t i = g_next++; pthread_mutex_unlock(&g_lock);
-    if (i >= nbins) break; resolve_bin(&bins[i]); }
+    if (i >= nbins) break;
+    resolve_bin(&bins[i]); }
   return NULL;
 }
 

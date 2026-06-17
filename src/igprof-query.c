@@ -1,4 +1,4 @@
-/* igprof-fast — fast streaming reader for IgProf dumps, built for interactive
+/* igprof-query — fast streaming reader for IgProf dumps, built for interactive
  * / MCP-style drill-down: each invocation re-reads the dump and aggregates only
  * what the query needs, so demangling stays trivial (only the symbols on the
  * answer are demangled, never the whole table).
@@ -12,16 +12,18 @@
  *            [ V<cid>[=(<ctrname>)]:(<count>,<bytes>,<peak>)]... [;LK=(<a>,<s>)]...
  *
  * Modes:
- *   igprof-fast [-k CTR] top  [-n N]            flat ranked self/cumulative
- *   igprof-fast [-k CTR] show -s REGEX          one symbol: callers + callees
- *   igprof-fast [-k CTR] show -r RANK           ditto, symbol = RANK-th of `top`
+ *   igprof-query [-k CTR] top  [-n N]            flat ranked self/cumulative
+ *   igprof-query [-k CTR] show -s REGEX          one symbol: callers + callees
+ *   igprof-query [-k CTR] show -r RANK           ditto, symbol = RANK-th of `top`
  * Input is a positional dump path or stdin:
- *   gzip -dc igprof.*.gz | igprof-fast show -s DCAFitter
+ *   gzip -dc igprof.*.gz | igprof-query show -s DCAFitter
  *
- * Build: cc -O2 -DIGPROF_DEMANGLE -o igprof-fast igprof-fast.c -lstdc++
+ * Build: cc -O2 -DIGPROF_DEMANGLE -o igprof-query igprof-query.c -lstdc++
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,7 +106,7 @@ static int is_igprof_file(const char *s, uint32_t n)
   return 0;
 }
 
-static void die(const char *m) { fprintf(stderr, "igprof-fast: %s\n", m); exit(1); }
+static void die(const char *m) { fprintf(stderr, "igprof-query: %s\n", m); exit(1); }
 
 static void *xgrow(void *p, size_t *cap, size_t need, size_t elem) {
   if (need <= *cap) return p;
@@ -520,7 +522,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "top") || !strcmp(argv[i], "show")) mode = argv[i];
     else path = argv[i];
   }
-  if (!mode) die("usage: igprof-fast [-k CTR] top [-n N] | show (-s REGEX | -r RANK) [dump]");
+  if (!mode) die("usage: igprof-query [-k CTR] top [-n N] | show (-s REGEX | -r RANK) [dump]");
 
   int fd = 0;
   if (path && strcmp(path, "-")) { fd = open(path, O_RDONLY); if (fd < 0) die("cannot open dump"); }
@@ -528,7 +530,9 @@ int main(int argc, char **argv) {
   for (;;) {
     if (len + (1 << 20) + 1 > cap) { cap *= 2; buf = realloc(buf, cap); if (!buf) die("oom"); }
     ssize_t n = read(fd, buf + len, 1 << 20);
-    if (n < 0) die("read"); if (!n) break; len += (size_t)n;
+    if (n < 0) die("read");
+    if (!n) break;
+    len += (size_t)n;
   }
   buf[len] = 0;
   if (sidecar) load_sidecar(sidecar);
