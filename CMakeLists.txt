@@ -215,6 +215,19 @@ INSTALL(FILES src/sym-resolve.h DESTINATION include/igprof)
 
 # Tests.
 IF(IGPROF_BUILD_TESTS)
-  # FIXME: Build libraries from sources in test/*.cc.
-  # FIXME: Run igprof-regression-tests
+  ENABLE_TESTING()
+  # Regression test for the dl_iterate_phdr deadlock guard (src/profile-perf.cc):
+  # run an exception-storm reproducer under the perf profiler and fail if it
+  # deadlocks (the driver bounds it with `timeout`). Linux-only, like the perf
+  # profiler itself.
+  IF(NOT APPLE)
+    ADD_EXECUTABLE(igprof-test-dl-iterate test/deadlock-dl-iterate.cc)
+    # Layered timers so a regressed deadlock can never hang CI:
+    #   reproducer runs ~3s  <<  driver `timeout` 30s (SIGTERM+SIGKILL)  <<
+    #   ctest TIMEOUT 90s (hard backstop if the driver's timeout is unavailable).
+    ADD_TEST(NAME dl-iterate-deadlock
+             COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/test/run-dl-iterate-test.sh
+                     $<TARGET_FILE:igprof> $<TARGET_FILE:igprof-test-dl-iterate> 3 30)
+    SET_TESTS_PROPERTIES(dl-iterate-deadlock PROPERTIES TIMEOUT 90)
+  ENDIF()
 ENDIF()
