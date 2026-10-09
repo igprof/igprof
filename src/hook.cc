@@ -752,9 +752,9 @@ lookup(const char *fn, const char *v, const char *lib, void *&sym)
  * Function to help evaluate instruction lenght. Parse function calls this when
  * modRM byte is part of instruction. Returns lenght of instruction.
  */
-int evalModRM(unsigned char byte, modRMByte &modRM)
+int evalModRM(const unsigned char *bytes, modRMByte &modRM)
 {
-  modRM.encoded = byte;
+  modRM.encoded = bytes[0];
   //mod == 00 and rm == 5	opcode, modRM, rip + 32bit
   //mod == 00                   opcode, modRM,(SIB)
   //mod == 01                   opcode,modRM,(SIB),1 byte immediate
@@ -762,6 +762,8 @@ int evalModRM(unsigned char byte, modRMByte &modRM)
   //mod == 11                   opcode,modRM
   if (modRM.bits.mod == 0 && modRM.bits.rm == 5)
     return 6;  //caller handles patching
+  else if (modRM.bits.mod == 0 && modRM.bits.rm == 4 && (bytes[1] & 7) == 5)
+    return 7;  //opcode, modRM, SIB with no base, 32bit displacement
   else if (modRM.bits.mod == 0)
     return (modRM.bits.rm) != 4 ? 2 : 3;	//check if SIB byte is needed
   else if (modRM.bits.mod == 1)
@@ -777,7 +779,7 @@ int evalModRM(unsigned char byte, modRMByte &modRM)
     to the trampoline, or -1 if a sufficiently long safe sequence was
     not found.
 
-    Other prefixes but rex prefixes(4*), opcodes 0F group, 6C-6F, 8C, 8E, 98-9F,
+    Other prefixes but rex prefixes(4*) and fs/gs overrides (64, 65), opcodes 0F group, 6C-6F, 8C, 8E, 98-9F,
     A0-A7, AA-AF, C2-C5, D6-DF, E0-E3,EC-EF,F0-FD are not supported.
     Group FF is partly supported
 */
@@ -858,6 +860,13 @@ parse(const char *func, void *address, unsigned *patches)
 
   while (n < 5)
   {
+    // fs/gs segment override prefix, e.g. mov %fs:0x18,%eax
+    if (insns[0] == 0x64 || insns[0] == 0x65)
+    {
+      insns += 1;
+      n += 1;
+    }
+
     if (insns[0] >= 0x40 && insns[0] <= 0x4f)
     {
       insns += 1;
@@ -911,7 +920,7 @@ parse(const char *func, void *address, unsigned *patches)
              || insns[0] == 0x8d || insns[0] == 0x63
              || insns[0] == 0xc0 || insns[0] == 0xc1)
     {
-      temp = evalModRM(insns[1], modRM);
+      temp = evalModRM(insns+1, modRM);
       if (temp == 6 && modRM.bits.mod == 0) //opcode, modRM, rip + 32bit
       	*patches++ = (n+0x6)*0x100 + n+2, n += 6, insns += 6;
       else	//opcode, modRM,(SIB)
@@ -932,7 +941,7 @@ parse(const char *func, void *address, unsigned *patches)
         if(modRM.bits.reg != 0)
           return -1;
       }
-      temp = evalModRM(insns[1], modRM);
+      temp = evalModRM(insns+1, modRM);
 
       if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
       {
@@ -954,7 +963,7 @@ parse(const char *func, void *address, unsigned *patches)
     // f6 and f7 group
     else if (insns[0] == 0xf6 || insns[0] == 0xf7)
     {
-      temp = evalModRM(insns[1], modRM);
+      temp = evalModRM(insns+1, modRM);
       if (modRM.bits.reg == 0 || modRM.bits.reg == 1) //instruction needs immediate value
       {
         if (temp == 6 && modRM.bits.mod == 0)
@@ -973,7 +982,7 @@ parse(const char *func, void *address, unsigned *patches)
     //0xff group
     else if (insns[0] == 0xff)
     {
-      temp = evalModRM(insns[1], modRM);
+      temp = evalModRM(insns+1, modRM);
       if (modRM.bits.reg == 3 || modRM.bits.reg == 5)
         return -1;
       else if (temp == 6 && modRM.bits.mod == 0)	//rip + 32bit
