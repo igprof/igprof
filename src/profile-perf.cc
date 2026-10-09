@@ -84,6 +84,10 @@ dl_iterate_phdr(dl_iterate_callback callback, void *data)
 // Traps for this profiler module
 LIBHOOK(0, int, dofork, _main, (), (), "fork", 0, 0)
 LIBHOOK(1, int, dosystem, _main, (const char *cmd), (cmd), "system", 0, 0)
+LIBHOOK(3, int, doexecve, _main,
+        (const char *path, char *const argv[], char *const envp[]),
+        (path, argv, envp),
+        "execve", 0, 0)
 LIBHOOK(3, int, dopthread_sigmask, _main,
         (int how, sigset_t *newmask, sigset_t *oldmask),
         (how, newmask, oldmask),
@@ -278,6 +282,7 @@ initialize(void)
   // Enable profiler.
   IgHook::hook(dofork_hook_main.raw);
   IgHook::hook(dosystem_hook_main.raw);
+  IgHook::hook(doexecve_hook_main.raw);
   IgHook::hook(dopthread_sigmask_hook_main.raw);
   IgHook::hook(dosigaction_hook_main.raw);
 #ifndef __arm__
@@ -468,6 +473,27 @@ dosystem(IgHook::SafeData<igprof_dosystem_t> &hook, const char *cmd)
   igprof_debug("resuming profiling after blinking for system() for"
 	       " %.3fms, %d ticks\n", dt*1000, nticks);
   igprof_enable();
+  return ret;
+}
+
+// Trap execve() to stop the profiling timer across it.  Interval timers
+// survive exec while signal handlers are reset to default, so a tick
+// arriving before the new image has installed its own handler (if any)
+// kills the process with SIGPROF.  This typically happens in fork()ed
+// children, where dofork() re-arms the timer.  Only async-signal-safe
+// calls here, as we may be in a vfork()ed child.
+static int
+doexecve(IgHook::SafeData<igprof_doexecve_t> &hook,
+         const char *path, char *const argv[], char *const envp[])
+{
+  itimerval orig;
+  itimerval stopped = { { 0, 0 }, { 0, 0 } };
+  setitimer(s_itimer, &stopped, &orig);
+
+  int ret = hook.chain(path, argv, envp);
+
+  // execve() only returns on failure, resume profiling.
+  setitimer(s_itimer, &orig, 0);
   return ret;
 }
 
